@@ -6,16 +6,17 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight } from 'lucide-react';
+import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight, BookOpen } from 'lucide-react';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { setSetting } from '../lib/db';
 import { Switch } from '../components/ui/switch';
 import { Slider } from '../components/ui/slider';
 import ProjectsSettings from './ProjectsSettings';
+import MasterCatalogue from './MasterCatalogue';
 import DangerZone from '../components/DangerZone';
 
-type SettingsView = 'main' | 'projects';
+type SettingsView = 'main' | 'projects' | 'catalogue';
 
 export default function Settings() {
   const { state, dispatch } = useMerchPad();
@@ -50,6 +51,10 @@ export default function Settings() {
     );
   }
 
+  if (view === 'catalogue') {
+    return <MasterCatalogue onBack={() => setView('main')} />;
+  }
+
   return (
     <div className="min-h-full animate-fade-in">
       {/* Header */}
@@ -61,6 +66,20 @@ export default function Settings() {
       </div>
 
       <div className="px-4 space-y-4 pb-8">
+
+        {/* Master Catalogue entry point */}
+        <button onClick={() => setView('catalogue')}
+          className="w-full mp-card p-4 flex items-center gap-3 text-left hover:border-[#6B5CFF] transition-colors">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'rgba(0,229,255,0.1)' }}>
+            <BookOpen size={18} style={{ color: '#00E5FF' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-[#E6E7EB]">Master Catalogue</p>
+            <p className="text-xs text-[#7B7F93]">Global product templates for all projects</p>
+          </div>
+          <ChevronRight size={16} className="text-[#7B7F93] flex-shrink-0" />
+        </button>
 
         {/* Projects — prominent entry point */}
         <button onClick={() => setView('projects')}

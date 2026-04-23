@@ -5,9 +5,9 @@
  *           CONFIRM SALE, CLEAR ALL, UNDO LAST, real-time totals
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { Minus, Plus, RotateCcw, Trash2, CheckCircle2, Zap, ShoppingBag, StopCircle, Archive } from 'lucide-react';
+import { Minus, Plus, RotateCcw, Trash2, CheckCircle2, Zap, ShoppingBag, StopCircle, Archive, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { ProductVariant } from '../lib/db';
@@ -31,13 +31,28 @@ interface TallyCardProps {
   variant: ProductVariant;
   qty: number;
   stockStatus: string;
+  currentStock: number;
   onIncrement: () => void;
   onDecrement: () => void;
 }
 
-function TallyCard({ variant, qty, stockStatus, onIncrement, onDecrement }: TallyCardProps) {
+function TallyCard({ variant, qty, stockStatus, currentStock, onIncrement, onDecrement }: TallyCardProps) {
   const [bumping, setBumping] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const infoRef = useRef<HTMLDivElement>(null);
   const isEmpty = stockStatus === 'empty';
+
+  // Close info popover on outside click
+  useEffect(() => {
+    if (!showInfo) return;
+    function handleClick(e: MouseEvent) {
+      if (infoRef.current && !infoRef.current.contains(e.target as Node)) {
+        setShowInfo(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showInfo]);
   const tallyTotal = qty * variant.price;
 
   function handleIncrement() {
@@ -73,9 +88,47 @@ function TallyCard({ variant, qty, stockStatus, onIncrement, onDecrement }: Tall
             {Object.values(variant.attributes).join(' · ')}
           </p>
         </div>
-        <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+        <div className="flex items-center gap-1.5 ml-2 flex-shrink-0 relative" ref={infoRef}>
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: stockColor }} />
           <span className="text-[10px] font-semibold" style={{ color: stockColor }}>{stockLabel}</span>
+          {/* Info button */}
+          <button
+            onClick={e => { e.stopPropagation(); setShowInfo(v => !v); }}
+            className="w-5 h-5 rounded-full flex items-center justify-center transition-colors"
+            style={{ background: showInfo ? 'rgba(107,92,255,0.25)' : 'rgba(107,92,255,0.1)', color: '#7C6DFF' }}>
+            <Info size={11} />
+          </button>
+          {/* Info popover */}
+          {showInfo && (
+            <div className="absolute top-6 right-0 z-50 w-44 rounded-xl p-3 shadow-2xl animate-fade-in"
+              style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}>
+              <p className="text-[10px] font-bold text-[#7C6DFF] uppercase tracking-wider mb-2">Variant Info</p>
+              <div className="space-y-1.5">
+                {Object.entries(variant.attributes).map(([key, val]) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <span className="text-[10px] text-[#7B7F93] capitalize">{key}</span>
+                    <span className="text-[10px] font-semibold text-[#A4A7B5]">{val}</span>
+                  </div>
+                ))}
+                <div className="border-t border-[#24273A] pt-1.5 mt-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-[#7B7F93]">In stock</span>
+                    <span className="text-[10px] font-bold" style={{ color: stockColor }}>{currentStock}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-[#7B7F93]">Price</span>
+                    <span className="text-[10px] font-semibold text-[#A4A7B5]">€{variant.price.toFixed(2)}</span>
+                  </div>
+                  {variant.sku && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-[#7B7F93]">SKU</span>
+                      <span className="text-[10px] font-semibold text-[#A4A7B5] mp-mono">{variant.sku}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -343,12 +396,15 @@ export default function TallyCounter() {
           {filteredVariants.map(({ variant }) => {
             const stockStatus = getVariantStockStatus(variant);
             const qty = tally.items[variant.id]?.qty ?? 0;
+            // Use live currentStock from products state (updated after each confirmed sale)
+            const liveVariant = products.flatMap(p => p.variants).find(v => v.id === variant.id) ?? variant;
             return (
               <TallyCard
                 key={variant.id}
-                variant={variant}
+                variant={liveVariant}
                 qty={qty}
                 stockStatus={stockStatus}
+                currentStock={liveVariant.currentStock}
                 onIncrement={() => dispatch({ type: 'TALLY_INCREMENT', payload: { variantId: variant.id, variantName: variant.name, unitPrice: variant.price } })}
                 onDecrement={() => dispatch({ type: 'TALLY_DECREMENT', payload: { variantId: variant.id, variantName: variant.name } })}
               />

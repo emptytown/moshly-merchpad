@@ -511,15 +511,19 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const getVariantStockStatus = useCallback((variant: ProductVariant): StockStatus => {
-    const { activeSession, settings } = stateRef.current;
-    const initial = activeSession?.stockSnapshot[variant.id] ?? variant.initialStock;
-    if (variant.currentStock <= 0) return 'empty';
-    const pct = variant.currentStock / (initial || 1);
+  // NOTE: intentionally NOT wrapped in useCallback with empty deps — must close over
+  // reactive `state` so Tally cards re-render with fresh stock after each confirmed sale.
+  const getVariantStockStatus = (variant: ProductVariant): StockStatus => {
+    const { activeSession, settings, products } = state;
+    // Use the live currentStock from the products array (updated via UPDATE_VARIANT_STOCK dispatch)
+    const liveVariant = products.flatMap(p => p.variants).find(v => v.id === variant.id) ?? variant;
+    const initial = activeSession?.stockSnapshot[variant.id] ?? liveVariant.initialStock;
+    if (liveVariant.currentStock <= 0) return 'empty';
+    const pct = liveVariant.currentStock / (initial || 1);
     if (pct > settings.stockThresholdYellow) return 'high';
     if (pct > settings.stockThresholdRed) return 'medium';
     return 'low';
-  }, []);
+  };
 
   const getSessionSoldQty = useCallback((variantId: string): number => {
     return stateRef.current.tally.items[variantId]?.qty ?? 0;
