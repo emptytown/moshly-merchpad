@@ -170,7 +170,7 @@ export function ExportButton({ auditEntries }: ExportSheetProps) {
     {
       id: 'range',
       icon: CalendarRange,
-      label: 'Export From / To',
+      label: 'Export Date Range',
       sub: 'Pick a custom date range',
       color: '#00E5FF',
       action: () => setView('daterange'),
@@ -272,8 +272,8 @@ export function ExportButton({ auditEntries }: ExportSheetProps) {
             )}
           </div>
 
-          {/* Bottom safe area */}
-          <div className="h-safe-bottom pb-4" />
+          {/* Bottom safe area — clears the 64px bottom nav bar */}
+          <div className="pb-20" />
         </div>
       </div>
     </>

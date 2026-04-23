@@ -397,7 +397,7 @@ export default function TallyCounter() {
       )}
 
       {/* Tally grid */}
-      <div className="px-4 pb-2">
+      <div className="px-4 pb-2" style={{ paddingBottom: '0.5rem' }}>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {filteredVariants.map(({ variant }) => {
             const stockStatus = getVariantStockStatus(variant);
@@ -481,8 +481,8 @@ export default function TallyCounter() {
         </div>
       </div>
 
-      {/* Spacer for action bar */}
-      <div className="h-36" />
+      {/* Spacer for action bar — must clear bottom nav (64px) + action bar (~140px) + safe area */}
+      <div className="h-56" />
 
       {/* Confirm modal */}
       {showConfirm && (
