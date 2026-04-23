@@ -48,18 +48,20 @@ interface TallyCardProps {
   basketQty: number;
   stockStatus: string;
   tallyMode: boolean;
+  /** True when remaining road stock (liveStock - sessionSoldQty) <= 0 */
+  effectivelyEmpty: boolean;
   onIncrement: () => void;
   onDecrement: () => void;
   onInstantSell: () => void;
 }
 function TallyCard({
   variant, liveStock, sessionSoldQty, basketQty, stockStatus,
-  tallyMode, onIncrement, onDecrement, onInstantSell,
+  tallyMode, effectivelyEmpty, onIncrement, onDecrement, onInstantSell,
 }: TallyCardProps) {
   const [bumping, setBumping] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
-  const isEmpty = stockStatus === 'empty';
+  const isEmpty = tallyMode ? effectivelyEmpty : stockStatus === 'empty';
 
   useEffect(() => {
     if (!showInfo) return;
@@ -177,10 +179,19 @@ function TallyCard({
           <span className="text-xs font-bold mp-mono text-[#E6E7EB]">
             €{(basketQty * variant.price).toFixed(2)}
           </span>
-        ) : tallyMode && sessionSoldQty > 0 ? (
-          <span className="text-xs font-bold mp-mono text-[#4ADE80]">
-            ×{sessionSoldQty} sold
-          </span>
+        ) : tallyMode ? (
+          (() => {
+            const left = liveStock - sessionSoldQty;
+            if (left <= 0) return (
+              <span className="text-xs font-bold mp-mono text-[#F87171]">Out</span>
+            );
+            if (left <= 3) return (
+              <span className="text-xs font-bold mp-mono text-[#FBBF24]">{left} Left</span>
+            );
+            return (
+              <span className="text-xs font-bold mp-mono text-[#4ADE80]">{left} Left</span>
+            );
+          })()
         ) : (
           <span className="text-xs font-bold mp-mono text-[#2D3048]">—</span>
         )}
@@ -509,6 +520,13 @@ export default function TallyCounter() {
   const { units: totalUnits, revenue: totalRevenue } = getTallyTotal();
   const hasItems = totalUnits > 0;
 
+  // Session cumulative totals (Tally mode) — sum across all confirmed sales this session
+  const sessionTotalUnits = Object.values(sessionSold).reduce((s, n) => s + n, 0);
+  const sessionTotalRevenue = Object.entries(sessionSold).reduce((sum, [vid, qty]) => {
+    const v = products.flatMap(p => p.variants).find(vv => vv.id === vid);
+    return sum + (v ? v.price * qty : 0);
+  }, 0);
+
   // Basket items for modals / preview
   const basketItems = Object.values(tally.items)
     .filter(i => i.qty > 0)
@@ -551,7 +569,12 @@ export default function TallyCounter() {
   }, [confirmSale, tally.items]);
 
   // Instant sell (Tally mode — single variant, qty=1, immediate confirm)
-  const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number) => {
+  const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number, liveStock: number) => {
+    const alreadySold = sessionSold[variantId] ?? 0;
+    if (alreadySold >= liveStock) {
+      toast.error(`${variantName} — no stock left!`, { duration: 2000 });
+      return;
+    }
     dispatch({ type: 'TALLY_INCREMENT', payload: { variantId, variantName, unitPrice } });
     setTimeout(async () => {
       const batch = await confirmSale();
@@ -563,7 +586,7 @@ export default function TallyCounter() {
         setTimeout(() => setJustConfirmed(false), 1500);
       }
     }, 50);
-  }, [dispatch, confirmSale]);
+  }, [dispatch, confirmSale, sessionSold]);
 
   function handleConfirmButton() {
     if (!hasItems) return;
@@ -766,9 +789,10 @@ export default function TallyCounter() {
                 basketQty={basketQty}
                 stockStatus={stockStatus}
                 tallyMode={tallyMode}
+                effectivelyEmpty={liveVariant.currentStock - (sessionSold[variant.id] ?? 0) <= 0}
                 onIncrement={() => dispatch({ type: 'TALLY_INCREMENT', payload: { variantId: variant.id, variantName: variant.name, unitPrice: variant.price } })}
                 onDecrement={() => dispatch({ type: 'TALLY_DECREMENT', payload: { variantId: variant.id, variantName: variant.name } })}
-                onInstantSell={() => handleInstantSell(variant.id, variant.name, variant.price)}
+                onInstantSell={() => handleInstantSell(variant.id, variant.name, variant.price, liveVariant.currentStock)}
               />
             );
           })}
@@ -784,20 +808,23 @@ export default function TallyCounter() {
       <div className="fixed left-0 right-0 bottom-16 z-30 px-4 pb-2">
         <div className={cn(
           'rounded-2xl p-3 shadow-2xl transition-all duration-300',
-          tallyMode && 'opacity-60'
         )}
-          style={{ background: 'rgba(20,22,36,0.97)', backdropFilter: 'blur(20px)', border: `1px solid ${tallyMode ? '#1E2030' : '#2D3048'}` }}>
+          style={{ background: 'rgba(20,22,36,0.97)', backdropFilter: 'blur(20px)', border: '1px solid #2D3048' }}>
           {/* Totals row */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <div>
-                <p className="text-xs text-[#7B7F93]">Units</p>
-                <p className="text-lg font-black text-[#E6E7EB] mp-mono leading-none">{totalUnits}</p>
+                <p className="text-xs text-[#7B7F93]">{tallyMode ? 'Sold' : 'Units'}</p>
+                <p className="text-lg font-black text-[#E6E7EB] mp-mono leading-none">
+                  {tallyMode ? sessionTotalUnits : totalUnits}
+                </p>
               </div>
               <div className="w-px h-8 bg-[#24273A]" />
               <div>
                 <p className="text-xs text-[#7B7F93]">Total</p>
-                <p className="text-lg font-black mp-gradient-text mp-mono leading-none">€{totalRevenue.toFixed(2)}</p>
+                <p className="text-lg font-black mp-gradient-text mp-mono leading-none">
+                  €{(tallyMode ? sessionTotalRevenue : totalRevenue).toFixed(2)}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
