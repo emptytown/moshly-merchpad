@@ -17,7 +17,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   Minus, Plus, RotateCcw, Trash2, CheckCircle2, Zap, ShoppingBag,
-  StopCircle, Archive, Info, ChevronDown, ChevronUp, Delete, Eye,
+  StopCircle, Archive, Info, ChevronDown, ChevronUp, Delete, Eye, Package,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
@@ -53,15 +53,21 @@ interface TallyCardProps {
   onIncrement: () => void;
   onDecrement: () => void;
   onInstantSell: () => void;
+  allowMidSaleRestock: boolean;
+  warehouseStock: number;
+  onRestock: (qty: number) => void;
 }
 function TallyCard({
   variant, liveStock, sessionSoldQty, basketQty, stockStatus,
   tallyMode, effectivelyEmpty, onIncrement, onDecrement, onInstantSell,
+  allowMidSaleRestock, warehouseStock, onRestock,
 }: TallyCardProps) {
   const [bumping, setBumping] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [showRestockPicker, setShowRestockPicker] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
-  const isEmpty = tallyMode ? effectivelyEmpty : stockStatus === 'empty';
+  // In Tally mode: effectively empty when currentStock (post-sale) reaches 0
+  const isEmpty = tallyMode ? (liveStock <= 0) : stockStatus === 'empty';
 
   useEffect(() => {
     if (!showInfo) return;
@@ -172,6 +178,36 @@ function TallyCard({
         </button>
       </div>
 
+      {/* Mid-sale restock button (Tally mode only, when enabled) */}
+      {tallyMode && allowMidSaleRestock && warehouseStock > 0 && (
+        <div className="mb-1">
+          {!showRestockPicker ? (
+            <button
+              onClick={() => setShowRestockPicker(true)}
+              className="w-full flex items-center justify-center gap-1 py-1 rounded-lg text-[10px] font-semibold transition-all active:scale-95"
+              style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', color: '#FBBF24' }}>
+              <Package size={10} /> Restock (WH: {warehouseStock})
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 justify-between">
+              {[1, 2, 5, 10].filter(q => q <= warehouseStock).map(q => (
+                <button key={q}
+                  onClick={() => { onRestock(q); setShowRestockPicker(false); }}
+                  className="flex-1 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-90"
+                  style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.3)', color: '#FBBF24' }}>
+                  +{q}
+                </button>
+              ))}
+              <button
+                onClick={() => setShowRestockPicker(false)}
+                className="flex-1 py-1 rounded-lg text-[10px] font-bold text-[#7B7F93] transition-all active:scale-90"
+                style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}>
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {/* Price / running total */}
       <div className="flex items-center justify-between">
         <span className="text-xs text-[#7B7F93] mp-mono">€{variant.price.toFixed(2)}</span>
@@ -181,15 +217,15 @@ function TallyCard({
           </span>
         ) : tallyMode ? (
           (() => {
-            const left = liveStock - sessionSoldQty;
-            if (left <= 0) return (
+            // liveStock is already post-sale (confirmSale decrements currentStock in DB+state)
+            if (liveStock <= 0) return (
               <span className="text-xs font-bold mp-mono text-[#F87171]">Out</span>
             );
-            if (left <= 3) return (
-              <span className="text-xs font-bold mp-mono text-[#FBBF24]">{left} Left</span>
+            if (liveStock <= 3) return (
+              <span className="text-xs font-bold mp-mono text-[#FBBF24]">{liveStock} Left</span>
             );
             return (
-              <span className="text-xs font-bold mp-mono text-[#4ADE80]">{left} Left</span>
+              <span className="text-xs font-bold mp-mono text-[#4ADE80]">{liveStock} Left</span>
             );
           })()
         ) : (
@@ -481,8 +517,9 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
 // ── Main Screen ────────────────────────────────────────────────────────────
 export default function TallyCounter() {
   const [, navigate] = useLocation();
-  const { state, dispatch, confirmSale, getVariantStockStatus, getTallyTotal } = useMerchPad();
+  const { state, dispatch, confirmSale, getVariantStockStatus, getTallyTotal, transferStock } = useMerchPad();
   const { products, activeSession, tally, settings } = state;
+  const allowMidSaleRestock = settings.allowMidSaleRestock ?? false;
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showBasketPreview, setShowBasketPreview] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -569,9 +606,10 @@ export default function TallyCounter() {
   }, [confirmSale, tally.items]);
 
   // Instant sell (Tally mode — single variant, qty=1, immediate confirm)
-  const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number, liveStock: number) => {
-    const alreadySold = sessionSold[variantId] ?? 0;
-    if (alreadySold >= liveStock) {
+  const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number) => {
+    // Guard against oversell: use live currentStock from products state
+    const liveVariantCheck = products.flatMap(p => p.variants).find(v => v.id === variantId);
+    if (!liveVariantCheck || liveVariantCheck.currentStock <= 0) {
       toast.error(`${variantName} — no stock left!`, { duration: 2000 });
       return;
     }
@@ -586,7 +624,13 @@ export default function TallyCounter() {
         setTimeout(() => setJustConfirmed(false), 1500);
       }
     }, 50);
-  }, [dispatch, confirmSale, sessionSold]);
+  }, [dispatch, confirmSale, products]);
+
+  // Mid-sale restock: pull units from warehouse into road stock
+  const handleRestock = useCallback(async (variantId: string, productId: string, variantName: string, qty: number) => {
+    await transferStock(variantId, productId, variantName, 'to_road', qty);
+    toast.success(`Restocked ${qty} × ${variantName} from warehouse`, { duration: 2500 });
+  }, [transferStock]);
 
   function handleConfirmButton() {
     if (!hasItems) return;
@@ -789,10 +833,13 @@ export default function TallyCounter() {
                 basketQty={basketQty}
                 stockStatus={stockStatus}
                 tallyMode={tallyMode}
-                effectivelyEmpty={liveVariant.currentStock - (sessionSold[variant.id] ?? 0) <= 0}
+                effectivelyEmpty={liveVariant.currentStock <= 0}
                 onIncrement={() => dispatch({ type: 'TALLY_INCREMENT', payload: { variantId: variant.id, variantName: variant.name, unitPrice: variant.price } })}
                 onDecrement={() => dispatch({ type: 'TALLY_DECREMENT', payload: { variantId: variant.id, variantName: variant.name } })}
-                onInstantSell={() => handleInstantSell(variant.id, variant.name, variant.price, liveVariant.currentStock)}
+                onInstantSell={() => handleInstantSell(variant.id, variant.name, variant.price)}
+                allowMidSaleRestock={allowMidSaleRestock}
+                onRestock={(qty) => handleRestock(variant.id, variant.productId ?? '', variant.name, qty)}
+                warehouseStock={liveVariant.warehouseStock ?? 0}
               />
             );
           })}
