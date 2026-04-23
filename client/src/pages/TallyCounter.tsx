@@ -283,22 +283,37 @@ function CashDrawer({ items, totalRevenue, requireMoneyInput, onConfirm, onCance
           </div>
         </div>
 
-        <div className="flex gap-0">
-          {/* Left: items + quick amounts + change display */}
-          <div className="flex-1 px-4 py-3 space-y-2.5 border-r border-[#24273A]">
-            {/* Items list */}
-            <div className="space-y-1 max-h-20 overflow-y-auto">
-              {items.map(item => (
-                <div key={item.name} className="flex items-center justify-between">
-                  <span className="text-xs text-[#A4A7B5]">
-                    <span className="text-[#7C6DFF] font-bold">×{item.qty}</span> {item.name}
-                  </span>
-                  <span className="text-xs font-semibold text-[#E6E7EB] mp-mono">€{item.total.toFixed(2)}</span>
-                </div>
-              ))}
+        {/* ── Info section: items, total due, money received, quick amounts, change, Complete Sale ── */}
+        <div className="px-4 pt-3 pb-2 space-y-2.5">
+          {/* Items list */}
+          <div className="space-y-1 max-h-24 overflow-y-auto">
+            {items.map(item => (
+              <div key={item.name} className="flex items-center justify-between">
+                <span className="text-xs text-[#A4A7B5]">
+                  <span className="text-[#7C6DFF] font-bold">×{item.qty}</span> {item.name}
+                </span>
+                <span className="text-xs font-semibold text-[#E6E7EB] mp-mono">€{item.total.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+          {/* Total due */}
+          <div className="flex items-center justify-between py-2 border-t border-[#24273A]">
+            <span className="text-sm font-semibold text-[#A4A7B5]">Total Due</span>
+            <span className="text-xl font-black mp-gradient-text mp-mono">€{totalRevenue.toFixed(2)}</span>
+          </div>
+          {/* Money received display */}
+          <div>
+            <p className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Money Received</p>
+            <div className="flex items-center gap-1 px-3 py-2.5 rounded-xl mb-2"
+              style={{
+                background: '#0E0F14',
+                border: `1px solid ${validInput && sufficient ? 'rgba(74,222,128,0.4)' : validInput && !sufficient ? 'rgba(248,113,113,0.4)' : '#2D3048'}`,
+              }}>
+              <span className="text-sm font-bold text-[#7B7F93]">€</span>
+              <span className="text-xl font-black text-[#E6E7EB] mp-mono flex-1">
+                {moneyIn === '' ? <span className="text-[#2D3048]">0</span> : moneyIn}
+              </span>
             </div>
-
-            {/* Quick cash buttons */}
             {quickAmounts.length > 0 && (
               <div className="flex gap-1.5 flex-wrap">
                 {quickAmounts.map(d => (
@@ -315,68 +330,50 @@ function CashDrawer({ items, totalRevenue, requireMoneyInput, onConfirm, onCance
                 ))}
               </div>
             )}
-
-            {/* Money received display */}
-            <div>
-              <p className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider mb-1">Money Received</p>
-              <div className="flex items-center gap-1 px-3 py-2.5 rounded-xl"
-                style={{
-                  background: '#0E0F14',
-                  border: `1px solid ${validInput && sufficient ? 'rgba(74,222,128,0.4)' : validInput && !sufficient ? 'rgba(248,113,113,0.4)' : '#2D3048'}`,
-                }}>
-                <span className="text-sm font-bold text-[#7B7F93]">€</span>
-                <span className="text-xl font-black text-[#E6E7EB] mp-mono flex-1">
-                  {moneyIn === '' ? <span className="text-[#2D3048]">0</span> : moneyIn}
-                </span>
-              </div>
-            </div>
-
-            {/* Change display */}
-            <div className="flex items-center justify-between py-2 rounded-xl px-3"
-              style={{
-                background: change === null ? 'rgba(45,48,72,0.4)' : sufficient ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)',
-                border: `1px solid ${change === null ? '#2D3048' : sufficient ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.25)'}`,
-              }}>
-              <span className="text-xs font-semibold"
-                style={{ color: change === null ? '#7B7F93' : sufficient ? '#4ADE80' : '#F87171' }}>
-                {change === null ? 'Change' : sufficient ? 'Change' : 'Short'}
-              </span>
-              <span className="text-lg font-black mp-mono"
-                style={{ color: change === null ? '#2D3048' : sufficient ? '#4ADE80' : '#F87171' }}>
-                {change === null ? '—' : sufficient ? `€${change.toFixed(2)}` : `-€${Math.abs(change).toFixed(2)}`}
-              </span>
-            </div>
-
-            {/* Complete Sale button */}
+          </div>
+          {/* Change display */}
+          <div className="flex items-center justify-between py-2 rounded-xl px-3"
+            style={{
+              background: change === null ? 'rgba(45,48,72,0.4)' : sufficient ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)',
+              border: `1px solid ${change === null ? '#2D3048' : sufficient ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.25)'}`,
+            }}>
+            <span className="text-xs font-semibold"
+              style={{ color: change === null ? '#7B7F93' : sufficient ? '#4ADE80' : '#F87171' }}>
+              {change === null ? 'Change' : sufficient ? 'Change' : 'Short'}
+            </span>
+            <span className="text-lg font-black mp-mono"
+              style={{ color: change === null ? '#2D3048' : sufficient ? '#4ADE80' : '#F87171' }}>
+              {change === null ? '—' : sufficient ? `€${change.toFixed(2)}` : `-€${Math.abs(change).toFixed(2)}`}
+            </span>
+          </div>
+          {/* Complete Sale button */}
+          <button
+            onClick={() => onConfirm(validInput ? parsed : 0)}
+            disabled={!canComplete}
+            className="w-full py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            style={canComplete
+              ? { background: 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)', boxShadow: '0 0 16px rgba(74,222,128,0.3)' }
+              : { background: '#1B1E2E', opacity: 0.35 }}>
+            <CheckCircle2 size={15} /> Complete Sale
+          </button>
+        </div>
+        {/* Numpad — below the info section */}
+        <div className="grid grid-cols-3 gap-1.5 px-4 pb-3">
+          {NUMPAD_KEYS.map(key => (
             <button
-              onClick={() => onConfirm(validInput ? parsed : 0)}
-              disabled={!canComplete}
-              className="w-full py-3 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-              style={canComplete
-                ? { background: 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)', boxShadow: '0 0 16px rgba(74,222,128,0.3)' }
-                : { background: '#1B1E2E', opacity: 0.35 }}>
-              <CheckCircle2 size={15} /> Complete Sale
+              key={key}
+              onClick={() => handleNumpad(key)}
+              className={cn(
+                'flex items-center justify-center h-11 rounded-xl text-sm font-bold transition-all active:scale-90',
+                key === '⌫' ? 'text-[#F87171]' : 'text-[#E6E7EB]'
+              )}
+              style={{
+                background: key === '⌫' ? 'rgba(248,113,113,0.1)' : '#1B1E2E',
+                border: `1px solid ${key === '⌫' ? 'rgba(248,113,113,0.2)' : '#2D3048'}`,
+              }}>
+              {key === '⌫' ? <Delete size={14} /> : key}
             </button>
-          </div>
-
-          {/* Right: Numpad — whole euros, no cents */}
-          <div className="grid grid-cols-3 gap-1 p-3 w-44 flex-shrink-0">
-            {NUMPAD_KEYS.map(key => (
-              <button
-                key={key}
-                onClick={() => handleNumpad(key)}
-                className={cn(
-                  'flex items-center justify-center h-10 rounded-xl text-sm font-bold transition-all active:scale-90',
-                  key === '⌫' ? 'text-[#F87171]' : 'text-[#E6E7EB]'
-                )}
-                style={{
-                  background: key === '⌫' ? 'rgba(248,113,113,0.1)' : '#1B1E2E',
-                  border: `1px solid ${key === '⌫' ? 'rgba(248,113,113,0.2)' : '#2D3048'}`,
-                }}>
-                {key === '⌫' ? <Delete size={14} /> : key}
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
       </div>
     </div>
