@@ -7,9 +7,10 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  AlertTriangle, TrendingDown, TrendingUp, Download, ChevronDown, ChevronUp,
-  Sliders, Clock, Package, BarChart2, Filter, X,
+  AlertTriangle, TrendingDown, TrendingUp, ChevronDown, ChevronUp,
+  Sliders, Clock, Package, BarChart2, X,
 } from 'lucide-react';
+import { ExportButton } from '../components/ExportSheet';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   Cell, PieChart, Pie, Legend,
@@ -328,11 +329,9 @@ export default function DetailInfo() {
             Analytics
           </h1>
         </div>
-        <button onClick={exportCSV}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#7B7F93] hover:text-[#E6E7EB] transition-colors mt-1"
-          style={{ border: '1px solid #2D3048' }}>
-          <Download size={13} /> Export
-        </button>
+        <div className="mt-1">
+          <ExportButton auditEntries={auditEntries} />
+        </div>
       </div>
 
       {/* Filter bar */}
