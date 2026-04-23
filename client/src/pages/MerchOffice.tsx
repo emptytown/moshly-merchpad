@@ -7,12 +7,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, BookOpen, Sparkles, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, BookOpen, Sparkles, AlertCircle, ArrowRightLeft, Warehouse, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { Product, ProductVariant, Show } from '../lib/db';
 import { cn } from '../lib/utils';
 import { loadCatalogue, CatalogueTemplate } from '../lib/catalogue';
+import StockTransferModal from '../components/StockTransferModal';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -93,6 +94,8 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
       price: 0,
       initialStock: 0,
       currentStock: 0,
+      warehouseStock: 0,
+      roadStock: 0,
     };
     setVariants(prev => [...prev, v]);
   }
@@ -116,6 +119,8 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
       price,
       initialStock: stock,
       currentStock: stock,
+      warehouseStock: 0,
+      roadStock: stock,
     }));
     setVariants(prev => [...prev, ...newVariants]);
     setBulkBase(''); setBulkAttr(''); setBulkValues(''); setBulkPrice(''); setBulkStock('');
@@ -489,13 +494,15 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
 
 export default function MerchOffice() {
   const [, navigate] = useLocation();
-  const { state, saveProduct, deleteProduct, saveShow, startSession } = useMerchPad();
+  const { state, saveProduct, deleteProduct, saveShow, startSession, startOneOffSession } = useMerchPad();
   const { products, shows, activeSession, isLoading } = state;
 
   const [selectedShowId, setSelectedShowId] = useState(shows.find(s => s.status === 'upcoming')?.id ?? shows[0]?.id ?? '');
   const [editingProduct, setEditingProduct] = useState<Product | 'new' | null>(null);
   const [showNewShow, setShowNewShow] = useState(false);
   const [showStartSale, setShowStartSale] = useState(false);
+  const [showOneOff, setShowOneOff] = useState(false);
+  const [transferProduct, setTransferProduct] = useState<Product | null>(null);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
 
   useEffect(() => {
@@ -565,13 +572,23 @@ export default function MerchOffice() {
 
         {/* Start Sale CTA */}
         {!activeSession ? (
-          <button
-            onClick={() => { if (!selectedShowId) { toast.error('Select a show first'); return; } setShowStartSale(true); }}
-            className="w-full py-4 rounded-2xl text-base font-black text-white mp-btn-primary flex items-center justify-center gap-2"
-            style={{ boxShadow: '0 0 24px rgba(107,92,255,0.3)' }}>
-            <Zap size={18} />
-            Start Sale Session
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { if (!selectedShowId) { toast.error('Select a show first'); return; } setShowStartSale(true); }}
+              className="flex-1 py-4 rounded-2xl text-base font-black text-white mp-btn-primary flex items-center justify-center gap-2"
+              style={{ boxShadow: '0 0 24px rgba(107,92,255,0.3)' }}>
+              <Zap size={18} />
+              Start Sale Session
+            </button>
+            <button
+              onClick={() => setShowOneOff(true)}
+              className="py-4 px-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-1.5 shrink-0"
+              style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.35)', color: '#FBBF24' }}
+              title="OneOff Sale">
+              <Truck size={16} />
+              <span className="hidden sm:inline">OneOff</span>
+            </button>
+          </div>
         ) : (
           <div className="rounded-2xl p-4 flex items-center justify-between"
             style={{ background: 'rgba(107,92,255,0.1)', border: '1px solid rgba(107,92,255,0.3)' }}>
@@ -640,11 +657,29 @@ export default function MerchOffice() {
                         </div>
                       ))}
                     </div>
+                    {/* Two-tier stock summary */}
+                    <div className="mx-3 mb-2 p-2 rounded-lg flex items-center justify-between text-xs"
+                      style={{ background: 'rgba(14,15,20,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div className="flex items-center gap-1.5 text-purple-300">
+                        <Warehouse size={11} />
+                        <span>WH: {product.variants.reduce((s, v) => s + (v.warehouseStock ?? 0), 0)}</span>
+                      </div>
+                      <ArrowRightLeft size={10} className="text-white/20" />
+                      <div className="flex items-center gap-1.5 text-green-300">
+                        <Truck size={11} />
+                        <span>Road: {product.variants.reduce((s, v) => s + (v.roadStock ?? v.currentStock), 0)}</span>
+                      </div>
+                    </div>
                     <div className="flex gap-2 p-3 pt-0">
                       <button onClick={() => setEditingProduct(product)}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-[#A4A7B5] hover:text-[#E6E7EB] transition-colors"
                         style={{ border: '1px solid #2D3048' }}>
                         <Edit2 size={12} /> Edit
+                      </button>
+                      <button onClick={() => setTransferProduct(product)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors"
+                        style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
+                        <ArrowRightLeft size={12} /> Transfer
                       </button>
                       <button onClick={() => { if (confirm(`Delete ${product.name}?`)) deleteProduct(product.id); }}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-[#F87171] hover:bg-[rgba(248,113,113,0.1)] transition-colors"
@@ -716,6 +751,80 @@ export default function MerchOffice() {
           onClose={() => setShowStartSale(false)}
         />
       )}
+      {showOneOff && (
+        <OneOffModal
+          onStart={async (repName) => {
+            await startOneOffSession(repName);
+            setShowOneOff(false);
+            toast.success('OneOff Sale started!');
+            navigate('/tally');
+          }}
+          onClose={() => setShowOneOff(false)}
+        />
+      )}
+      {transferProduct && (
+        <StockTransferModal
+          product={transferProduct}
+          open={true}
+          onClose={() => setTransferProduct(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── OneOff Sale Modal ──────────────────────────────────────────────────────
+
+function OneOffModal({ onStart, onClose }: { onStart: (repName: string) => Promise<void>; onClose: () => void }) {
+  const [repName, setRepName] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleStart() {
+    if (!repName.trim()) { toast.error('Enter your name'); return; }
+    setLoading(true);
+    try { await onStart(repName.trim()); } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="w-full max-w-lg rounded-t-3xl p-6 space-y-5 animate-slide-up"
+        style={{ background: '#13141C', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Truck size={16} className="text-amber-400" />
+              <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">OneOff Sale</span>
+            </div>
+            <h2 className="text-xl font-black text-[#E6E7EB]">Quick Sale</h2>
+            <p className="text-xs text-[#7B7F93] mt-0.5">No show required — sale is logged in the OneOff register</p>
+          </div>
+          <button onClick={onClose} className="text-[#7B7F93] hover:text-white p-1"><X size={18} /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider block mb-1.5">Rep Name *</label>
+            <input
+              type="text"
+              value={repName}
+              onChange={e => setRepName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleStart()}
+              placeholder="Your name"
+              className="w-full px-3 py-2.5 rounded-xl text-sm text-[#E6E7EB] placeholder:text-[#4A4D5E] outline-none"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+              autoFocus
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleStart}
+          disabled={loading}
+          className="w-full py-3.5 rounded-2xl text-base font-black text-white flex items-center justify-center gap-2"
+          style={{ background: 'linear-gradient(135deg,#d97706,#f59e0b)', boxShadow: '0 0 20px rgba(217,119,6,0.3)' }}>
+          {loading ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <Truck size={18} />}
+          Start OneOff Sale
+        </button>
+      </div>
     </div>
   );
 }

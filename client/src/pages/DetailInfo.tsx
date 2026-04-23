@@ -31,6 +31,7 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   tally_confirmed: { label: 'Sale', color: '#4ADE80' },
   tally_voided: { label: 'Voided', color: '#F87171' },
   stock_adjusted: { label: 'Adjustment', color: '#FBBF24' },
+  stock_transferred: { label: 'Transfer', color: '#00E5FF' },
   session_started: { label: 'Session Start', color: '#6B5CFF' },
   session_ended: { label: 'Session End', color: '#7B7F93' },
   tally_undo: { label: 'Undo', color: '#F87171' },

@@ -339,10 +339,16 @@ export default function TallyCounter() {
 
       {/* Session bar */}
       <div className="px-4 py-3 flex items-center justify-between"
-        style={{ background: 'rgba(107,92,255,0.08)', borderBottom: '1px solid rgba(107,92,255,0.15)' }}>
+        style={activeSession.sessionType === 'oneoff'
+          ? { background: 'rgba(217,119,6,0.08)', borderBottom: '1px solid rgba(217,119,6,0.2)' }
+          : { background: 'rgba(107,92,255,0.08)', borderBottom: '1px solid rgba(107,92,255,0.15)' }}>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-[#4ADE80] animate-pulse" />
-          <span className="text-xs font-semibold text-[#7C6DFF]">SALE ACTIVE</span>
+          {activeSession.sessionType === 'oneoff' ? (
+            <span className="text-xs font-semibold text-amber-400">ONEOFF SALE</span>
+          ) : (
+            <span className="text-xs font-semibold text-[#7C6DFF]">SALE ACTIVE</span>
+          )}
           <span className="text-xs text-[#7B7F93]">· {activeSession.repName}</span>
           {activeSession.standName && (
             <span className="text-xs text-[#7B7F93]">· {activeSession.standName}</span>

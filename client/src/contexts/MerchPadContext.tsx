@@ -220,6 +220,8 @@ interface MerchPadContextValue {
   getSessionSoldQty: (variantId: string) => number;
   getTallyTotal: () => { units: number; revenue: number };
   getAuditLog: (sessionId?: string) => Promise<AuditEntry[]>;
+  transferStock: (variantId: string, productId: string, variantName: string, direction: 'to_road' | 'to_warehouse', qty: number) => Promise<void>;
+  startOneOffSession: (repName: string) => Promise<SaleSession>;
 }
 
 const MerchPadContext = createContext<MerchPadContextValue | null>(null);
@@ -324,6 +326,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       standName,
       startedAt: new Date().toISOString(),
       status: 'active',
+      sessionType: 'show',
       stockSnapshot,
     };
 
@@ -554,6 +557,106 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     return all.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   }, []);
 
+  const transferStock = useCallback(async (
+    variantId: string,
+    productId: string,
+    variantName: string,
+    direction: 'to_road' | 'to_warehouse',
+    qty: number
+  ) => {
+    const db = await getDB();
+    const { repName } = stateRef.current;
+    const now = new Date().toISOString();
+
+    // Find the product and variant in current state
+    const products = stateRef.current.products;
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    const variant = product.variants.find(v => v.id === variantId);
+    if (!variant) return;
+
+    const warehouseStock = variant.warehouseStock ?? 0;
+    const roadStock = variant.roadStock ?? variant.currentStock;
+
+    let newWarehouse = warehouseStock;
+    let newRoad = roadStock;
+
+    if (direction === 'to_road') {
+      const transfer = Math.min(qty, warehouseStock);
+      newWarehouse = warehouseStock - transfer;
+      newRoad = roadStock + transfer;
+    } else {
+      const transfer = Math.min(qty, roadStock);
+      newRoad = roadStock - transfer;
+      newWarehouse = warehouseStock + transfer;
+    }
+
+    // Build updated product
+    const updatedProduct: Product = {
+      ...product,
+      variants: product.variants.map(v =>
+        v.id === variantId
+          ? { ...v, warehouseStock: newWarehouse, roadStock: newRoad, currentStock: newRoad }
+          : v
+      ),
+      updatedAt: now,
+    };
+
+    await db.put('products', updatedProduct);
+    dispatch({ type: 'UPDATE_PRODUCT', payload: updatedProduct });
+
+    await addAuditEntry({
+      sessionId: stateRef.current.activeSession?.id ?? 'no-session',
+      showId: stateRef.current.activeSession?.showId ?? 'no-show',
+      deviceId: getDeviceId(),
+      action: 'stock_transferred',
+      entityType: 'product_variant',
+      entityId: variantId,
+      description: `Stock transfer: ${variantName} — ${direction === 'to_road' ? `WH→Road +${qty}` : `Road→WH +${qty}`}`,
+      actorName: repName || 'Unknown',
+      oldValue: { warehouseStock, roadStock },
+      newValue: { warehouseStock: newWarehouse, roadStock: newRoad },
+      timestamp: now,
+    });
+  }, []);
+
+  const startOneOffSession = useCallback(async (repName: string): Promise<SaleSession> => {
+    const db = await getDB();
+    const deviceId = getDeviceId();
+    const products = stateRef.current.products;
+    const stockSnapshot: Record<string, number> = {};
+    for (const p of products) {
+      for (const v of p.variants) { stockSnapshot[v.id] = v.currentStock; }
+    }
+    const session: SaleSession = {
+      id: uuidv4(),
+      showId: 'oneoff',
+      deviceId,
+      repName,
+      startedAt: new Date().toISOString(),
+      status: 'active',
+      sessionType: 'oneoff',
+      stockSnapshot,
+    };
+    await db.put('sessions', session);
+    await setSetting('repName', repName);
+    await addAuditEntry({
+      sessionId: session.id,
+      showId: 'oneoff',
+      deviceId,
+      action: 'session_started',
+      entityType: 'session',
+      entityId: session.id,
+      description: `OneOff Sale started by ${repName}`,
+      actorName: repName,
+      timestamp: session.startedAt,
+    });
+    await enqueueSync('session_start', session);
+    dispatch({ type: 'SET_ACTIVE_SESSION', payload: session });
+    dispatch({ type: 'SET_REP_NAME', payload: repName });
+    return session;
+  }, []);
+
   return (
     <MerchPadContext.Provider value={{
       state,
@@ -569,6 +672,8 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       getSessionSoldQty,
       getTallyTotal,
       getAuditLog,
+      transferStock,
+      startOneOffSession,
     }}>
       {children}
     </MerchPadContext.Provider>
