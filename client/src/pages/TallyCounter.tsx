@@ -1,25 +1,31 @@
 /**
- * Tally Counter — offline-first sale mode
+ * Tally Counter — offline-first sale mode  v0.14.0
  * Design: "Neon Ledger" — glowing stock-stroke cards, large tally numbers
  *
  * Modes:
- *  1. TALLY mode (default) — running tally, + tap instantly auto-confirms single item,
- *     SS1 bar is shaded/dimmed (no manual Confirm Sale needed).
- *  2. REGISTER mode — SS1 bar fully active; "Confirm Sale" opens an augmented modal:
- *     items list → total → money received → change → Complete Sale + collapsible iOS numpad.
+ *  1. TALLY mode (default) — + tap instantly records a single-item sale.
+ *     Big number on card = cumulative session-sold count (persists across sales).
+ *  2. REGISTER mode — build basket, Confirm Sale opens augmented modal with
+ *     items list (with +/- tweaks), total, money received, change, Complete Sale,
+ *     collapsible iOS numpad.  Basket preview available via expand button on bar.
  *
- * Stock fix: TallyCard receives liveStock from reactive products state, not from session snapshot
+ * Key state:
+ *  - sessionSold: Record<variantId, number>  — cumulative sold this session
+ *  - tally.items: current basket (resets after each confirmed sale in Register mode)
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   Minus, Plus, RotateCcw, Trash2, CheckCircle2, Zap, ShoppingBag,
-  StopCircle, Archive, Info, ChevronDown, ChevronUp, Delete,
+  StopCircle, Archive, Info, ChevronDown, ChevronUp, Delete, Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { ProductVariant } from '../lib/db';
 import { cn } from '../lib/utils';
+
+// ── Euro denominations for quick-amount buttons ────────────────────────────
+const EURO_DENOMS = [1, 2, 5, 10, 20, 50, 100, 200];
 
 // ── Stock stroke helper ────────────────────────────────────────────────────
 function stockStrokeClass(status: string) {
@@ -35,17 +41,21 @@ function stockStrokeClass(status: string) {
 // ── Tally Card ─────────────────────────────────────────────────────────────
 interface TallyCardProps {
   variant: ProductVariant;
-  /** Live stock from reactive products state — always post-sale accurate */
   liveStock: number;
-  qty: number;
+  /** Cumulative units sold this session for this variant */
+  sessionSoldQty: number;
+  /** Current basket qty (Register mode) */
+  basketQty: number;
   stockStatus: string;
-  /** In TALLY mode, + tap immediately confirms a single-item sale */
   tallyMode: boolean;
   onIncrement: () => void;
   onDecrement: () => void;
   onInstantSell: () => void;
 }
-function TallyCard({ variant, liveStock, qty, stockStatus, tallyMode, onIncrement, onDecrement, onInstantSell }: TallyCardProps) {
+function TallyCard({
+  variant, liveStock, sessionSoldQty, basketQty, stockStatus,
+  tallyMode, onIncrement, onDecrement, onInstantSell,
+}: TallyCardProps) {
   const [bumping, setBumping] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
@@ -60,7 +70,8 @@ function TallyCard({ variant, liveStock, qty, stockStatus, tallyMode, onIncremen
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showInfo]);
 
-  const tallyTotal = qty * variant.price;
+  // The big displayed number: cumulative sold in Tally mode, basket qty in Register mode
+  const displayQty = tallyMode ? sessionSoldQty : basketQty;
 
   function handleIncrement() {
     if (isEmpty) return;
@@ -81,7 +92,6 @@ function TallyCard({ variant, liveStock, qty, stockStatus, tallyMode, onIncremen
       'mp-card flex flex-col p-3 select-none transition-all',
       stockStrokeClass(stockStatus),
       isEmpty && 'opacity-50',
-      tallyMode && 'opacity-80'
     )}>
       {/* Header */}
       <div className="flex items-start justify-between mb-2">
@@ -134,17 +144,19 @@ function TallyCard({ variant, liveStock, qty, stockStatus, tallyMode, onIncremen
           )}
         </div>
       </div>
-      {/* Tally number */}
+
+      {/* Big number — session cumulative in Tally, basket qty in Register */}
       <div className="flex-1 flex items-center justify-center py-2">
         <span
           className={cn('mp-tally-number', bumping && 'animate-counter-bump')}
-          style={{ color: qty > 0 ? '#E6E7EB' : '#2D3048' }}>
-          {qty}
+          style={{ color: displayQty > 0 ? '#E6E7EB' : '#2D3048' }}>
+          {displayQty}
         </span>
       </div>
+
       {/* +/- controls */}
       <div className="flex items-center gap-1.5 mb-2">
-        <button onClick={onDecrement} disabled={qty === 0 || tallyMode}
+        <button onClick={onDecrement} disabled={basketQty === 0 || tallyMode}
           className="flex-1 flex items-center justify-center h-9 rounded-lg transition-all active:scale-95 disabled:opacity-30"
           style={{ background: '#0E0F14', border: '1px solid #2D3048' }}>
           <Minus size={14} className="text-[#A4A7B5]" />
@@ -157,62 +169,140 @@ function TallyCard({ variant, liveStock, qty, stockStatus, tallyMode, onIncremen
           <Plus size={16} />
         </button>
       </div>
-      {/* Total */}
+
+      {/* Price / running total */}
       <div className="flex items-center justify-between">
         <span className="text-xs text-[#7B7F93] mp-mono">€{variant.price.toFixed(2)}</span>
-        <span className={cn('text-xs font-bold mp-mono', qty > 0 ? 'text-[#E6E7EB]' : 'text-[#2D3048]')}>
-          {qty > 0 ? `€${tallyTotal.toFixed(2)}` : '—'}
-        </span>
+        {!tallyMode && basketQty > 0 ? (
+          <span className="text-xs font-bold mp-mono text-[#E6E7EB]">
+            €{(basketQty * variant.price).toFixed(2)}
+          </span>
+        ) : tallyMode && sessionSoldQty > 0 ? (
+          <span className="text-xs font-bold mp-mono text-[#4ADE80]">
+            ×{sessionSoldQty} sold
+          </span>
+        ) : (
+          <span className="text-xs font-bold mp-mono text-[#2D3048]">—</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Basket Preview Sheet (Register mode — expand button) ───────────────────
+interface BasketPreviewProps {
+  items: Array<{ variantId: string; name: string; qty: number; unitPrice: number }>;
+  totalRevenue: number;
+  onClose: () => void;
+  onAdjust: (variantId: string, variantName: string, unitPrice: number, delta: number) => void;
+}
+function BasketPreview({ items, totalRevenue, onClose, onAdjust }: BasketPreviewProps) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center"
+      style={{ background: 'rgba(14,15,20,0.7)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}>
+      <div
+        className="w-full max-w-sm rounded-t-2xl animate-slide-up pb-safe"
+        style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 pt-4 pb-3">
+          <h3 className="text-sm font-bold text-[#E6E7EB]">Current Basket</h3>
+          <button onClick={onClose}
+            className="w-7 h-7 rounded-full flex items-center justify-center text-[#7B7F93]"
+            style={{ background: 'rgba(45,48,72,0.5)' }}>
+            <ChevronDown size={14} />
+          </button>
+        </div>
+        {items.length === 0 ? (
+          <p className="text-sm text-[#7B7F93] text-center py-6">Basket is empty</p>
+        ) : (
+          <div className="px-5 space-y-1 max-h-64 overflow-y-auto pb-4">
+            {items.map(item => (
+              <div key={item.variantId} className="flex items-center justify-between py-2 px-2 rounded-lg"
+                style={{ background: 'rgba(14,15,20,0.5)' }}>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="text-xs font-bold text-[#7C6DFF] mp-mono w-5 text-center">×{item.qty}</span>
+                  <span className="text-sm text-[#A4A7B5] truncate">{item.name}</span>
+                </div>
+                <div className="flex items-center gap-1.5 ml-2">
+                  <span className="text-sm font-bold text-[#E6E7EB] mp-mono mr-2">
+                    €{(item.qty * item.unitPrice).toFixed(2)}
+                  </span>
+                  <button
+                    onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, -1)}
+                    className="w-6 h-6 rounded-full flex items-center justify-center transition-all active:scale-90"
+                    style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}>
+                    <Minus size={10} className="text-[#F87171]" />
+                  </button>
+                  <button
+                    onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, 1)}
+                    className="w-6 h-6 rounded-full flex items-center justify-center transition-all active:scale-90"
+                    style={{ background: 'rgba(107,92,255,0.12)', border: '1px solid rgba(107,92,255,0.2)' }}>
+                    <Plus size={10} className="text-[#7C6DFF]" />
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div className="flex items-center justify-between pt-2 border-t border-[#24273A]">
+              <span className="text-sm font-semibold text-[#A4A7B5]">Total</span>
+              <span className="text-base font-black mp-gradient-text mp-mono">€{totalRevenue.toFixed(2)}</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // ── Register Modal (augmented Confirm Sale + cash drawer + iOS numpad) ─────
-const NUMPAD_KEYS = ['7','8','9','4','5','6','1','2','3','00','0','⌫'] as const;
+const NUMPAD_KEYS = ['7','8','9','4','5','6','1','2','3','00','0','\u232b'] as const;
 
 interface RegisterModalProps {
-  items: Array<{ name: string; qty: number; total: number }>;
-  totalUnits: number;
+  items: Array<{ variantId: string; name: string; qty: number; unitPrice: number }>;
   totalRevenue: number;
   requireMoneyInput: boolean;
   onConfirm: (moneyIn: number) => void;
   onCancel: () => void;
+  onAdjust: (variantId: string, variantName: string, unitPrice: number, delta: number) => void;
 }
-function RegisterModal({ items, totalUnits, totalRevenue, requireMoneyInput, onConfirm, onCancel }: RegisterModalProps) {
-  const [moneyIn, setMoneyIn] = useState('');
+function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCancel, onAdjust }: RegisterModalProps) {
+  const [moneyIn, setMoneyIn] = useState(0);
   const [numpadOpen, setNumpadOpen] = useState(true);
+  const [numpadRaw, setNumpadRaw] = useState('');
 
-  const parsed = parseFloat(moneyIn) || 0;
-  const validInput = moneyIn !== '' && !isNaN(parsed) && parsed >= 0;
-  const sufficient = validInput && parsed >= totalRevenue;
-  const change = validInput ? parsed - totalRevenue : null;
+  // moneyIn is the running sum from denomination taps + numpad
+  const totalUnits = items.reduce((s, i) => s + i.qty, 0);
+  const validInput = moneyIn > 0;
+  const sufficient = validInput && moneyIn >= totalRevenue;
+  const change = validInput ? moneyIn - totalRevenue : null;
   const canComplete = sufficient || !requireMoneyInput;
 
-  // Quick amounts: nearest round values above total
-  const quickAmounts = (() => {
-    const amounts: number[] = [];
-    const thresholds = [5, 10, 20, 50, 100, 200];
-    for (const t of thresholds) {
-      const rounded = Math.ceil(totalRevenue / t) * t;
-      if (rounded >= totalRevenue && !amounts.includes(rounded) && amounts.length < 4) {
-        amounts.push(rounded);
-      }
-    }
-    return amounts;
-  })();
+  function handleDenom(d: number) {
+    setMoneyIn(v => Math.min(v + d, 9999));
+    setNumpadRaw('');
+  }
 
   function handleNumpad(key: string) {
-    if (key === '⌫') {
-      setMoneyIn(v => v.slice(0, -1));
+    if (key === '\u232b') {
+      const next = numpadRaw.slice(0, -1);
+      setNumpadRaw(next);
+      setMoneyIn(parseFloat(next) || 0);
     } else if (key === '00') {
-      setMoneyIn(v => (v === '' ? '' : v + '00'));
+      const next = numpadRaw === '' ? '' : numpadRaw + '00';
+      setNumpadRaw(next);
+      setMoneyIn(parseFloat(next) || 0);
     } else {
-      setMoneyIn(v => {
-        const next = v + key;
-        return parseFloat(next) > 9999 ? v : next;
-      });
+      const next = numpadRaw + key;
+      if (parseFloat(next) <= 9999) {
+        setNumpadRaw(next);
+        setMoneyIn(parseFloat(next) || 0);
+      }
     }
+  }
+
+  function handleClearMoney() {
+    setMoneyIn(0);
+    setNumpadRaw('');
   }
 
   return (
@@ -239,16 +329,32 @@ function RegisterModal({ items, totalUnits, totalRevenue, requireMoneyInput, onC
           </button>
         </div>
 
-        {/* Items list */}
-        <div className="px-5 space-y-1 max-h-36 overflow-y-auto mb-1">
+        {/* Items list with +/- tweaks */}
+        <div className="px-5 space-y-1 max-h-40 overflow-y-auto mb-1">
           {items.map(item => (
-            <div key={item.name} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
+            <div key={item.variantId} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
               style={{ background: 'rgba(14,15,20,0.5)' }}>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="text-xs font-bold text-[#7C6DFF] mp-mono w-5 text-center">×{item.qty}</span>
-                <span className="text-sm text-[#A4A7B5]">{item.name}</span>
+                <span className="text-sm text-[#A4A7B5] truncate">{item.name}</span>
               </div>
-              <span className="text-sm font-bold text-[#E6E7EB] mp-mono">€{item.total.toFixed(2)}</span>
+              <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+                <span className="text-sm font-bold text-[#E6E7EB] mp-mono mr-1">
+                  €{(item.qty * item.unitPrice).toFixed(2)}
+                </span>
+                <button
+                  onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, -1)}
+                  className="w-6 h-6 rounded-full flex items-center justify-center transition-all active:scale-90"
+                  style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}>
+                  <Minus size={10} className="text-[#F87171]" />
+                </button>
+                <button
+                  onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, 1)}
+                  className="w-6 h-6 rounded-full flex items-center justify-center transition-all active:scale-90"
+                  style={{ background: 'rgba(107,92,255,0.12)', border: '1px solid rgba(107,92,255,0.2)' }}>
+                  <Plus size={10} className="text-[#7C6DFF]" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -261,7 +367,15 @@ function RegisterModal({ items, totalUnits, totalRevenue, requireMoneyInput, onC
 
         {/* Money received */}
         <div className="px-5 pt-3 pb-2">
-          <p className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Money Received</p>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Money Received</p>
+            {moneyIn > 0 && (
+              <button onClick={handleClearMoney}
+                className="text-[10px] font-semibold text-[#F87171] hover:text-[#FCA5A5] transition-colors">
+                Clear
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-1 px-3 py-2.5 rounded-2xl mb-2"
             style={{
               background: '#0E0F14',
@@ -269,26 +383,25 @@ function RegisterModal({ items, totalUnits, totalRevenue, requireMoneyInput, onC
             }}>
             <span className="text-sm font-bold text-[#7B7F93]">€</span>
             <span className="text-xl font-black text-[#E6E7EB] mp-mono flex-1">
-              {moneyIn === '' ? <span className="text-[#2D3048]">0</span> : moneyIn}
+              {moneyIn === 0 ? <span className="text-[#2D3048]">0</span> : moneyIn.toFixed(2)}
             </span>
           </div>
-          {/* Quick amounts */}
-          {quickAmounts.length > 0 && (
-            <div className="flex gap-1.5 flex-wrap mb-2">
-              {quickAmounts.map(d => (
-                <button key={d}
-                  onClick={() => setMoneyIn(String(d))}
-                  className="px-2.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
-                  style={{
-                    background: moneyIn === String(d) ? 'rgba(74,222,128,0.15)' : '#1B1E2E',
-                    border: moneyIn === String(d) ? '1px solid rgba(74,222,128,0.4)' : '1px solid #2D3048',
-                    color: moneyIn === String(d) ? '#4ADE80' : '#A4A7B5',
-                  }}>
-                  €{d}
-                </button>
-              ))}
-            </div>
-          )}
+
+          {/* Euro denomination quick-add buttons */}
+          <div className="flex gap-1.5 flex-wrap mb-2">
+            {EURO_DENOMS.map(d => (
+              <button key={d}
+                onClick={() => handleDenom(d)}
+                className="px-2.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
+                style={{
+                  background: '#1B1E2E',
+                  border: '1px solid #2D3048',
+                  color: '#A4A7B5',
+                }}>
+                €{d}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Change display */}
@@ -310,7 +423,7 @@ function RegisterModal({ items, totalUnits, totalRevenue, requireMoneyInput, onC
         {/* Complete Sale button */}
         <div className="px-5 mb-3">
           <button
-            onClick={() => onConfirm(validInput ? parsed : 0)}
+            onClick={() => onConfirm(moneyIn)}
             disabled={!canComplete}
             className="w-full py-3.5 rounded-2xl text-sm font-black text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
             style={canComplete
@@ -337,75 +450,18 @@ function RegisterModal({ items, totalUnits, totalRevenue, requireMoneyInput, onC
                 onClick={() => handleNumpad(key)}
                 className={cn(
                   'flex items-center justify-center h-14 rounded-full text-lg font-bold transition-all active:scale-90',
-                  key === '⌫' ? 'text-[#F87171]' : 'text-[#E6E7EB]'
+                  key === '\u232b' ? 'text-[#F87171]' : 'text-[#E6E7EB]'
                 )}
                 style={{
-                  background: key === '⌫' ? 'rgba(248,113,113,0.12)' : '#1B1E2E',
-                  border: `1px solid ${key === '⌫' ? 'rgba(248,113,113,0.25)' : '#2D3048'}`,
+                  background: key === '\u232b' ? 'rgba(248,113,113,0.12)' : '#1B1E2E',
+                  border: `1px solid ${key === '\u232b' ? 'rgba(248,113,113,0.25)' : '#2D3048'}`,
                   boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
                 }}>
-                {key === '⌫' ? <Delete size={18} /> : key}
+                {key === '\u232b' ? <Delete size={18} /> : key}
               </button>
             ))}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-// ── Standard Confirm Sale Modal (Register mode — no cash) ──────────────────
-interface ConfirmSaleModalProps {
-  items: Array<{ name: string; qty: number; total: number }>;
-  totalUnits: number;
-  totalRevenue: number;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
-function ConfirmSaleModal({ items, totalUnits, totalRevenue, onConfirm, onCancel }: ConfirmSaleModalProps) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
-      <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up"
-        style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}>
-        <div className="p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ background: 'rgba(107,92,255,0.12)' }}>
-              <CheckCircle2 size={20} className="text-[#7C6DFF]" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-[#E6E7EB]">Confirm Sale</h2>
-              <p className="text-xs text-[#7B7F93]">{totalUnits} items · €{totalRevenue.toFixed(2)}</p>
-            </div>
-          </div>
-          <div className="space-y-1.5 mb-4 max-h-48 overflow-y-auto">
-            {items.map(item => (
-              <div key={item.name} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
-                style={{ background: 'rgba(14,15,20,0.5)' }}>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-[#7C6DFF] mp-mono w-5 text-center">×{item.qty}</span>
-                  <span className="text-sm text-[#A4A7B5]">{item.name}</span>
-                </div>
-                <span className="text-sm font-bold text-[#E6E7EB] mp-mono">€{item.total.toFixed(2)}</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-between py-3 border-t border-[#24273A] mb-4">
-            <span className="text-sm font-semibold text-[#A4A7B5]">Total</span>
-            <span className="text-xl font-black mp-gradient-text mp-mono">€{totalRevenue.toFixed(2)}</span>
-          </div>
-          <div className="flex gap-3">
-            <button onClick={onCancel}
-              className="flex-1 py-3 rounded-xl text-sm font-semibold text-[#A4A7B5]"
-              style={{ border: '1px solid #2D3048' }}>Cancel</button>
-            <button onClick={onConfirm}
-              className="flex-[2] py-3 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2"
-              style={{ background: 'linear-gradient(135deg, #6B5CFF 0%, #C026D3 100%)', boxShadow: '0 0 20px rgba(107,92,255,0.3)' }}>
-              <CheckCircle2 size={15} /> Confirm Sale
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -416,8 +472,8 @@ export default function TallyCounter() {
   const [, navigate] = useLocation();
   const { state, dispatch, confirmSale, getVariantStockStatus, getTallyTotal } = useMerchPad();
   const { products, activeSession, tally, settings } = state;
-  const [showConfirm, setShowConfirm] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [showBasketPreview, setShowBasketPreview] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [justConfirmed, setJustConfirmed] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
@@ -425,6 +481,19 @@ export default function TallyCounter() {
   // TALLY = instant-confirm mode (default), REGISTER = cash drawer modal mode
   const [mode, setMode] = useState<'tally' | 'register'>('tally');
   const tallyMode = mode === 'tally';
+
+  // Cumulative session-sold counts — persists across individual sales, resets only at session close
+  const [sessionSold, setSessionSold] = useState<Record<string, number>>({});
+
+  // Reset sessionSold when the active session changes (new session started)
+  const prevSessionId = useRef<string | null>(null);
+  useEffect(() => {
+    const currentId = activeSession?.id ?? null;
+    if (currentId !== prevSessionId.current) {
+      prevSessionId.current = currentId;
+      setSessionSold({});
+    }
+  }, [activeSession?.id]);
 
   const allVariants: Array<{ variant: ProductVariant; productName: string }> = products.flatMap(p =>
     p.variants.map(v => ({ variant: v, productName: p.name }))
@@ -440,10 +509,34 @@ export default function TallyCounter() {
   const { units: totalUnits, revenue: totalRevenue } = getTallyTotal();
   const hasItems = totalUnits > 0;
 
+  // Basket items for modals / preview
+  const basketItems = Object.values(tally.items)
+    .filter(i => i.qty > 0)
+    .map(i => ({ variantId: i.variantId, name: i.variantName, qty: i.qty, unitPrice: i.unitPrice }));
+
+  // Adjust basket qty (used in both preview and modal)
+  const handleAdjust = useCallback((variantId: string, variantName: string, unitPrice: number, delta: number) => {
+    if (delta > 0) {
+      dispatch({ type: 'TALLY_INCREMENT', payload: { variantId, variantName, unitPrice } });
+    } else {
+      dispatch({ type: 'TALLY_DECREMENT', payload: { variantId, variantName } });
+    }
+  }, [dispatch]);
+
   // Register confirm (with cash amount)
   const handleRegisterConfirm = useCallback(async (moneyIn: number) => {
+    // Snapshot basket before confirm clears it
+    const snapshot = Object.values(tally.items).filter(i => i.qty > 0);
     const batch = await confirmSale();
     if (batch) {
+      // Accumulate into sessionSold
+      setSessionSold(prev => {
+        const next = { ...prev };
+        snapshot.forEach(item => {
+          next[item.variantId] = (next[item.variantId] ?? 0) + item.qty;
+        });
+        return next;
+      });
       const change = moneyIn > 0 ? moneyIn - batch.totalPrice : 0;
       setShowRegisterModal(false);
       setJustConfirmed(true);
@@ -455,7 +548,7 @@ export default function TallyCounter() {
       );
       setTimeout(() => setJustConfirmed(false), 2000);
     }
-  }, [confirmSale]);
+  }, [confirmSale, tally.items]);
 
   // Instant sell (Tally mode — single variant, qty=1, immediate confirm)
   const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number) => {
@@ -463,6 +556,8 @@ export default function TallyCounter() {
     setTimeout(async () => {
       const batch = await confirmSale();
       if (batch) {
+        // Accumulate session sold count
+        setSessionSold(prev => ({ ...prev, [variantId]: (prev[variantId] ?? 0) + 1 }));
         setJustConfirmed(true);
         toast.success(`${variantName} · €${unitPrice.toFixed(2)}`, { duration: 1500 });
         setTimeout(() => setJustConfirmed(false), 1500);
@@ -474,10 +569,6 @@ export default function TallyCounter() {
     if (!hasItems) return;
     setShowRegisterModal(true);
   }
-
-  const confirmItems = Object.values(tally.items)
-    .filter(i => i.qty > 0)
-    .map(i => ({ name: i.variantName, qty: i.qty, total: i.qty * i.unitPrice }));
 
   if (!activeSession) {
     return (
@@ -516,7 +607,7 @@ export default function TallyCounter() {
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-[#E6E7EB]">Stop Sale?</h2>
-                  <p className="text-xs text-[#7B7F93]">You\'ll review the session before archiving</p>
+                  <p className="text-xs text-[#7B7F93]">You'll review the session before archiving</p>
                 </div>
               </div>
               <p className="text-sm text-[#A4A7B5] mb-4">
@@ -550,8 +641,27 @@ export default function TallyCounter() {
           <span className="text-xs text-[#7B7F93] truncate">· {activeSession.repName}</span>
         </div>
 
-        {/* Controls: TALLY/REGISTER toggle | LIVE·Stop group */}
         <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Basket preview button — Register mode only */}
+          {!tallyMode && (
+            <button
+              onClick={() => setShowBasketPreview(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 relative"
+              style={{
+                background: hasItems ? 'rgba(107,92,255,0.2)' : 'rgba(45,48,72,0.4)',
+                border: `1px solid ${hasItems ? 'rgba(107,92,255,0.4)' : '#2D3048'}`,
+                color: hasItems ? '#A78BFA' : '#7B7F93',
+              }}>
+              <Eye size={11} />
+              {hasItems && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white"
+                  style={{ background: '#6B5CFF' }}>
+                  {totalUnits}
+                </span>
+              )}
+            </button>
+          )}
+
           {/* TALLY / REGISTER pill toggle */}
           <div className="flex items-center rounded-xl overflow-hidden"
             style={{ border: '1px solid #2D3048', background: '#0E0F14' }}>
@@ -645,15 +755,16 @@ export default function TallyCounter() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {filteredVariants.map(({ variant }) => {
             const stockStatus = getVariantStockStatus(variant);
-            const qty = tally.items[variant.id]?.qty ?? 0;
+            const basketQty = tally.items[variant.id]?.qty ?? 0;
             const liveVariant = products.flatMap(p => p.variants).find(v => v.id === variant.id) ?? variant;
             return (
               <TallyCard
                 key={variant.id}
                 variant={liveVariant}
-                qty={qty}
-                stockStatus={stockStatus}
                 liveStock={liveVariant.currentStock}
+                sessionSoldQty={sessionSold[variant.id] ?? 0}
+                basketQty={basketQty}
+                stockStatus={stockStatus}
                 tallyMode={tallyMode}
                 onIncrement={() => dispatch({ type: 'TALLY_INCREMENT', payload: { variantId: variant.id, variantName: variant.name, unitPrice: variant.price } })}
                 onDecrement={() => dispatch({ type: 'TALLY_DECREMENT', payload: { variantId: variant.id, variantName: variant.name } })}
@@ -736,34 +847,25 @@ export default function TallyCounter() {
       {/* Spacer */}
       <div className="h-60" />
 
+      {/* Basket preview sheet (Register mode) */}
+      {showBasketPreview && (
+        <BasketPreview
+          items={basketItems}
+          totalRevenue={totalRevenue}
+          onClose={() => setShowBasketPreview(false)}
+          onAdjust={handleAdjust}
+        />
+      )}
+
       {/* Register modal (with cash drawer + iOS numpad) */}
       {showRegisterModal && (
         <RegisterModal
-          items={confirmItems}
-          totalUnits={totalUnits}
+          items={basketItems}
           totalRevenue={totalRevenue}
           requireMoneyInput={settings.requireMoneyInput ?? false}
           onConfirm={handleRegisterConfirm}
           onCancel={() => setShowRegisterModal(false)}
-        />
-      )}
-
-      {/* Standard confirm modal (kept for safety) */}
-      {showConfirm && (
-        <ConfirmSaleModal
-          items={confirmItems}
-          totalUnits={totalUnits}
-          totalRevenue={totalRevenue}
-          onConfirm={async () => {
-            const batch = await confirmSale();
-            if (batch) {
-              setShowConfirm(false);
-              setJustConfirmed(true);
-              toast.success(`Sale confirmed! ${batch.totalItems} items · €${batch.totalPrice.toFixed(2)}`);
-              setTimeout(() => setJustConfirmed(false), 2000);
-            }
-          }}
-          onCancel={() => setShowConfirm(false)}
+          onAdjust={handleAdjust}
         />
       )}
     </div>
