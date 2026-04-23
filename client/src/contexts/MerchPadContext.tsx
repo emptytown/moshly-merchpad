@@ -267,19 +267,21 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       await seedDemoData();
       const db = await getDB();
 
-      const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock] = await Promise.all([
+      const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed] = await Promise.all([
         db.getAll('products'),
         db.getAll('shows'),
         getSetting<string>('repName', ''),
         getSetting<boolean>('undoEnabled', true),
         getSetting<boolean>('requireMoneyInput', false),
         getSetting<boolean>('allowMidSaleRestock', false),
+        getSetting<number>('stockThresholdYellow', 0.3),
+        getSetting<number>('stockThresholdRed', 0.1),
       ]);
 
       dispatch({ type: 'SET_PRODUCTS', payload: products });
       dispatch({ type: 'SET_SHOWS', payload: shows });
       dispatch({ type: 'SET_REP_NAME', payload: repName });
-      dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled, requireMoneyInput, allowMidSaleRestock } });
+      dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed } });
 
       // Restore active session if any
       const activeSessions = await db.getAllFromIndex('sessions', 'by-status', 'active');

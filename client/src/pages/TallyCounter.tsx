@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
+import { setSetting, getSetting } from '../lib/db';
 import { ProductVariant } from '../lib/db';
 import { cn } from '../lib/utils';
 
@@ -523,12 +524,24 @@ export default function TallyCounter() {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showBasketPreview, setShowBasketPreview] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  // Restore persisted category filter on mount
+  useEffect(() => {
+    getSetting<string>('tallyFilterCategory', 'all').then(saved => {
+      if (saved) setFilterCategory(saved);
+    });
+  }, []);
   const [justConfirmed, setJustConfirmed] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
 
   // TALLY = instant-confirm mode (default), REGISTER = cash drawer modal mode
   const [mode, setMode] = useState<'tally' | 'register'>('tally');
   const tallyMode = mode === 'tally';
+  // Restore persisted mode on mount
+  useEffect(() => {
+    getSetting<string>('tallyMode', 'tally').then(saved => {
+      if (saved === 'register') setMode('register');
+    });
+  }, []);
 
   // Cumulative session-sold counts — persists across individual sales, resets only at session close
   const [sessionSold, setSessionSold] = useState<Record<string, number>>({});
@@ -733,7 +746,7 @@ export default function TallyCounter() {
           <div className="flex items-center rounded-xl overflow-hidden"
             style={{ border: '1px solid #2D3048', background: '#0E0F14' }}>
             <button
-              onClick={() => setMode('tally')}
+              onClick={() => { setMode('tally'); setSetting('tallyMode', 'tally'); }}
               className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold transition-all"
               style={tallyMode
                 ? { background: 'rgba(107,92,255,0.25)', color: '#A78BFA' }
@@ -742,7 +755,7 @@ export default function TallyCounter() {
             </button>
             <div className="w-px h-4 bg-[#2D3048]" />
             <button
-              onClick={() => setMode('register')}
+              onClick={() => { setMode('register'); setSetting('tallyMode', 'register'); }}
               className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold transition-all"
               style={!tallyMode
                 ? { background: 'rgba(74,222,128,0.2)', color: '#4ADE80' }
@@ -789,7 +802,7 @@ export default function TallyCounter() {
       {categories.length > 2 && (
         <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-none">
           {categories.map(cat => (
-            <button key={cat} onClick={() => setFilterCategory(cat)}
+            <button key={cat} onClick={() => { setFilterCategory(cat); setSetting('tallyFilterCategory', cat); }}
               className={cn('flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
                 filterCategory === cat ? 'text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]'
               )}

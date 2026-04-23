@@ -184,7 +184,7 @@ export default function Settings() {
               </div>
               <Slider
                 value={[settings.stockThresholdYellow * 100]}
-                onValueChange={([v]) => dispatch({ type: 'SET_SETTINGS', payload: { stockThresholdYellow: v / 100 } })}
+                onValueChange={async ([v]) => { dispatch({ type: 'SET_SETTINGS', payload: { stockThresholdYellow: v / 100 } }); await setSetting('stockThresholdYellow', v / 100); }}
                 min={10} max={60} step={5}
                 className="w-full"
               />
@@ -203,7 +203,7 @@ export default function Settings() {
               </div>
               <Slider
                 value={[settings.stockThresholdRed * 100]}
-                onValueChange={([v]) => dispatch({ type: 'SET_SETTINGS', payload: { stockThresholdRed: v / 100 } })}
+                onValueChange={async ([v]) => { dispatch({ type: 'SET_SETTINGS', payload: { stockThresholdRed: v / 100 } }); await setSetting('stockThresholdRed', v / 100); }}
                 min={1} max={20} step={1}
                 className="w-full"
               />
