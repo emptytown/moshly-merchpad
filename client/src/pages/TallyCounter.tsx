@@ -3,10 +3,10 @@
  * Design: "Neon Ledger" — glowing stock-stroke cards, large tally numbers
  *
  * Modes:
- *  1. Standard Mode — running tally, Confirm Sale modal, Undo/Clear
- *  2. Client Mode — single-sale terminal: items → Cash Drawer (money in / change)
- *     • Activated by "Client Mode" button next to the LIVE·Stop group in session bar
- *     • "Stay On" pin: if active, stays enabled between sales; if off, auto-disables after each sale
+ *  1. TALLY mode (default) — running tally, + tap instantly auto-confirms single item,
+ *     SS1 bar is shaded/dimmed (no manual Confirm Sale needed).
+ *  2. REGISTER mode — SS1 bar fully active; "Confirm Sale" opens an augmented modal:
+ *     items list → total → money received → change → Complete Sale + collapsible iOS numpad.
  *
  * Stock fix: TallyCard receives liveStock from reactive products state, not from session snapshot
  */
@@ -14,7 +14,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   Minus, Plus, RotateCcw, Trash2, CheckCircle2, Zap, ShoppingBag,
-  StopCircle, Archive, Info, Banknote, X, Pin, Delete,
+  StopCircle, Archive, Info, ChevronDown, ChevronUp, Delete,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
@@ -39,11 +39,13 @@ interface TallyCardProps {
   liveStock: number;
   qty: number;
   stockStatus: string;
+  /** In TALLY mode, + tap immediately confirms a single-item sale */
+  tallyMode: boolean;
   onIncrement: () => void;
   onDecrement: () => void;
+  onInstantSell: () => void;
 }
-
-function TallyCard({ variant, liveStock, qty, stockStatus, onIncrement, onDecrement }: TallyCardProps) {
+function TallyCard({ variant, liveStock, qty, stockStatus, tallyMode, onIncrement, onDecrement, onInstantSell }: TallyCardProps) {
   const [bumping, setBumping] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
@@ -64,14 +66,23 @@ function TallyCard({ variant, liveStock, qty, stockStatus, onIncrement, onDecrem
     if (isEmpty) return;
     setBumping(true);
     setTimeout(() => setBumping(false), 200);
-    onIncrement();
+    if (tallyMode) {
+      onInstantSell();
+    } else {
+      onIncrement();
+    }
   }
 
   const stockLabel = { high: 'In Stock', medium: 'Low', low: 'Critical', empty: 'Out' }[stockStatus] ?? '';
   const stockColor = { high: '#4ADE80', medium: '#FBBF24', low: '#F87171', empty: '#F87171' }[stockStatus] ?? '#7B7F93';
 
   return (
-    <div className={cn('mp-card flex flex-col p-3 select-none', stockStrokeClass(stockStatus), isEmpty && 'opacity-50')}>
+    <div className={cn(
+      'mp-card flex flex-col p-3 select-none transition-all',
+      stockStrokeClass(stockStatus),
+      isEmpty && 'opacity-50',
+      tallyMode && 'opacity-80'
+    )}>
       {/* Header */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
@@ -105,7 +116,6 @@ function TallyCard({ variant, liveStock, qty, stockStatus, onIncrement, onDecrem
                 <div className="border-t border-[#24273A] pt-1.5 mt-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-[#7B7F93]">In stock</span>
-                    {/* liveStock is always the current value from reactive state */}
                     <span className="text-[10px] font-bold" style={{ color: stockColor }}>{liveStock}</span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -124,7 +134,6 @@ function TallyCard({ variant, liveStock, qty, stockStatus, onIncrement, onDecrem
           )}
         </div>
       </div>
-
       {/* Tally number */}
       <div className="flex-1 flex items-center justify-center py-2">
         <span
@@ -133,21 +142,21 @@ function TallyCard({ variant, liveStock, qty, stockStatus, onIncrement, onDecrem
           {qty}
         </span>
       </div>
-
       {/* +/- controls */}
       <div className="flex items-center gap-1.5 mb-2">
-        <button onClick={onDecrement} disabled={qty === 0}
+        <button onClick={onDecrement} disabled={qty === 0 || tallyMode}
           className="flex-1 flex items-center justify-center h-9 rounded-lg transition-all active:scale-95 disabled:opacity-30"
           style={{ background: '#0E0F14', border: '1px solid #2D3048' }}>
           <Minus size={14} className="text-[#A4A7B5]" />
         </button>
         <button onClick={handleIncrement} disabled={isEmpty}
           className="flex-[2] flex items-center justify-center h-9 rounded-lg font-bold text-white transition-all active:scale-95 disabled:opacity-30"
-          style={{ background: 'linear-gradient(135deg, #6B5CFF 0%, #C026D3 100%)' }}>
+          style={{ background: tallyMode
+            ? 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)'
+            : 'linear-gradient(135deg, #6B5CFF 0%, #C026D3 100%)' }}>
           <Plus size={16} />
         </button>
       </div>
-
       {/* Total */}
       <div className="flex items-center justify-between">
         <span className="text-xs text-[#7B7F93] mp-mono">€{variant.price.toFixed(2)}</span>
@@ -159,7 +168,193 @@ function TallyCard({ variant, liveStock, qty, stockStatus, onIncrement, onDecrem
   );
 }
 
-// ── Standard Confirm Sale Modal ────────────────────────────────────────────
+// ── Register Modal (augmented Confirm Sale + cash drawer + iOS numpad) ─────
+const NUMPAD_KEYS = ['7','8','9','4','5','6','1','2','3','00','0','⌫'] as const;
+
+interface RegisterModalProps {
+  items: Array<{ name: string; qty: number; total: number }>;
+  totalUnits: number;
+  totalRevenue: number;
+  requireMoneyInput: boolean;
+  onConfirm: (moneyIn: number) => void;
+  onCancel: () => void;
+}
+function RegisterModal({ items, totalUnits, totalRevenue, requireMoneyInput, onConfirm, onCancel }: RegisterModalProps) {
+  const [moneyIn, setMoneyIn] = useState('');
+  const [numpadOpen, setNumpadOpen] = useState(true);
+
+  const parsed = parseFloat(moneyIn) || 0;
+  const validInput = moneyIn !== '' && !isNaN(parsed) && parsed >= 0;
+  const sufficient = validInput && parsed >= totalRevenue;
+  const change = validInput ? parsed - totalRevenue : null;
+  const canComplete = sufficient || !requireMoneyInput;
+
+  // Quick amounts: nearest round values above total
+  const quickAmounts = (() => {
+    const amounts: number[] = [];
+    const thresholds = [5, 10, 20, 50, 100, 200];
+    for (const t of thresholds) {
+      const rounded = Math.ceil(totalRevenue / t) * t;
+      if (rounded >= totalRevenue && !amounts.includes(rounded) && amounts.length < 4) {
+        amounts.push(rounded);
+      }
+    }
+    return amounts;
+  })();
+
+  function handleNumpad(key: string) {
+    if (key === '⌫') {
+      setMoneyIn(v => v.slice(0, -1));
+    } else if (key === '00') {
+      setMoneyIn(v => (v === '' ? '' : v + '00'));
+    } else {
+      setMoneyIn(v => {
+        const next = v + key;
+        return parseFloat(next) > 9999 ? v : next;
+      });
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
+      <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-hidden"
+        style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: 'rgba(107,92,255,0.12)' }}>
+              <CheckCircle2 size={18} className="text-[#7C6DFF]" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-[#E6E7EB]">Confirm Sale</h2>
+              <p className="text-xs text-[#7B7F93]">{totalUnits} items · €{totalRevenue.toFixed(2)}</p>
+            </div>
+          </div>
+          <button onClick={onCancel} className="w-8 h-8 rounded-full flex items-center justify-center text-[#7B7F93] hover:text-[#E6E7EB] transition-colors"
+            style={{ background: 'rgba(45,48,72,0.5)' }}>
+            <Delete size={15} />
+          </button>
+        </div>
+
+        {/* Items list */}
+        <div className="px-5 space-y-1 max-h-36 overflow-y-auto mb-1">
+          {items.map(item => (
+            <div key={item.name} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
+              style={{ background: 'rgba(14,15,20,0.5)' }}>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-[#7C6DFF] mp-mono w-5 text-center">×{item.qty}</span>
+                <span className="text-sm text-[#A4A7B5]">{item.name}</span>
+              </div>
+              <span className="text-sm font-bold text-[#E6E7EB] mp-mono">€{item.total.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Total row */}
+        <div className="flex items-center justify-between px-5 py-3 border-t border-b border-[#24273A]">
+          <span className="text-sm font-semibold text-[#A4A7B5]">Total</span>
+          <span className="text-xl font-black mp-gradient-text mp-mono">€{totalRevenue.toFixed(2)}</span>
+        </div>
+
+        {/* Money received */}
+        <div className="px-5 pt-3 pb-2">
+          <p className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Money Received</p>
+          <div className="flex items-center gap-1 px-3 py-2.5 rounded-2xl mb-2"
+            style={{
+              background: '#0E0F14',
+              border: `1px solid ${validInput && sufficient ? 'rgba(74,222,128,0.4)' : validInput && !sufficient ? 'rgba(248,113,113,0.4)' : '#2D3048'}`,
+            }}>
+            <span className="text-sm font-bold text-[#7B7F93]">€</span>
+            <span className="text-xl font-black text-[#E6E7EB] mp-mono flex-1">
+              {moneyIn === '' ? <span className="text-[#2D3048]">0</span> : moneyIn}
+            </span>
+          </div>
+          {/* Quick amounts */}
+          {quickAmounts.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap mb-2">
+              {quickAmounts.map(d => (
+                <button key={d}
+                  onClick={() => setMoneyIn(String(d))}
+                  className="px-2.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
+                  style={{
+                    background: moneyIn === String(d) ? 'rgba(74,222,128,0.15)' : '#1B1E2E',
+                    border: moneyIn === String(d) ? '1px solid rgba(74,222,128,0.4)' : '1px solid #2D3048',
+                    color: moneyIn === String(d) ? '#4ADE80' : '#A4A7B5',
+                  }}>
+                  €{d}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Change display */}
+        <div className="mx-5 mb-3 flex items-center justify-between py-2.5 rounded-2xl px-4"
+          style={{
+            background: change === null ? 'rgba(45,48,72,0.4)' : sufficient ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)',
+            border: `1px solid ${change === null ? '#2D3048' : sufficient ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.25)'}`,
+          }}>
+          <span className="text-xs font-semibold"
+            style={{ color: change === null ? '#7B7F93' : sufficient ? '#4ADE80' : '#F87171' }}>
+            {change === null ? 'Change' : sufficient ? 'Change' : 'Short'}
+          </span>
+          <span className="text-lg font-black mp-mono"
+            style={{ color: change === null ? '#2D3048' : sufficient ? '#4ADE80' : '#F87171' }}>
+            {change === null ? '—' : sufficient ? `€${change.toFixed(2)}` : `-€${Math.abs(change).toFixed(2)}`}
+          </span>
+        </div>
+
+        {/* Complete Sale button */}
+        <div className="px-5 mb-3">
+          <button
+            onClick={() => onConfirm(validInput ? parsed : 0)}
+            disabled={!canComplete}
+            className="w-full py-3.5 rounded-2xl text-sm font-black text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            style={canComplete
+              ? { background: 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)', boxShadow: '0 0 20px rgba(74,222,128,0.3)' }
+              : { background: '#1B1E2E', opacity: 0.35 }}>
+            <CheckCircle2 size={15} /> Complete Sale
+          </button>
+        </div>
+
+        {/* Numpad toggle */}
+        <button
+          onClick={() => setNumpadOpen(v => !v)}
+          className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-[#7B7F93] hover:text-[#A4A7B5] transition-colors border-t border-[#24273A]">
+          {numpadOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+          {numpadOpen ? 'Hide Numpad' : 'Show Numpad'}
+        </button>
+
+        {/* iOS-style numpad */}
+        {numpadOpen && (
+          <div className="grid grid-cols-3 gap-2 px-5 pb-5 pt-3">
+            {NUMPAD_KEYS.map(key => (
+              <button
+                key={key}
+                onClick={() => handleNumpad(key)}
+                className={cn(
+                  'flex items-center justify-center h-14 rounded-full text-lg font-bold transition-all active:scale-90',
+                  key === '⌫' ? 'text-[#F87171]' : 'text-[#E6E7EB]'
+                )}
+                style={{
+                  background: key === '⌫' ? 'rgba(248,113,113,0.12)' : '#1B1E2E',
+                  border: `1px solid ${key === '⌫' ? 'rgba(248,113,113,0.25)' : '#2D3048'}`,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                }}>
+                {key === '⌫' ? <Delete size={18} /> : key}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Standard Confirm Sale Modal (Register mode — no cash) ──────────────────
 interface ConfirmSaleModalProps {
   items: Array<{ name: string; qty: number; total: number }>;
   totalUnits: number;
@@ -167,7 +362,6 @@ interface ConfirmSaleModalProps {
   onConfirm: () => void;
   onCancel: () => void;
 }
-
 function ConfirmSaleModal({ items, totalUnits, totalRevenue, onConfirm, onCancel }: ConfirmSaleModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -199,181 +393,18 @@ function ConfirmSaleModal({ items, totalUnits, totalRevenue, onConfirm, onCancel
           </div>
           <div className="flex items-center justify-between py-3 border-t border-[#24273A] mb-4">
             <span className="text-sm font-semibold text-[#A4A7B5]">Total</span>
-            <span className="text-xl font-black text-[#E6E7EB] mp-mono">€{totalRevenue.toFixed(2)}</span>
-          </div>
-        </div>
-        <div className="flex gap-2 px-5 pb-5">
-          <button onClick={onCancel}
-            className="flex-1 py-3 rounded-xl text-sm font-semibold text-[#A4A7B5]"
-            style={{ border: '1px solid #2D3048' }}>Cancel</button>
-          <button onClick={onConfirm}
-            className="flex-[2] py-3 rounded-xl text-sm font-black text-white mp-btn-primary flex items-center justify-center gap-2"
-            style={{ boxShadow: '0 0 20px rgba(107,92,255,0.3)' }}>
-            <CheckCircle2 size={16} /> Confirm Sale
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Client Mode Cash Drawer ────────────────────────────────────────────────
-// Sticky bottom panel — always visible, not a full-screen overlay
-interface CashDrawerProps {
-  items: Array<{ name: string; qty: number; total: number }>;
-  totalRevenue: number;
-  requireMoneyInput: boolean;
-  onConfirm: (moneyIn: number) => void;
-  onCancel: () => void;
-}
-
-const NUMPAD_KEYS = ['7','8','9','4','5','6','1','2','3','00','0','⌫'];
-
-function CashDrawer({ items, totalRevenue, requireMoneyInput, onConfirm, onCancel }: CashDrawerProps) {
-  const [moneyIn, setMoneyIn] = useState('');
-
-  // Parse as euro integer (e.g. "2500" = €25.00) — numpad inputs whole euros only
-  const euroValue = moneyIn === '' ? null : parseInt(moneyIn, 10);
-  const parsed = euroValue !== null ? euroValue : 0;
-  const validInput = euroValue !== null && euroValue >= 0;
-  const change = validInput ? parsed - totalRevenue : null;
-  const sufficient = change !== null && change >= 0;
-
-  // Quick denomination buttons — nearest common values above total
-  const quickAmounts = [5, 10, 20, 50, 100].filter(d => d >= totalRevenue).slice(0, 4);
-
-  function handleNumpad(key: string) {
-    if (key === '⌫') {
-      setMoneyIn(v => v.slice(0, -1));
-    } else if (key === '00') {
-      setMoneyIn(v => (v === '' ? '' : v + '00'));
-    } else {
-      setMoneyIn(v => {
-        const next = v + key;
-        // Max €9999
-        if (parseInt(next, 10) > 9999) return v;
-        return next;
-      });
-    }
-  }
-
-  const canComplete = sufficient || !requireMoneyInput;
-
-  return (
-    // Sticky panel anchored above bottom nav — not a full-screen overlay
-    <div className="fixed bottom-16 left-0 right-0 z-40 px-3 pb-2 animate-slide-up">
-      <div className="rounded-2xl shadow-2xl overflow-hidden"
-        style={{ background: '#141624', border: '1px solid rgba(74,222,128,0.3)' }}>
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-[#24273A]">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'rgba(74,222,128,0.12)' }}>
-              <Banknote size={14} className="text-[#4ADE80]" />
-            </div>
-            <span className="text-sm font-black text-[#E6E7EB]">Client Mode</span>
-            <span className="text-xs text-[#7B7F93]">· {items.reduce((s, i) => s + i.qty, 0)} items</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-black mp-gradient-text mp-mono">€{totalRevenue.toFixed(2)}</span>
-            <button onClick={onCancel} className="text-[#7B7F93] hover:text-[#E6E7EB] p-1 transition-colors">
-              <X size={15} />
-            </button>
-          </div>
-        </div>
-
-        {/* ── Info section: items, total due, money received, quick amounts, change, Complete Sale ── */}
-        <div className="px-4 pt-3 pb-2 space-y-2.5">
-          {/* Items list */}
-          <div className="space-y-1 max-h-24 overflow-y-auto">
-            {items.map(item => (
-              <div key={item.name} className="flex items-center justify-between">
-                <span className="text-xs text-[#A4A7B5]">
-                  <span className="text-[#7C6DFF] font-bold">×{item.qty}</span> {item.name}
-                </span>
-                <span className="text-xs font-semibold text-[#E6E7EB] mp-mono">€{item.total.toFixed(2)}</span>
-              </div>
-            ))}
-          </div>
-          {/* Total due */}
-          <div className="flex items-center justify-between py-2 border-t border-[#24273A]">
-            <span className="text-sm font-semibold text-[#A4A7B5]">Total Due</span>
             <span className="text-xl font-black mp-gradient-text mp-mono">€{totalRevenue.toFixed(2)}</span>
           </div>
-          {/* Money received display */}
-          <div>
-            <p className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Money Received</p>
-            <div className="flex items-center gap-1 px-3 py-2.5 rounded-xl mb-2"
-              style={{
-                background: '#0E0F14',
-                border: `1px solid ${validInput && sufficient ? 'rgba(74,222,128,0.4)' : validInput && !sufficient ? 'rgba(248,113,113,0.4)' : '#2D3048'}`,
-              }}>
-              <span className="text-sm font-bold text-[#7B7F93]">€</span>
-              <span className="text-xl font-black text-[#E6E7EB] mp-mono flex-1">
-                {moneyIn === '' ? <span className="text-[#2D3048]">0</span> : moneyIn}
-              </span>
-            </div>
-            {quickAmounts.length > 0 && (
-              <div className="flex gap-1.5 flex-wrap">
-                {quickAmounts.map(d => (
-                  <button key={d}
-                    onClick={() => setMoneyIn(String(d))}
-                    className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95"
-                    style={{
-                      background: moneyIn === String(d) ? 'rgba(74,222,128,0.15)' : '#1B1E2E',
-                      border: moneyIn === String(d) ? '1px solid rgba(74,222,128,0.4)' : '1px solid #2D3048',
-                      color: moneyIn === String(d) ? '#4ADE80' : '#A4A7B5',
-                    }}>
-                    €{d}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          {/* Change display */}
-          <div className="flex items-center justify-between py-2 rounded-xl px-3"
-            style={{
-              background: change === null ? 'rgba(45,48,72,0.4)' : sufficient ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)',
-              border: `1px solid ${change === null ? '#2D3048' : sufficient ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.25)'}`,
-            }}>
-            <span className="text-xs font-semibold"
-              style={{ color: change === null ? '#7B7F93' : sufficient ? '#4ADE80' : '#F87171' }}>
-              {change === null ? 'Change' : sufficient ? 'Change' : 'Short'}
-            </span>
-            <span className="text-lg font-black mp-mono"
-              style={{ color: change === null ? '#2D3048' : sufficient ? '#4ADE80' : '#F87171' }}>
-              {change === null ? '—' : sufficient ? `€${change.toFixed(2)}` : `-€${Math.abs(change).toFixed(2)}`}
-            </span>
-          </div>
-          {/* Complete Sale button */}
-          <button
-            onClick={() => onConfirm(validInput ? parsed : 0)}
-            disabled={!canComplete}
-            className="w-full py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-            style={canComplete
-              ? { background: 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)', boxShadow: '0 0 16px rgba(74,222,128,0.3)' }
-              : { background: '#1B1E2E', opacity: 0.35 }}>
-            <CheckCircle2 size={15} /> Complete Sale
-          </button>
-        </div>
-        {/* Numpad — below the info section */}
-        <div className="grid grid-cols-3 gap-1.5 px-4 pb-3">
-          {NUMPAD_KEYS.map(key => (
-            <button
-              key={key}
-              onClick={() => handleNumpad(key)}
-              className={cn(
-                'flex items-center justify-center h-11 rounded-xl text-sm font-bold transition-all active:scale-90',
-                key === '⌫' ? 'text-[#F87171]' : 'text-[#E6E7EB]'
-              )}
-              style={{
-                background: key === '⌫' ? 'rgba(248,113,113,0.1)' : '#1B1E2E',
-                border: `1px solid ${key === '⌫' ? 'rgba(248,113,113,0.2)' : '#2D3048'}`,
-              }}>
-              {key === '⌫' ? <Delete size={14} /> : key}
+          <div className="flex gap-3">
+            <button onClick={onCancel}
+              className="flex-1 py-3 rounded-xl text-sm font-semibold text-[#A4A7B5]"
+              style={{ border: '1px solid #2D3048' }}>Cancel</button>
+            <button onClick={onConfirm}
+              className="flex-[2] py-3 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg, #6B5CFF 0%, #C026D3 100%)', boxShadow: '0 0 20px rgba(107,92,255,0.3)' }}>
+              <CheckCircle2 size={15} /> Confirm Sale
             </button>
-          ))}
+          </div>
         </div>
       </div>
     </div>
@@ -385,23 +416,20 @@ export default function TallyCounter() {
   const [, navigate] = useLocation();
   const { state, dispatch, confirmSale, getVariantStockStatus, getTallyTotal } = useMerchPad();
   const { products, activeSession, tally, settings } = state;
-
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [justConfirmed, setJustConfirmed] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
 
-  // Client Mode
-  const [clientMode, setClientMode] = useState(false);
-  const [clientStayOn, setClientStayOn] = useState(false);
-  const [showCashDrawer, setShowCashDrawer] = useState(false);
+  // TALLY = instant-confirm mode (default), REGISTER = cash drawer modal mode
+  const [mode, setMode] = useState<'tally' | 'register'>('tally');
+  const tallyMode = mode === 'tally';
 
   const allVariants: Array<{ variant: ProductVariant; productName: string }> = products.flatMap(p =>
     p.variants.map(v => ({ variant: v, productName: p.name }))
   );
-
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category ?? 'Other').filter(Boolean)))];
-
   const filteredVariants = filterCategory === 'all'
     ? allVariants
     : allVariants.filter(({ variant }) => {
@@ -412,35 +440,39 @@ export default function TallyCounter() {
   const { units: totalUnits, revenue: totalRevenue } = getTallyTotal();
   const hasItems = totalUnits > 0;
 
-  const handleConfirm = useCallback(async () => {
+  // Register confirm (with cash amount)
+  const handleRegisterConfirm = useCallback(async (moneyIn: number) => {
     const batch = await confirmSale();
     if (batch) {
-      setShowConfirm(false);
+      const change = moneyIn > 0 ? moneyIn - batch.totalPrice : 0;
+      setShowRegisterModal(false);
       setJustConfirmed(true);
-      toast.success(`Sale confirmed! ${batch.totalItems} items · €${batch.totalPrice.toFixed(2)}`);
+      toast.success(
+        moneyIn > 0
+          ? `Sale complete! €${batch.totalPrice.toFixed(2)} · Change: €${change.toFixed(2)}`
+          : `Sale confirmed! ${batch.totalItems} items · €${batch.totalPrice.toFixed(2)}`,
+        { duration: 4000 }
+      );
       setTimeout(() => setJustConfirmed(false), 2000);
     }
   }, [confirmSale]);
 
-  const handleClientConfirm = useCallback(async (moneyIn: number) => {
-    const batch = await confirmSale();
-    if (batch) {
-      const change = moneyIn - batch.totalPrice;
-      setShowCashDrawer(false);
-      setJustConfirmed(true);
-      toast.success(
-        `Sale complete! €${batch.totalPrice.toFixed(2)} · Change: €${change.toFixed(2)}`,
-        { duration: 4000 }
-      );
-      setTimeout(() => setJustConfirmed(false), 2000);
-      if (!clientStayOn) setClientMode(false);
-    }
-  }, [confirmSale, clientStayOn]);
+  // Instant sell (Tally mode — single variant, qty=1, immediate confirm)
+  const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number) => {
+    dispatch({ type: 'TALLY_INCREMENT', payload: { variantId, variantName, unitPrice } });
+    setTimeout(async () => {
+      const batch = await confirmSale();
+      if (batch) {
+        setJustConfirmed(true);
+        toast.success(`${variantName} · €${unitPrice.toFixed(2)}`, { duration: 1500 });
+        setTimeout(() => setJustConfirmed(false), 1500);
+      }
+    }, 50);
+  }, [dispatch, confirmSale]);
 
   function handleConfirmButton() {
     if (!hasItems) return;
-    if (clientMode) setShowCashDrawer(true);
-    else setShowConfirm(true);
+    setShowRegisterModal(true);
   }
 
   const confirmItems = Object.values(tally.items)
@@ -449,27 +481,28 @@ export default function TallyCounter() {
 
   if (!activeSession) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center animate-fade-in">
-        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-          style={{ background: 'rgba(107,92,255,0.1)', border: '1px solid rgba(107,92,255,0.2)' }}>
-          <Zap size={28} className="text-[#6B5CFF]" />
+      <div className="flex flex-col items-center justify-center h-full gap-4 px-6">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+          style={{ background: 'rgba(107,92,255,0.12)' }}>
+          <Zap size={28} className="text-[#7C6DFF]" />
         </div>
-        <h2 className="text-xl font-black text-[#E6E7EB] mb-2">No Active Session</h2>
-        <p className="text-sm text-[#7B7F93] mb-6 max-w-xs">
-          Go to Merch Office, select a show, and start a sale session to activate the Tally Counter.
-        </p>
-        <button onClick={() => navigate('/')}
-          className="px-6 py-3 rounded-xl text-sm font-bold text-white mp-btn-primary flex items-center gap-2">
-          <ShoppingBag size={15} /> Go to Merch Office
+        <div className="text-center">
+          <h2 className="text-lg font-black text-[#E6E7EB] mb-1">No Active Session</h2>
+          <p className="text-sm text-[#7B7F93]">Start a sale session from Merch Office to begin tallying.</p>
+        </div>
+        <button
+          onClick={() => navigate('/')}
+          className="px-6 py-3 rounded-xl text-sm font-bold text-white"
+          style={{ background: 'linear-gradient(135deg, #6B5CFF 0%, #C026D3 100%)' }}>
+          Go to Merch Office
         </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-full animate-fade-in">
-
-      {/* Stop Sale confirm overlay */}
+    <div className="flex flex-col min-h-full">
+      {/* Stop Sale confirmation modal */}
       {showStopConfirm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
           style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
@@ -483,7 +516,7 @@ export default function TallyCounter() {
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-[#E6E7EB]">Stop Sale?</h2>
-                  <p className="text-xs text-[#7B7F93]">You'll review the session before archiving</p>
+                  <p className="text-xs text-[#7B7F93]">You\'ll review the session before archiving</p>
                 </div>
               </div>
               <p className="text-sm text-[#A4A7B5] mb-4">
@@ -517,33 +550,31 @@ export default function TallyCounter() {
           <span className="text-xs text-[#7B7F93] truncate">· {activeSession.repName}</span>
         </div>
 
-        {/* Controls: Client Mode toggle | Stay On pin | LIVE·Stop group */}
+        {/* Controls: TALLY/REGISTER toggle | LIVE·Stop group */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Client Mode toggle — larger, clearly labelled */}
-          <button
-            onClick={() => { setClientMode(v => !v); if (showCashDrawer) setShowCashDrawer(false); }}
-            title="Toggle Client Mode — single-sale cash helper"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
-            style={clientMode
-              ? { background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.5)', color: '#4ADE80' }
-              : { background: 'rgba(45,48,72,0.6)', border: '1px solid #2D3048', color: '#A4A7B5' }}>
-            <Banknote size={13} /> Client Mode
-          </button>
-
-          {/* Stay On pin — only visible when Client Mode is active */}
-          {clientMode && (
+          {/* TALLY / REGISTER pill toggle */}
+          <div className="flex items-center rounded-xl overflow-hidden"
+            style={{ border: '1px solid #2D3048', background: '#0E0F14' }}>
             <button
-              onClick={() => setClientStayOn(v => !v)}
-              title={clientStayOn ? 'Stay On: persists between sales' : 'Stay On: off (one-shot)'}
-              className="flex items-center gap-1 px-2 py-2 rounded-xl text-[10px] font-bold transition-all"
-              style={clientStayOn
-                ? { background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', color: '#4ADE80' }
-                : { background: 'rgba(45,48,72,0.4)', border: '1px solid #2D3048', color: '#7B7F93' }}>
-              <Pin size={11} /> {clientStayOn ? 'On' : 'Off'}
+              onClick={() => setMode('tally')}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold transition-all"
+              style={tallyMode
+                ? { background: 'rgba(107,92,255,0.25)', color: '#A78BFA' }
+                : { color: '#7B7F93' }}>
+              <Zap size={11} /> Tally
             </button>
-          )}
+            <div className="w-px h-4 bg-[#2D3048]" />
+            <button
+              onClick={() => setMode('register')}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold transition-all"
+              style={!tallyMode
+                ? { background: 'rgba(74,222,128,0.2)', color: '#4ADE80' }
+                : { color: '#7B7F93' }}>
+              <ShoppingBag size={11} /> Register
+            </button>
+          </div>
 
-          {/* LIVE indicator + Stop Sale — flowing as one unit */}
+          {/* LIVE indicator + Stop Sale */}
           <div className="flex items-center rounded-xl overflow-hidden"
             style={{ border: '1px solid rgba(248,113,113,0.25)' }}>
             <div className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-2">
@@ -560,19 +591,20 @@ export default function TallyCounter() {
         </div>
       </div>
 
-      {/* Client Mode indicator banner */}
-      {clientMode && (
+      {/* Mode indicator banner */}
+      {tallyMode ? (
+        <div className="mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
+          style={{ background: 'rgba(107,92,255,0.06)', border: '1px solid rgba(107,92,255,0.15)' }}>
+          <Zap size={12} className="text-[#7C6DFF] flex-shrink-0" />
+          <span className="text-xs text-[#7C6DFF] font-semibold">Tally Mode</span>
+          <span className="text-xs text-[#7B7F93]">— tap + to instantly record each sale</span>
+        </div>
+      ) : (
         <div className="mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
           style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)' }}>
-          <Banknote size={12} className="text-[#4ADE80] flex-shrink-0" />
-          <span className="text-xs text-[#4ADE80] font-semibold">Client Mode</span>
-          <span className="text-xs text-[#7B7F93]">— Cash Sale opens the cash drawer below</span>
-          {clientStayOn && (
-            <span className="ml-auto flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md"
-              style={{ background: 'rgba(74,222,128,0.15)', color: '#4ADE80', border: '1px solid rgba(74,222,128,0.3)' }}>
-              STAY ON
-            </span>
-          )}
+          <ShoppingBag size={12} className="text-[#4ADE80] flex-shrink-0" />
+          <span className="text-xs text-[#4ADE80] font-semibold">Register Mode</span>
+          <span className="text-xs text-[#7B7F93]">— build basket, then confirm with cash drawer</span>
         </div>
       )}
 
@@ -614,7 +646,6 @@ export default function TallyCounter() {
           {filteredVariants.map(({ variant }) => {
             const stockStatus = getVariantStockStatus(variant);
             const qty = tally.items[variant.id]?.qty ?? 0;
-            // Always resolve from reactive products state — never from stale session snapshot
             const liveVariant = products.flatMap(p => p.variants).find(v => v.id === variant.id) ?? variant;
             return (
               <TallyCard
@@ -623,8 +654,10 @@ export default function TallyCounter() {
                 qty={qty}
                 stockStatus={stockStatus}
                 liveStock={liveVariant.currentStock}
+                tallyMode={tallyMode}
                 onIncrement={() => dispatch({ type: 'TALLY_INCREMENT', payload: { variantId: variant.id, variantName: variant.name, unitPrice: variant.price } })}
                 onDecrement={() => dispatch({ type: 'TALLY_DECREMENT', payload: { variantId: variant.id, variantName: variant.name } })}
+                onInstantSell={() => handleInstantSell(variant.id, variant.name, variant.price)}
               />
             );
           })}
@@ -636,10 +669,13 @@ export default function TallyCounter() {
         )}
       </div>
 
-      {/* Bottom action bar — sits above cash drawer when Client Mode is active */}
-      <div className={cn('fixed left-0 right-0 z-30 px-4 pb-2', showCashDrawer ? 'bottom-[calc(16rem+4rem)]' : 'bottom-16')}>
-        <div className="rounded-2xl p-3 shadow-2xl"
-          style={{ background: 'rgba(20,22,36,0.97)', backdropFilter: 'blur(20px)', border: '1px solid #2D3048' }}>
+      {/* Bottom action bar */}
+      <div className="fixed left-0 right-0 bottom-16 z-30 px-4 pb-2">
+        <div className={cn(
+          'rounded-2xl p-3 shadow-2xl transition-all duration-300',
+          tallyMode && 'opacity-60'
+        )}
+          style={{ background: 'rgba(20,22,36,0.97)', backdropFilter: 'blur(20px)', border: `1px solid ${tallyMode ? '#1E2030' : '#2D3048'}` }}>
           {/* Totals row */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
@@ -672,52 +708,62 @@ export default function TallyCounter() {
             </div>
           </div>
 
-          {/* Confirm / Cash Sale button */}
-          <button
-            onClick={handleConfirmButton}
-            disabled={!hasItems}
-            className={cn(
-              'w-full py-3.5 rounded-xl text-base font-black text-white transition-all flex items-center justify-center gap-2',
-              hasItems ? 'mp-btn-primary' : 'opacity-30 cursor-not-allowed'
-            )}
-            style={hasItems
-              ? clientMode
-                ? { background: 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)', boxShadow: '0 0 24px rgba(74,222,128,0.35)' }
-                : { boxShadow: '0 0 24px rgba(107,92,255,0.35)' }
-              : {}}>
-            {justConfirmed ? (
-              <><CheckCircle2 size={18} /> Sale Confirmed!</>
-            ) : clientMode ? (
-              <><Banknote size={18} /> Cash Sale</>
-            ) : (
-              <><CheckCircle2 size={18} /> Confirm Sale</>
-            )}
-          </button>
+          {/* Action button — context-aware */}
+          {tallyMode ? (
+            <div className="w-full py-3.5 rounded-xl text-sm font-bold text-center select-none"
+              style={{ background: '#1B1E2E', color: '#3D4060', border: '1px solid #1E2030' }}>
+              Tally Mode — tap + to sell instantly
+            </div>
+          ) : (
+            <button
+              onClick={handleConfirmButton}
+              disabled={!hasItems}
+              className={cn(
+                'w-full py-3.5 rounded-xl text-base font-black text-white transition-all flex items-center justify-center gap-2',
+                hasItems ? 'mp-btn-primary' : 'opacity-30 cursor-not-allowed'
+              )}
+              style={hasItems ? { boxShadow: '0 0 24px rgba(107,92,255,0.35)' } : {}}>
+              {justConfirmed ? (
+                <><CheckCircle2 size={18} /> Sale Confirmed!</>
+              ) : (
+                <><CheckCircle2 size={18} /> Confirm Sale</>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Spacer — clears bottom nav + action bar + optional cash drawer */}
-      <div className={cn(showCashDrawer ? 'h-[34rem]' : 'h-60')} />
+      {/* Spacer */}
+      <div className="h-60" />
 
-      {/* Standard confirm modal */}
+      {/* Register modal (with cash drawer + iOS numpad) */}
+      {showRegisterModal && (
+        <RegisterModal
+          items={confirmItems}
+          totalUnits={totalUnits}
+          totalRevenue={totalRevenue}
+          requireMoneyInput={settings.requireMoneyInput ?? false}
+          onConfirm={handleRegisterConfirm}
+          onCancel={() => setShowRegisterModal(false)}
+        />
+      )}
+
+      {/* Standard confirm modal (kept for safety) */}
       {showConfirm && (
         <ConfirmSaleModal
           items={confirmItems}
           totalUnits={totalUnits}
           totalRevenue={totalRevenue}
-          onConfirm={handleConfirm}
+          onConfirm={async () => {
+            const batch = await confirmSale();
+            if (batch) {
+              setShowConfirm(false);
+              setJustConfirmed(true);
+              toast.success(`Sale confirmed! ${batch.totalItems} items · €${batch.totalPrice.toFixed(2)}`);
+              setTimeout(() => setJustConfirmed(false), 2000);
+            }
+          }}
           onCancel={() => setShowConfirm(false)}
-        />
-      )}
-
-      {/* Client Mode Cash Drawer — sticky panel, not full-screen */}
-      {showCashDrawer && (
-        <CashDrawer
-          items={confirmItems}
-          totalRevenue={totalRevenue}
-          requireMoneyInput={settings.requireMoneyInput ?? false}
-          onConfirm={handleClientConfirm}
-          onCancel={() => setShowCashDrawer(false)}
         />
       )}
     </div>
