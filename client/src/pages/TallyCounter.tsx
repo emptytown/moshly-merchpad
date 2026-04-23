@@ -5,9 +5,9 @@
  *           CONFIRM SALE, CLEAR ALL, UNDO LAST, real-time totals
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { Minus, Plus, RotateCcw, Trash2, CheckCircle2, Zap, ShoppingBag } from 'lucide-react';
+import { Minus, Plus, RotateCcw, Trash2, CheckCircle2, Zap, ShoppingBag, StopCircle, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { ProductVariant } from '../lib/db';
@@ -191,6 +191,7 @@ export default function TallyCounter() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [justConfirmed, setJustConfirmed] = useState(false);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
 
   // Flatten all variants
   const allVariants: Array<{ variant: ProductVariant; productName: string }> = products.flatMap(p =>
@@ -248,6 +249,41 @@ export default function TallyCounter() {
 
   return (
     <div className="min-h-full animate-fade-in">
+      {/* Stop Sale confirm overlay */}
+      {showStopConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
+          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up"
+            style={{ background: '#141624', border: '1px solid rgba(248,113,113,0.3)' }}>
+            <div className="p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ background: 'rgba(248,113,113,0.12)' }}>
+                  <StopCircle size={20} className="text-[#F87171]" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-[#E6E7EB]">Stop Sale?</h2>
+                  <p className="text-xs text-[#7B7F93]">You'll review the session before archiving</p>
+                </div>
+              </div>
+              <p className="text-sm text-[#A4A7B5] mb-4">
+                This will take you to the Archive screen where you can review all sales and confirm the session end.
+              </p>
+            </div>
+            <div className="flex gap-2 px-5 pb-5">
+              <button onClick={() => setShowStopConfirm(false)}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold text-[#A4A7B5]"
+                style={{ border: '1px solid #2D3048' }}>Keep Selling</button>
+              <button onClick={() => { setShowStopConfirm(false); navigate('/end-sale'); }}
+                className="flex-[2] py-3 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2"
+                style={{ background: 'linear-gradient(135deg, #F87171 0%, #C026D3 100%)' }}>
+                <Archive size={15} /> Review & Archive
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Session bar */}
       <div className="px-4 py-3 flex items-center justify-between"
         style={{ background: 'rgba(107,92,255,0.08)', borderBottom: '1px solid rgba(107,92,255,0.15)' }}>
@@ -255,10 +291,16 @@ export default function TallyCounter() {
           <div className="w-2 h-2 rounded-full bg-[#4ADE80] animate-pulse" />
           <span className="text-xs font-semibold text-[#7C6DFF]">SALE ACTIVE</span>
           <span className="text-xs text-[#7B7F93]">· {activeSession.repName}</span>
+          {activeSession.standName && (
+            <span className="text-xs text-[#7B7F93]">· {activeSession.standName}</span>
+          )}
         </div>
-        {activeSession.standName && (
-          <span className="text-xs text-[#7B7F93]">{activeSession.standName}</span>
-        )}
+        <button
+          onClick={() => setShowStopConfirm(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95"
+          style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', color: '#F87171' }}>
+          <StopCircle size={12} /> Stop Sale
+        </button>
       </div>
 
       {/* Category filter */}

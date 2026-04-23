@@ -1,22 +1,28 @@
 /**
  * Settings — app configuration screen
  * Design: "Neon Ledger" — dark glass cards, toggle controls
- * Features: undo toggle, stock thresholds, rep name, device info
+ * Features: Projects picker, undo toggle, stock thresholds, rep name, device info
  */
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Smartphone, User, RotateCcw, BarChart3, Info } from 'lucide-react';
+import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight } from 'lucide-react';
 import { useMerchPad } from '../contexts/MerchPadContext';
+import { useProjects } from '../contexts/ProjectContext';
 import { setSetting } from '../lib/db';
 import { Switch } from '../components/ui/switch';
 import { Slider } from '../components/ui/slider';
+import ProjectsSettings from './ProjectsSettings';
+
+type SettingsView = 'main' | 'projects';
 
 export default function Settings() {
   const { state, dispatch } = useMerchPad();
   const { settings, deviceId, repName } = state;
+  const { activeProject, localProjects } = useProjects();
 
   const [localRepName, setLocalRepName] = useState(repName);
+  const [view, setView] = useState<SettingsView>('main');
 
   async function saveRepName() {
     await setSetting('repName', localRepName);
@@ -27,6 +33,20 @@ export default function Settings() {
   async function toggleUndo(val: boolean) {
     await setSetting('undoEnabled', val);
     dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled: val } });
+  }
+
+  if (view === 'projects') {
+    return (
+      <div className="min-h-full animate-fade-in">
+        <div className="px-4 pt-4">
+          <button onClick={() => setView('main')}
+            className="flex items-center gap-1 text-xs text-[#7B7F93] hover:text-[#A4A7B5] mb-2 transition-colors">
+            ← Back to Settings
+          </button>
+        </div>
+        <ProjectsSettings />
+      </div>
+    );
   }
 
   return (
@@ -40,6 +60,25 @@ export default function Settings() {
       </div>
 
       <div className="px-4 space-y-4 pb-8">
+
+        {/* Projects — prominent entry point */}
+        <button onClick={() => setView('projects')}
+          className="w-full mp-card p-4 flex items-center gap-3 text-left hover:border-[#6B5CFF] transition-colors">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: activeProject ? `${activeProject.color}15` : 'rgba(107,92,255,0.12)' }}>
+            <Layers size={18} style={{ color: activeProject?.color ?? '#6B5CFF' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-[#E6E7EB]">Projects</p>
+            <p className="text-xs text-[#7B7F93]">
+              {activeProject
+                ? <><span style={{ color: activeProject.color }}>{activeProject.name}</span> · {localProjects.length}/3 slots used</>
+                : 'No project selected'}
+            </p>
+          </div>
+          <ChevronRight size={16} className="text-[#7B7F93] flex-shrink-0" />
+        </button>
+
         {/* Rep name */}
         <div className="mp-card p-4">
           <div className="flex items-center gap-2 mb-3">
@@ -97,7 +136,7 @@ export default function Settings() {
                   <div className="w-3 h-3 rounded-full bg-[#FBBF24]" />
                   <span className="text-sm text-[#A4A7B5]">Yellow threshold</span>
                 </div>
-                <span className="text-sm font-bold text-[#FBBF24] mp-mono">
+                <span className="text-sm font-bold text-[#FBBF24]">
                   {Math.round(settings.stockThresholdYellow * 100)}%
                 </span>
               </div>
@@ -116,7 +155,7 @@ export default function Settings() {
                   <div className="w-3 h-3 rounded-full bg-[#F87171]" />
                   <span className="text-sm text-[#A4A7B5]">Red threshold</span>
                 </div>
-                <span className="text-sm font-bold text-[#F87171] mp-mono">
+                <span className="text-sm font-bold text-[#F87171]">
                   {Math.round(settings.stockThresholdRed * 100)}%
                 </span>
               </div>
@@ -153,7 +192,7 @@ export default function Settings() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs text-[#7B7F93]">Device ID</span>
-              <span className="text-xs text-[#A4A7B5] mp-mono">{deviceId.slice(0, 8)}…</span>
+              <span className="text-xs text-[#A4A7B5] font-mono">{deviceId.slice(0, 8)}…</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-[#7B7F93]">Auth</span>
@@ -172,7 +211,7 @@ export default function Settings() {
             MerchPad is an offline-first merchandise sales tool for live shows. Part of the Moshly ecosystem.
             All data is stored locally on this device and syncs to the backend when online.
           </p>
-          <p className="text-xs text-[#7B7F93] mt-2">Version 0.1.0 — MVP</p>
+          <p className="text-xs text-[#7B7F93] mt-2">Version 0.2.0 — MVP</p>
         </div>
       </div>
     </div>
