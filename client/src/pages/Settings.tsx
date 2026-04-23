@@ -137,6 +137,28 @@ export default function Settings() {
               onCheckedChange={toggleUndo}
             />
           </div>
+
+          <div className="border-t border-[#24273A] pt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(74,222,128,0.12)' }}>
+                <span className="text-[10px] font-black text-[#4ADE80]">CM</span>
+              </div>
+              <p className="text-sm font-bold text-[#E6E7EB]">Client Mode</p>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-[#A4A7B5]">Require money input</p>
+                <p className="text-xs text-[#7B7F93]">Shade "Complete Sale" until cash amount is entered</p>
+              </div>
+              <Switch
+                checked={settings.requireMoneyInput}
+                onCheckedChange={async (val) => {
+                  await setSetting('requireMoneyInput', val);
+                  dispatch({ type: 'SET_SETTINGS', payload: { requireMoneyInput: val } });
+                }}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Stock thresholds */}

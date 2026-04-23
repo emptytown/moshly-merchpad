@@ -43,6 +43,7 @@ export interface AppState {
     undoEnabled: boolean;
     stockThresholdYellow: number; // 0.3
     stockThresholdRed: number;    // 0.1
+    requireMoneyInput: boolean;   // shade Complete Sale until money entered in Client Mode
   };
 }
 
@@ -248,6 +249,7 @@ const initialState: AppState = {
     undoEnabled: true,
     stockThresholdYellow: 0.3,
     stockThresholdRed: 0.1,
+    requireMoneyInput: false,
   },
 };
 
@@ -263,17 +265,18 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       await seedDemoData();
       const db = await getDB();
 
-      const [products, shows, repName, undoEnabled] = await Promise.all([
+      const [products, shows, repName, undoEnabled, requireMoneyInput] = await Promise.all([
         db.getAll('products'),
         db.getAll('shows'),
         getSetting<string>('repName', ''),
         getSetting<boolean>('undoEnabled', true),
+        getSetting<boolean>('requireMoneyInput', false),
       ]);
 
       dispatch({ type: 'SET_PRODUCTS', payload: products });
       dispatch({ type: 'SET_SHOWS', payload: shows });
       dispatch({ type: 'SET_REP_NAME', payload: repName });
-      dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled } });
+      dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled, requireMoneyInput } });
 
       // Restore active session if any
       const activeSessions = await db.getAllFromIndex('sessions', 'by-status', 'active');
