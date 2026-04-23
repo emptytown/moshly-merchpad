@@ -371,7 +371,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const confirmSale = useCallback(async (): Promise<TallyBatch | null> => {
-    const { tally, activeSession, repName } = stateRef.current;
+    const { tally, activeSession, repName, products: stateProducts } = stateRef.current;
     const items = Object.values(tally.items).filter(i => i.qty > 0);
     if (items.length === 0 || !activeSession) return null;
 
@@ -395,14 +395,22 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
 
     await db.put('tallyBatches', batch);
 
-    // Decrement stock in products
-    const products = await db.getAll('products');
+    // Decrement stock using in-memory state (avoids DB read race) then persist to DB
     for (const item of items) {
-      for (const p of products) {
+      for (const p of stateProducts) {
         const v = p.variants.find(v => v.id === item.variantId);
         if (v) {
-          v.currentStock = Math.max(0, v.currentStock - item.qty);
-          await db.put('products', p);
+          // Compute new stock from current in-memory value
+          const newStock = Math.max(0, v.currentStock - item.qty);
+          // Build updated product with new stock and persist
+          const updatedProduct = {
+            ...p,
+            variants: p.variants.map(pv =>
+              pv.id === v.id ? { ...pv, currentStock: newStock } : pv
+            ),
+          };
+          await db.put('products', updatedProduct);
+          // Dispatch delta so reducer updates state.products in one step
           dispatch({ type: 'UPDATE_VARIANT_STOCK', payload: { variantId: v.id, productId: p.id, delta: -item.qty } });
         }
       }
