@@ -2,7 +2,7 @@
  * MerchPad Global Styles
  * Design: "Neon Ledger" — Dark Glassmorphism + Moshly Electric Accents
  * Tokens: Moshly-Site-Design-Tokens (colors, typography, spacing, animations)
- * Fonts: Syne (display/UI) + JetBrains Mono (numbers/data)
+ * Fonts: Inter (all weights — 400 through 900)
  */
 
 @import "tailwindcss";
@@ -124,12 +124,12 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Syne', 'SF Pro Text', system-ui, sans-serif;
+    font-family: 'Inter', 'SF Pro Text', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
   .font-mono {
-    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-family: 'Inter', system-ui, sans-serif;
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -213,7 +213,7 @@
     color: white;
     border: none;
     border-radius: 10px;
-    font-family: 'Syne', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-weight: 700;
     transition: opacity var(--duration-fast), transform var(--duration-fast);
   }
@@ -227,7 +227,7 @@
 
   /* ── Tally Counter Number ── */
   .mp-tally-number {
-    font-family: 'Syne', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-weight: 800;
     font-size: 2.5rem;
     line-height: 1;
@@ -237,7 +237,7 @@
 
   /* ── Mono data ── */
   .mp-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Inter', sans-serif;
     font-weight: 500;
   }
 

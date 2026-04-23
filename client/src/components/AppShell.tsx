@@ -26,7 +26,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3"
         style={{ background: 'rgba(14, 15, 20, 0.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid #24273A' }}>
         <div className="flex items-center gap-2">
-          <span className="font-bold text-base tracking-tight text-[#E6E7EB]" style={{ fontFamily: 'Syne, sans-serif' }}>
+          <span className="font-bold text-base tracking-tight text-[#E6E7EB]" style={{ fontFamily: 'Inter, sans-serif' }}>
             <span className="mp-gradient-text">Merch</span>Pad
           </span>
           {activeSession && (

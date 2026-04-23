@@ -39,7 +39,7 @@ function App() {
                   background: '#1B1E2E',
                   border: '1px solid #2D3048',
                   color: '#E6E7EB',
-                  fontFamily: 'Syne, sans-serif',
+                  fontFamily: 'Inter, sans-serif',
                 },
               }}
             />
