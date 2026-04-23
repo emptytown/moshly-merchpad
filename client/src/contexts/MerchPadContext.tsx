@@ -45,6 +45,8 @@ export interface AppState {
     stockThresholdRed: number;    // 0.1
     requireMoneyInput: boolean;   // shade Complete Sale until money entered in Client Mode
     allowMidSaleRestock: boolean; // show Restock button on Tally cards during a session
+    stickyBarTally: boolean;      // keep bottom action bar visible in Tally mode
+    stickyBarRegister: boolean;   // keep bottom action bar visible in Register mode
   };
 }
 
@@ -251,7 +253,9 @@ const initialState: AppState = {
     stockThresholdYellow: 0.3,
     stockThresholdRed: 0.1,
     requireMoneyInput: false,
-      allowMidSaleRestock: false,
+    allowMidSaleRestock: false,
+    stickyBarTally: true,
+    stickyBarRegister: true,
   },
 };
 
@@ -267,7 +271,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       await seedDemoData();
       const db = await getDB();
 
-      const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed] = await Promise.all([
+      const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister] = await Promise.all([
         db.getAll('products'),
         db.getAll('shows'),
         getSetting<string>('repName', ''),
@@ -276,12 +280,14 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
         getSetting<boolean>('allowMidSaleRestock', false),
         getSetting<number>('stockThresholdYellow', 0.3),
         getSetting<number>('stockThresholdRed', 0.1),
+        getSetting<boolean>('stickyBarTally', true),
+        getSetting<boolean>('stickyBarRegister', true),
       ]);
 
       dispatch({ type: 'SET_PRODUCTS', payload: products });
       dispatch({ type: 'SET_SHOWS', payload: shows });
       dispatch({ type: 'SET_REP_NAME', payload: repName });
-      dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed } });
+      dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister } });
 
       // Restore active session if any
       const activeSessions = await db.getAllFromIndex('sessions', 'by-status', 'active');

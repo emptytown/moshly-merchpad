@@ -159,6 +159,41 @@ export default function Settings() {
               />
             </div>
           </div>
+
+          <div className="border-t border-[#24273A] pt-4 space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(124,109,255,0.15)' }}>
+                <span className="text-[10px] font-black text-[#7C6DFF]">SB</span>
+              </div>
+              <p className="text-sm font-bold text-[#E6E7EB]">Sticky Bottom Bar</p>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-[#A4A7B5]">Sticky in Tally mode</p>
+                <p className="text-xs text-[#7B7F93]">Keep Sold / Total bar always visible in Tally mode</p>
+              </div>
+              <Switch
+                checked={settings.stickyBarTally}
+                onCheckedChange={async (val) => {
+                  await setSetting('stickyBarTally', val);
+                  dispatch({ type: 'SET_SETTINGS', payload: { stickyBarTally: val } });
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-[#A4A7B5]">Sticky in Register mode</p>
+                <p className="text-xs text-[#7B7F93]">Keep Sold / Total bar always visible in Register mode</p>
+              </div>
+              <Switch
+                checked={settings.stickyBarRegister}
+                onCheckedChange={async (val) => {
+                  await setSetting('stickyBarRegister', val);
+                  dispatch({ type: 'SET_SETTINGS', payload: { stickyBarRegister: val } });
+                }}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Stock thresholds */}
