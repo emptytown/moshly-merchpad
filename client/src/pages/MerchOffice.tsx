@@ -171,7 +171,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
               className="w-full flex items-center justify-between px-3 py-2.5 text-left">
               <div className="flex items-center gap-2">
                 <BookOpen size={14} style={{ color: '#00E5FF' }} />
-                <span className="text-xs font-semibold" style={{ color: '#00E5FF' }}>Pick from Master Catalogue</span>
+                <span className="text-xs font-semibold" style={{ color: '#00E5FF' }}>Pick from Item Template Creator</span>
               </div>
               <span className="text-[10px] text-[#7B7F93]">{showCatPicker ? 'Hide' : `${catalogue.length} templates`}</span>
             </button>
@@ -188,7 +188,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
                   </button>
                 ))}
                 {catalogue.length === 0 && (
-                  <p className="text-xs text-[#7B7F93] py-2 text-center">No templates yet — add them in Settings → Master Catalogue</p>
+                  <p className="text-xs text-[#7B7F93] py-2 text-center">No templates yet — add them in Settings → Item Template Creator</p>
                 )}
               </div>
             )}
@@ -640,18 +640,28 @@ export default function MerchOffice() {
                 {expandedProduct === product.id && (
                   <div className="border-t border-[#24273A]">
                     <div className="p-3 space-y-1.5">
+                      {/* Column headers */}
+                      <div className="flex items-center justify-between px-2 pb-1">
+                        <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Variant</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider w-12 text-right">Price</span>
+                          <span className="text-[10px] font-semibold text-purple-400 uppercase tracking-wider w-8 text-right">WH</span>
+                          <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider w-8 text-right">Road</span>
+                        </div>
+                      </div>
                       {product.variants.map(v => (
                         <div key={v.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
                           style={{ background: 'rgba(14,15,20,0.4)' }}>
                           <span className="text-sm text-[#A4A7B5]">{v.name}</span>
                           <div className="flex items-center gap-3">
-                            <span className="text-xs text-[#7B7F93] mp-mono">{formatCurrency(v.price)}</span>
-                            <span className={cn('text-sm font-bold mp-mono',
-                              v.currentStock <= 0 ? 'text-[#F87171]' :
-                              v.currentStock / (v.initialStock || 1) <= 0.1 ? 'text-[#F87171]' :
-                              v.currentStock / (v.initialStock || 1) <= 0.3 ? 'text-[#FBBF24]' :
+                            <span className="text-xs text-[#7B7F93] mp-mono w-12 text-right">{formatCurrency(v.price)}</span>
+                            <span className="text-sm font-bold mp-mono text-purple-300 w-8 text-right">{v.warehouseStock ?? 0}</span>
+                            <span className={cn('text-sm font-bold mp-mono w-8 text-right',
+                              (v.roadStock ?? v.currentStock) <= 0 ? 'text-[#F87171]' :
+                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-[#F87171]' :
+                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-[#FBBF24]' :
                               'text-[#4ADE80]')}>
-                              {v.currentStock}
+                              {v.roadStock ?? v.currentStock}
                             </span>
                           </div>
                         </div>
@@ -676,7 +686,7 @@ export default function MerchOffice() {
                         style={{ border: '1px solid #2D3048' }}>
                         <Edit2 size={12} /> Edit
                       </button>
-                      <button onClick={() => setTransferProduct(product)}
+                      <button onClick={() => { setTransferProduct(product); }}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors"
                         style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
                         <ArrowRightLeft size={12} /> Transfer

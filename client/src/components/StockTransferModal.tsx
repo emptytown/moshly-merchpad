@@ -140,9 +140,9 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
                 : 'text-white/50 hover:text-white/80'
             }`}
           >
-            <Truck className="w-4 h-4" />
-            <ArrowLeft className="w-3 h-3" />
             <Warehouse className="w-4 h-4" />
+            <ArrowLeft className="w-3 h-3" />
+            <Truck className="w-4 h-4" />
             Road → Warehouse
           </button>
         </div>

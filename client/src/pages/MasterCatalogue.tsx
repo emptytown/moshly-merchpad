@@ -22,6 +22,26 @@ interface AxisEditorProps {
 
 const COMMON_AXIS_KEYS = ['size', 'colour', 'format', 'edition', 'style', 'finish', 'material', 'type', 'design', 'pack'];
 
+// Uncontrolled per-axis value input — allows free typing of commas/spaces, commits on blur or Enter
+function AxisValueInput({ axisKey, initialValues, onCommit }: { axisKey: string; initialValues: string[]; onCommit: (values: string[]) => void }) {
+  const [raw, setRaw] = useState(initialValues.join(', '));
+  useEffect(() => { setRaw(initialValues.join(', ')); }, [axisKey]);
+  function commit() {
+    const values = raw.split(',').map(v => v.trim()).filter(Boolean);
+    onCommit(values);
+  }
+  return (
+    <input
+      value={raw}
+      onChange={e => setRaw(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+      placeholder="e.g. S, M, L, XL"
+      className="w-full px-2 py-1.5 rounded-lg text-xs text-[#E6E7EB] bg-[#141624] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none"
+    />
+  );
+}
+
 function AxisEditor({ axes, onChange }: AxisEditorProps) {
   const [newKey, setNewKey] = useState('');
 
@@ -37,8 +57,7 @@ function AxisEditor({ axes, onChange }: AxisEditorProps) {
     onChange(axes.filter(a => a.key !== key));
   }
 
-  function updateAxisValues(key: string, raw: string) {
-    const values = raw.split(',').map(v => v.trim()).filter(Boolean);
+  function updateAxisValues(key: string, values: string[]) {
     onChange(axes.map(a => a.key === key ? { ...a, values } : a));
   }
 
@@ -54,13 +73,8 @@ function AxisEditor({ axes, onChange }: AxisEditorProps) {
               <X size={12} />
             </button>
           </div>
-          <input
-            value={axis.values.join(', ')}
-            onChange={e => updateAxisValues(axis.key, e.target.value)}
-            placeholder="e.g. S, M, L, XL"
-            className="w-full px-2 py-1.5 rounded-lg text-xs text-[#E6E7EB] bg-[#141624] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none"
-          />
-          <p className="text-[10px] text-[#7B7F93] mt-1">Comma-separated suggested values</p>
+          <AxisValueInput axisKey={axis.key} initialValues={axis.values} onCommit={vals => updateAxisValues(axis.key, vals)} />
+          <p className="text-[10px] text-[#7B7F93] mt-1">Type values separated by commas (e.g. S, M, L, XL) — press Enter or click away to confirm</p>
         </div>
       ))}
 
@@ -290,14 +304,14 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-center justify-between">
         <div>
-          <button onClick={onBack} className="flex items-center gap-1 text-xs text-[#7B7F93] hover:text-[#A4A7B5] mb-1.5 transition-colors">
+          <button onClick={onBack} className="flex items-center gap-1 text-xs font-semibold text-[#7C6DFF] hover:text-[#9B8FFF] mb-4 transition-colors">
             ← Back to Settings
           </button>
           <div className="flex items-center gap-2">
             <BookOpen size={16} className="text-[#7C6DFF]" />
-            <h1 className="text-xl font-black text-[#E6E7EB]" style={{ letterSpacing: '-0.03em' }}>Master Catalogue</h1>
+            <h1 className="text-xl font-black text-[#E6E7EB]" style={{ letterSpacing: '-0.03em' }}>Item Template Creator</h1>
           </div>
-          <p className="text-xs text-[#7B7F93] mt-0.5">Global product templates — available in all projects</p>
+          <p className="text-xs text-[#7B7F93] mt-0.5">Define reusable item templates with variant axes</p>
         </div>
         {view === 'list' && (
           <button onClick={() => setView('create')}

@@ -42,7 +42,7 @@ export default function Settings() {
       <div className="min-h-full animate-fade-in">
         <div className="px-4 pt-4">
           <button onClick={() => setView('main')}
-            className="flex items-center gap-1 text-xs text-[#7B7F93] hover:text-[#A4A7B5] mb-2 transition-colors">
+            className="flex items-center gap-1 text-xs font-semibold text-[#7C6DFF] hover:text-[#9B8FFF] mb-5 transition-colors">
             ← Back to Settings
           </button>
         </div>
@@ -67,7 +67,7 @@ export default function Settings() {
 
       <div className="px-4 space-y-4 pb-8">
 
-        {/* Master Catalogue entry point */}
+        {/* Item Template Creator entry point */}
         <button onClick={() => setView('catalogue')}
           className="w-full mp-card p-4 flex items-center gap-3 text-left hover:border-[#6B5CFF] transition-colors">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -75,7 +75,7 @@ export default function Settings() {
             <BookOpen size={18} style={{ color: '#00E5FF' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-[#E6E7EB]">Master Catalogue</p>
+            <p className="text-sm font-bold text-[#E6E7EB]">Item Template Creator</p>
             <p className="text-xs text-[#7B7F93]">Global product templates for all projects</p>
           </div>
           <ChevronRight size={16} className="text-[#7B7F93] flex-shrink-0" />
