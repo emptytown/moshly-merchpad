@@ -13,6 +13,7 @@ import { setSetting } from '../lib/db';
 import { Switch } from '../components/ui/switch';
 import { Slider } from '../components/ui/slider';
 import ProjectsSettings from './ProjectsSettings';
+import DangerZone from '../components/DangerZone';
 
 type SettingsView = 'main' | 'projects';
 
@@ -211,8 +212,12 @@ export default function Settings() {
             MerchPad is an offline-first merchandise sales tool for live shows. Part of the Moshly ecosystem.
             All data is stored locally on this device and syncs to the backend when online.
           </p>
-          <p className="text-xs text-[#7B7F93] mt-2">Version 0.2.0 — MVP</p>
+          <p className="text-xs text-[#7B7F93] mt-2">Version 0.3.0 — MVP</p>
         </div>
+
+        {/* Danger Zone */}
+        <DangerZone />
+
       </div>
     </div>
   );

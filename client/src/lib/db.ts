@@ -388,3 +388,73 @@ export async function seedDemoData(): Promise<void> {
     await db.put('shows', s);
   }
 }
+
+// ── Danger Zone Operations ────────────────────────────────────────────────
+
+/** Reset all variant stock back to their initialStock values */
+export async function resetAllStock(): Promise<void> {
+  const db = await getDB();
+  const products = await db.getAll('products');
+  for (const product of products) {
+    const updated = {
+      ...product,
+      variants: product.variants.map(v => ({ ...v, currentStock: v.initialStock })),
+      updatedAt: new Date().toISOString(),
+    };
+    await db.put('products', updated);
+  }
+}
+
+/** Delete all products (and their variants) */
+export async function deleteAllProducts(): Promise<void> {
+  const db = await getDB();
+  await db.clear('products');
+}
+
+/** Delete all data for the current project: products, shows, sessions,
+ *  tally batches, audit log, stock adjustments, sync queue */
+export async function deleteProjectData(): Promise<void> {
+  const db = await getDB();
+  await db.clear('products');
+  await db.clear('shows');
+  await db.clear('sessions');
+  await db.clear('tallyBatches');
+  await db.clear('auditLog');
+  await db.clear('stockAdjustments');
+  await db.clear('syncQueue');
+}
+
+/** Full factory reset: wipe every store including settings, then reload */
+export async function resetAndDeleteAll(): Promise<void> {
+  const db = await getDB();
+  await db.clear('products');
+  await db.clear('shows');
+  await db.clear('sessions');
+  await db.clear('tallyBatches');
+  await db.clear('auditLog');
+  await db.clear('stockAdjustments');
+  await db.clear('syncQueue');
+  await db.clear('settings');
+  // Clear localStorage too (device ID, projects, active project)
+  localStorage.removeItem('mp_projects');
+  localStorage.removeItem('mp_active_project_id');
+  localStorage.removeItem('mp_device_id');
+}
+
+/** Remove only the seeded mock/demo data (products + shows that were
+ *  created by seedDemoData — identified by the known demo product names) */
+export async function removeMockData(): Promise<void> {
+  const MOCK_PRODUCT_NAMES = ['T-Shirt', 'Poster', 'Vinyl Record', 'Enamel Pin', 'Hoodie'];
+  const MOCK_SHOW_NAMES = ['Summer Solstice Tour', 'NOS Alive 2026'];
+  const db = await getDB();
+
+  const products = await db.getAll('products');
+  for (const p of products) {
+    if (MOCK_PRODUCT_NAMES.includes(p.name)) await db.delete('products', p.id);
+  }
+
+  const shows = await db.getAll('shows');
+  for (const s of shows) {
+    if (MOCK_SHOW_NAMES.includes(s.name)) await db.delete('shows', s.id);
+  }
+}
