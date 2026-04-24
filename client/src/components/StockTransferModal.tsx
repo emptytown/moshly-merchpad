@@ -9,12 +9,12 @@
  */
 
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ArrowRight, ArrowLeft, Warehouse, Truck } from 'lucide-react';
+import { RightDrawer } from './RightDrawer';
 import { toast } from 'sonner';
 import { useMerchPad } from '@/contexts/MerchPadContext';
 import { Product, ProductVariant } from '@/lib/db';
@@ -109,14 +109,8 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-lg bg-[#0f1117] border border-white/10 text-white">
-        <DialogHeader>
-          <DialogTitle className="text-white flex items-center gap-2">
-            <span className="text-purple-400">⇄</span> Stock Transfer — {product.name}
-          </DialogTitle>
-        </DialogHeader>
-
+    <RightDrawer open={open} onClose={onClose} title={`Stock Transfer — ${product.name}`} className="max-w-md">
+      <div className="p-4 space-y-4">
         {/* Direction toggle */}
         <div className="flex gap-2 p-1 bg-white/5 rounded-lg">
           <button
@@ -234,7 +228,7 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
             </Button>
           </TabsContent>
         </Tabs>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </RightDrawer>
   );
 }

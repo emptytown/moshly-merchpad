@@ -15,6 +15,7 @@ import { cn } from '../lib/utils';
 import { loadCatalogue, CatalogueTemplate } from '../lib/catalogue';
 import StockTransferModal from '../components/StockTransferModal';
 import { AdjustmentModal } from './DetailInfo';
+import { RightDrawer } from '../components/RightDrawer';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -152,17 +153,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-0 sm:p-4 pt-16 sm:pt-4"
-      style={{ background: 'rgba(14,15,20,0.85)', backdropFilter: 'blur(8px)' }}>
-      <div className="w-full sm:max-w-2xl max-h-[85vh] overflow-y-auto rounded-b-2xl sm:rounded-2xl animate-slide-up"
-        style={{ background: '#141624', border: '1px solid #2D3048' }}>
-        <div className="sticky top-0 flex items-center justify-between p-4 border-b border-[#24273A]"
-          style={{ background: '#141624' }}>
-          <h2 className="text-lg font-bold text-[#E6E7EB]">{product ? 'Edit Product' : 'New Product'}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-[#7B7F93] hover:text-[#E6E7EB] hover:bg-[#1B1E2E]">
-            <X size={18} />
-          </button>
-        </div>
+    <RightDrawer open={true} onClose={onClose} title={product ? 'Edit Product' : 'New Product'} className="max-w-md">
 
         <div className="p-4 space-y-4">
 
@@ -317,17 +308,16 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
           </div>
         </div>
 
-        <div className="sticky bottom-0 flex gap-2 p-4 border-t border-[#24273A]" style={{ background: '#141624' }}>
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5] hover:text-[#E6E7EB] transition-colors"
-            style={{ border: '1px solid #2D3048' }}>
-            Cancel
-          </button>
-          <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
-            Save Product
-          </button>
-        </div>
+      <div className="flex gap-2 p-4 border-t border-[#24273A] flex-shrink-0">
+        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5] hover:text-[#E6E7EB] transition-colors"
+          style={{ border: '1px solid #2D3048' }}>
+          Cancel
+        </button>
+        <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
+          Save Product
+        </button>
       </div>
-    </div>
+    </RightDrawer>
   );
 }
 
@@ -415,38 +405,30 @@ function NewShowModal({ onSave, onClose }: { onSave: (s: Show) => void; onClose:
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      style={{ background: 'rgba(14,15,20,0.85)', backdropFilter: 'blur(8px)' }}>
-      <div className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl animate-slide-up"
-        style={{ background: '#141624', border: '1px solid #2D3048' }}>
-        <div className="flex items-center justify-between p-4 border-b border-[#24273A]">
-          <h2 className="text-lg font-bold text-[#E6E7EB]">New Show</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-[#7B7F93] hover:text-[#E6E7EB]"><X size={18} /></button>
-        </div>
-        <div className="p-4 space-y-3">
-          {[
-            { label: 'Show Name', val: name, set: setName, ph: 'Summer Tour 2026' },
-            { label: 'Venue', val: venue, set: setVenue, ph: 'Altice Arena' },
-            { label: 'City', val: city, set: setCity, ph: 'Lisbon' },
-          ].map(({ label, val, set, ph }) => (
-            <div key={label}>
-              <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">{label}</label>
-              <input value={val} onChange={e => set(e.target.value)} placeholder={ph}
-                className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
-            </div>
-          ))}
-          <div>
-            <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+    <RightDrawer open={true} onClose={onClose} title="New Show">
+      <div className="p-4 space-y-3">
+        {[
+          { label: 'Show Name', val: name, set: setName, ph: 'Summer Tour 2026' },
+          { label: 'Venue', val: venue, set: setVenue, ph: 'Altice Arena' },
+          { label: 'City', val: city, set: setCity, ph: 'Lisbon' },
+        ].map(({ label, val, set, ph }) => (
+          <div key={label}>
+            <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">{label}</label>
+            <input value={val} onChange={e => set(e.target.value)} placeholder={ph}
               className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
           </div>
-        </div>
-        <div className="flex gap-2 p-4 border-t border-[#24273A]">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]" style={{ border: '1px solid #2D3048' }}>Cancel</button>
-          <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">Save Show</button>
+        ))}
+        <div>
+          <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Date</label>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
         </div>
       </div>
-    </div>
+      <div className="flex gap-2 p-4 border-t border-[#24273A] flex-shrink-0">
+        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]" style={{ border: '1px solid #2D3048' }}>Cancel</button>
+        <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">Save Show</button>
+      </div>
+    </RightDrawer>
   );
 }
 
@@ -458,36 +440,28 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
   const [stand, setStand] = useState('');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      style={{ background: 'rgba(14,15,20,0.85)', backdropFilter: 'blur(8px)' }}>
-      <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up"
-        style={{ background: '#141624', border: '1px solid #2D3048' }}>
-        <div className="flex items-center justify-between p-4 border-b border-[#24273A]">
-          <h2 className="text-lg font-bold text-[#E6E7EB]">Start Sale Session</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-[#7B7F93] hover:text-[#E6E7EB]"><X size={18} /></button>
+    <RightDrawer open={true} onClose={onClose} title="Start Sale Session">
+      <div className="p-4 space-y-3">
+        <p className="text-sm text-[#A4A7B5]">This will snapshot the current stock for your stand. Stock stroke colors will reflect this allocation.</p>
+        <div>
+          <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Your Name</label>
+          <input value={repName} onChange={e => setRepName(e.target.value)} placeholder="João"
+            className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
         </div>
-        <div className="p-4 space-y-3">
-          <p className="text-sm text-[#A4A7B5]">This will snapshot the current stock for your stand. Stock stroke colors will reflect this allocation.</p>
-          <div>
-            <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Your Name</label>
-            <input value={repName} onChange={e => setRepName(e.target.value)} placeholder="João"
-              className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Stand / Location (optional)</label>
-            <input value={stand} onChange={e => setStand(e.target.value)} placeholder="Stand A"
-              className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
-          </div>
-        </div>
-        <div className="flex gap-2 p-4 border-t border-[#24273A]">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]" style={{ border: '1px solid #2D3048' }}>Cancel</button>
-          <button onClick={() => { if (!repName.trim()) { toast.error('Name required'); return; } onStart(repName.trim(), stand.trim() || undefined); }}
-            className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary flex items-center justify-center gap-2">
-            <Zap size={14} /> Start Sale
-          </button>
+        <div>
+          <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Stand / Location (optional)</label>
+          <input value={stand} onChange={e => setStand(e.target.value)} placeholder="Stand A"
+            className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
         </div>
       </div>
-    </div>
+      <div className="flex gap-2 p-4 border-t border-[#24273A] flex-shrink-0">
+        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]" style={{ border: '1px solid #2D3048' }}>Cancel</button>
+        <button onClick={() => { if (!repName.trim()) { toast.error('Name required'); return; } onStart(repName.trim(), stand.trim() || undefined); }}
+          className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary flex items-center justify-center gap-2">
+          <Zap size={14} /> Start Sale
+        </button>
+      </div>
+    </RightDrawer>
   );
 }
 
@@ -890,35 +864,24 @@ function OneOffModal({ onStart, onClose }: { onStart: (repName: string) => Promi
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="w-full max-w-lg rounded-t-3xl p-6 space-y-5 animate-slide-up"
-        style={{ background: '#13141C', border: '1px solid rgba(255,255,255,0.08)' }}>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Truck size={16} className="text-amber-400" />
-              <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">OneOff Sale</span>
-            </div>
-            <h2 className="text-xl font-black text-[#E6E7EB]">Quick Sale</h2>
-            <p className="text-xs text-[#7B7F93] mt-0.5">No show required — sale is logged in the OneOff register</p>
-          </div>
-          <button onClick={onClose} className="text-[#7B7F93] hover:text-white p-1"><X size={18} /></button>
+    <RightDrawer open={true} onClose={onClose} title="Quick Sale" subtitle="OneOff — no show required">
+      <div className="p-4 space-y-4">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.2)' }}>
+          <Truck size={14} className="text-amber-400 flex-shrink-0" />
+          <p className="text-xs text-amber-300">Sale is logged in the OneOff register</p>
         </div>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider block mb-1.5">Rep Name *</label>
-            <input
-              type="text"
-              value={repName}
-              onChange={e => setRepName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleStart()}
-              placeholder="Your name"
-              className="w-full px-3 py-2.5 rounded-xl text-sm text-[#E6E7EB] placeholder:text-[#4A4D5E] outline-none"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-              autoFocus
-            />
-          </div>
+        <div>
+          <label className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider block mb-1.5">Rep Name *</label>
+          <input
+            type="text"
+            value={repName}
+            onChange={e => setRepName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleStart()}
+            placeholder="Your name"
+            className="w-full px-3 py-2.5 rounded-xl text-sm text-[#E6E7EB] placeholder:text-[#4A4D5E] outline-none"
+            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+            autoFocus
+          />
         </div>
         <button
           onClick={handleStart}
@@ -929,6 +892,6 @@ function OneOffModal({ onStart, onClose }: { onStart: (repName: string) => Promi
           Start OneOff Sale
         </button>
       </div>
-    </div>
+    </RightDrawer>
   );
 }

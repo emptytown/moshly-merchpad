@@ -10,6 +10,7 @@ import {
   AlertTriangle, TrendingDown, TrendingUp, ChevronDown, ChevronUp,
   Sliders, Clock, Package, BarChart2, X,
 } from 'lucide-react';
+import { RightDrawer } from '../components/RightDrawer';
 import { ExportButton } from '../components/ExportSheet';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -74,59 +75,50 @@ export function AdjustmentModal({ variantName, currentStock, onSave, onClose }: 
   const newStock = Math.max(0, currentStock + delta);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      style={{ background: 'rgba(14,15,20,0.9)', backdropFilter: 'blur(8px)' }}>
-      <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up"
-        style={{ background: '#141624', border: '1px solid #2D3048' }}>
-        <div className="flex items-center justify-between p-4 border-b border-[#24273A]">
-          <div><h2 className="text-base font-bold text-[#E6E7EB]">Stock Adjustment</h2>
-            <p className="text-xs text-[#7B7F93]">{variantName}</p></div>
-          <button onClick={onClose} className="text-[#7B7F93] hover:text-[#E6E7EB] p-1"><X size={16} /></button>
+    <RightDrawer open={true} onClose={onClose} title="Stock Adjustment" subtitle={variantName}>
+      <div className="p-4 space-y-4">
+        <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid #2D3048' }}>
+          {(['remove', 'add'] as const).map(m => (
+            <button key={m} onClick={() => setMode(m)}
+              className={cn('flex-1 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-1.5',
+                mode === m ? 'text-white' : 'text-[#7B7F93]')}
+              style={mode === m ? { background: m === 'remove' ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)' } : {}}>
+              {m === 'remove' ? <><TrendingDown size={14} /> Remove</> : <><TrendingUp size={14} /> Add</>}
+            </button>
+          ))}
         </div>
-        <div className="p-4 space-y-4">
-          <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid #2D3048' }}>
-            {(['remove', 'add'] as const).map(m => (
-              <button key={m} onClick={() => setMode(m)}
-                className={cn('flex-1 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-1.5',
-                  mode === m ? 'text-white' : 'text-[#7B7F93]')}
-                style={mode === m ? { background: m === 'remove' ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)' } : {}}>
-                {m === 'remove' ? <><TrendingDown size={14} /> Remove</> : <><TrendingUp size={14} /> Add</>}
-              </button>
-            ))}
-          </div>
-          <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg text-lg font-bold text-center text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
-          <div className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'rgba(14,15,20,0.5)' }}>
-            <span className="text-xs text-[#7B7F93]">Current → New</span>
-            <span className="text-sm font-bold">
-              <span className="text-[#A4A7B5]">{currentStock}</span>
-              <span className="text-[#7B7F93] mx-1">→</span>
-              <span className={newStock < currentStock ? 'text-[#F87171]' : 'text-[#4ADE80]'}>{newStock}</span>
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {(['damaged', 'theft', 'counting_error', 'restock', 'other'] as const).map(r => (
-              <button key={r} onClick={() => setReason(r)}
-                className={cn('py-2 rounded-lg text-xs font-semibold capitalize',
-                  reason === r ? 'text-[#7C6DFF]' : 'text-[#7B7F93]')}
-                style={reason === r
-                  ? { background: 'rgba(107,92,255,0.15)', border: '1px solid rgba(107,92,255,0.3)' }
-                  : { background: '#1B1E2E', border: '1px solid #24273A' }}>
-                {r.replace('_', ' ')}
-              </button>
-            ))}
-          </div>
-          <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes (optional)…"
-            className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+        <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg text-lg font-bold text-center text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'rgba(14,15,20,0.5)' }}>
+          <span className="text-xs text-[#7B7F93]">Current → New</span>
+          <span className="text-sm font-bold">
+            <span className="text-[#A4A7B5]">{currentStock}</span>
+            <span className="text-[#7B7F93] mx-1">→</span>
+            <span className={newStock < currentStock ? 'text-[#F87171]' : 'text-[#4ADE80]'}>{newStock}</span>
+          </span>
         </div>
-        <div className="flex gap-2 p-4 border-t border-[#24273A]">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]"
-            style={{ border: '1px solid #2D3048' }}>Cancel</button>
-          <button onClick={() => { if (!qty || parseInt(qty) <= 0) { toast.error('Enter a valid quantity'); return; } onSave(delta, reason, notes); }}
-            className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">Apply</button>
+        <div className="grid grid-cols-2 gap-2">
+          {(['damaged', 'theft', 'counting_error', 'restock', 'other'] as const).map(r => (
+            <button key={r} onClick={() => setReason(r)}
+              className={cn('py-2 rounded-lg text-xs font-semibold capitalize',
+                reason === r ? 'text-[#7C6DFF]' : 'text-[#7B7F93]')}
+              style={reason === r
+                ? { background: 'rgba(107,92,255,0.15)', border: '1px solid rgba(107,92,255,0.3)' }
+                : { background: '#1B1E2E', border: '1px solid #24273A' }}>
+              {r.replace('_', ' ')}
+            </button>
+          ))}
         </div>
+        <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes (optional)…"
+          className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
       </div>
-    </div>
+      <div className="flex gap-2 p-4 border-t border-[#24273A] flex-shrink-0">
+        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]"
+          style={{ border: '1px solid #2D3048' }}>Cancel</button>
+        <button onClick={() => { if (!qty || parseInt(qty) <= 0) { toast.error('Enter a valid quantity'); return; } onSave(delta, reason, notes); }}
+          className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">Apply</button>
+      </div>
+    </RightDrawer>
   );
 }
 

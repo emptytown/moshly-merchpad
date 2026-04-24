@@ -447,11 +447,10 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     });
 
     await enqueueSync('tally_batch', batch);
-
     const pending = await db.getAllFromIndex('syncQueue', 'by-status', 'pending');
     dispatch({ type: 'SET_PENDING_SYNC_COUNT', payload: pending.length });
-    dispatch({ type: 'TALLY_CLEAR' });
-
+    // Tally counts intentionally NOT cleared here — they persist across sales.
+    // Only explicit user commands (Clear button, session close, settings reset) clear the tally.
     return batch;
   }, []);
 

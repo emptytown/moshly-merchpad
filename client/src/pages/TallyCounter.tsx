@@ -17,7 +17,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   Minus, Plus, RotateCcw, Trash2, CheckCircle2, Zap, ShoppingBag,
-  StopCircle, Archive, Info, ChevronDown, ChevronUp, Delete, Eye, Package,
+  StopCircle, Archive, Info, ChevronDown, ChevronUp, Delete, Eye, Package, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
@@ -360,25 +360,25 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
         style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+        <div className="flex items-center justify-between px-4 pt-3 pb-2">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center"
               style={{ background: 'rgba(107,92,255,0.12)' }}>
-              <CheckCircle2 size={18} className="text-[#7C6DFF]" />
+              <CheckCircle2 size={14} className="text-[#7C6DFF]" />
             </div>
             <div>
               <h2 className="text-base font-bold text-[#E6E7EB]">Confirm Sale</h2>
               <p className="text-xs text-[#7B7F93]">{totalUnits} items · €{totalRevenue.toFixed(2)}</p>
             </div>
           </div>
-          <button onClick={onCancel} className="w-8 h-8 rounded-full flex items-center justify-center text-[#7B7F93] hover:text-[#E6E7EB] transition-colors"
-            style={{ background: 'rgba(45,48,72,0.5)' }}>
-            <Delete size={15} />
+          <button onClick={onCancel} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
+            style={{ background: 'rgba(107,92,255,0.15)', border: '1px solid rgba(107,92,255,0.35)', color: '#7C6DFF' }}>
+            <X size={13} /> Back
           </button>
         </div>
 
         {/* Items list with +/- tweaks */}
-        <div className="px-5 space-y-1 max-h-40 overflow-y-auto mb-1">
+        <div className="px-4 space-y-0.5 max-h-28 overflow-y-auto mb-1">
           {items.map(item => (
             <div key={item.variantId} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
               style={{ background: 'rgba(14,15,20,0.5)' }}>
@@ -408,13 +408,13 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
         </div>
 
         {/* Total row */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-b border-[#24273A]">
+        <div className="flex items-center justify-between px-4 py-2 border-t border-b border-[#24273A]">
           <span className="text-sm font-semibold text-[#A4A7B5]">Total</span>
           <span className="text-xl font-black mp-gradient-text mp-mono">€{totalRevenue.toFixed(2)}</span>
         </div>
 
         {/* Money received */}
-        <div className="px-5 pt-3 pb-2">
+        <div className="px-4 pt-2 pb-1">
           <div className="flex items-center justify-between mb-1.5">
             <p className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Money Received</p>
             {moneyIn > 0 && (
@@ -424,7 +424,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
               </button>
             )}
           </div>
-          <div className="flex items-center gap-1 px-3 py-2.5 rounded-2xl mb-2"
+          <div className="flex items-center gap-1 px-3 py-2 rounded-2xl mb-1.5"
             style={{
               background: '#0E0F14',
               border: `1px solid ${validInput && sufficient ? 'rgba(74,222,128,0.4)' : validInput && !sufficient ? 'rgba(248,113,113,0.4)' : '#2D3048'}`,
@@ -436,7 +436,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
           </div>
 
           {/* Euro denomination quick-add buttons */}
-          <div className="flex gap-1.5 flex-wrap mb-2">
+          <div className="flex gap-1 flex-wrap mb-1.5">
             {EURO_DENOMS.map(d => (
               <button key={d}
                 onClick={() => handleDenom(d)}
@@ -453,7 +453,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
         </div>
 
         {/* Change display */}
-        <div className="mx-5 mb-3 flex items-center justify-between py-2.5 rounded-2xl px-4"
+        <div className="mx-4 mb-2 flex items-center justify-between py-2 rounded-2xl px-4"
           style={{
             background: change === null ? 'rgba(45,48,72,0.4)' : sufficient ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)',
             border: `1px solid ${change === null ? '#2D3048' : sufficient ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.25)'}`,
@@ -469,11 +469,11 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
         </div>
 
         {/* Complete Sale button */}
-        <div className="px-5 mb-3">
+        <div className="px-4 mb-2">
           <button
             onClick={() => onConfirm(moneyIn)}
             disabled={!canComplete}
-            className="w-full py-3.5 rounded-2xl text-sm font-black text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            className="w-full py-3 rounded-2xl text-sm font-black text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
             style={canComplete
               ? { background: 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)', boxShadow: '0 0 20px rgba(74,222,128,0.3)' }
               : { background: '#1B1E2E', opacity: 0.35 }}>
@@ -491,13 +491,13 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
 
         {/* iOS-style numpad */}
         {numpadOpen && (
-          <div className="grid grid-cols-3 gap-2 px-5 pb-5 pt-3">
+          <div className="grid grid-cols-3 gap-1.5 px-4 pb-3 pt-2">
             {NUMPAD_KEYS.map(key => (
               <button
                 key={key}
                 onClick={() => handleNumpad(key)}
                 className={cn(
-                  'flex items-center justify-center h-14 rounded-full text-lg font-bold transition-all active:scale-90',
+                  'flex items-center justify-center h-11 rounded-2xl text-base font-bold transition-all active:scale-90',
                   key === '\u232b' ? 'text-[#F87171]' : 'text-[#E6E7EB]'
                 )}
                 style={{
