@@ -65,7 +65,7 @@ interface AdjustmentModalProps {
   onClose: () => void;
 }
 
-function AdjustmentModal({ variantName, currentStock, onSave, onClose }: AdjustmentModalProps) {
+export function AdjustmentModal({ variantName, currentStock, onSave, onClose }: AdjustmentModalProps) {
   const [mode, setMode] = useState<'add' | 'remove'>('remove');
   const [qty, setQty] = useState('1');
   const [reason, setReason] = useState<'damaged' | 'theft' | 'counting_error' | 'restock' | 'other'>('counting_error');

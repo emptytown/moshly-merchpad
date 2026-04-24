@@ -14,6 +14,7 @@ import { Product, ProductVariant, Show } from '../lib/db';
 import { cn } from '../lib/utils';
 import { loadCatalogue, CatalogueTemplate } from '../lib/catalogue';
 import StockTransferModal from '../components/StockTransferModal';
+import { AdjustmentModal } from './DetailInfo';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -151,9 +152,9 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-0 sm:p-4 pt-16 sm:pt-4"
       style={{ background: 'rgba(14,15,20,0.85)', backdropFilter: 'blur(8px)' }}>
-      <div className="w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl animate-slide-up"
+      <div className="w-full sm:max-w-2xl max-h-[85vh] overflow-y-auto rounded-b-2xl sm:rounded-2xl animate-slide-up"
         style={{ background: '#141624', border: '1px solid #2D3048' }}>
         <div className="sticky top-0 flex items-center justify-between p-4 border-b border-[#24273A]"
           style={{ background: '#141624' }}>
@@ -494,7 +495,7 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
 
 export default function MerchOffice() {
   const [, navigate] = useLocation();
-  const { state, saveProduct, deleteProduct, saveShow, startSession, startOneOffSession } = useMerchPad();
+  const { state, saveProduct, deleteProduct, saveShow, startSession, startOneOffSession, adjustStock } = useMerchPad();
   const { products, shows, activeSession, isLoading } = state;
 
   const [selectedShowId, setSelectedShowId] = useState(shows.find(s => s.status === 'upcoming')?.id ?? shows[0]?.id ?? '');
@@ -504,6 +505,15 @@ export default function MerchOffice() {
   const [showOneOff, setShowOneOff] = useState(false);
   const [transferProduct, setTransferProduct] = useState<Product | null>(null);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
+  // Collapsible section state (all open by default)
+  const [secShow, setSecShow] = useState(true);
+  const [secProducts, setSecProducts] = useState(true);
+  const [secStock, setSecStock] = useState(true);
+  const [secPastShows, setSecPastShows] = useState(true);
+  // Stock adjustment
+  const [adjustingVariant, setAdjustingVariant] = useState<{
+    variantId: string; productId: string; variantName: string; currentStock: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!selectedShowId && shows.length > 0) {
@@ -530,10 +540,10 @@ export default function MerchOffice() {
   return (
     <div className="min-h-full animate-fade-in">
       {/* Hero header */}
-      <div className="relative overflow-hidden px-4 pt-4 pb-6"
+      <div className="relative overflow-hidden px-4 pt-4 pb-3"
         style={{
           background: `linear-gradient(to bottom, rgba(14,15,20,0) 0%, #0E0F14 100%), url(https://d2xsxph8kpxj0f.cloudfront.net/310519663361417877/U3ZSLTmW8mQsvZ2KUYsYhR/merchpad-hero-bg-QTNZkgshAugSQaW8YVe4nh.webp) center/cover no-repeat`,
-          minHeight: 160,
+          minHeight: 100,
         }}>
         <div className="relative z-10">
           <p className="text-xs font-semibold text-[#7C6DFF] uppercase tracking-widest mb-1">Merch Office</p>
@@ -561,13 +571,16 @@ export default function MerchOffice() {
 
         {/* Show selector */}
         <div>
-          <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-2">Show</p>
-          <ShowSelector
+          <button onClick={() => setSecShow(v => !v)} className="flex items-center justify-between w-full mb-2 group">
+            <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Show</p>
+            <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secShow ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+          </button>
+          {secShow && <ShowSelector
             shows={shows}
             selectedShowId={selectedShowId}
             onSelect={setSelectedShowId}
             onNewShow={() => setShowNewShow(true)}
-          />
+          />}
         </div>
 
         {/* Start Sale CTA */}
@@ -606,14 +619,17 @@ export default function MerchOffice() {
         {/* Products */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Products</p>
+            <button onClick={() => setSecProducts(v => !v)} className="flex items-center gap-1.5 group">
+              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Products</p>
+              <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secProducts ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+            </button>
             <button onClick={() => setEditingProduct('new')}
               className="flex items-center gap-1 text-xs font-semibold text-[#7C6DFF] hover:text-[#6B5CFF] transition-colors">
               <Plus size={13} /> Add Product
             </button>
           </div>
 
-          <div className="space-y-2">
+          {secProducts && <div className="space-y-2">
             {products.map(product => (
               <div key={product.id} className="mp-card overflow-hidden">
                 <button
@@ -709,14 +725,82 @@ export default function MerchOffice() {
                 <p className="text-xs text-[#7B7F93] mt-1">Add your first product to get started</p>
               </div>
             )}
+          </div>}
+        </div>
+        {/* Stock Management */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <button onClick={() => setSecStock(v => !v)} className="flex items-center gap-1.5 group">
+              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Stock Management</p>
+              <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secStock ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+            </button>
           </div>
+          {secStock && (
+            <div className="space-y-2">
+              {products.map(product => (
+                <div key={product.id} className="mp-card overflow-hidden">
+                  <div className="p-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-[#E6E7EB]">{product.name}</p>
+                      <p className="text-xs text-[#7B7F93]">{product.variants.length} variants</p>
+                    </div>
+                    <button onClick={() => setTransferProduct(product)}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors"
+                      style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
+                      <ArrowRightLeft size={11} /> Transfer
+                    </button>
+                  </div>
+                  <div className="border-t border-[#24273A] p-3 space-y-1.5">
+                    <div className="flex items-center justify-between px-2 pb-1">
+                      <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Variant</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-semibold text-purple-400 uppercase tracking-wider w-8 text-right">WH</span>
+                        <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider w-8 text-right">Road</span>
+                        <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider w-8 text-right">Adj</span>
+                      </div>
+                    </div>
+                    {product.variants.map(v => (
+                      <div key={v.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
+                        style={{ background: 'rgba(14,15,20,0.4)' }}>
+                        <span className="text-sm text-[#A4A7B5]">{v.name}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-bold mp-mono text-purple-300 w-8 text-right">{v.warehouseStock ?? 0}</span>
+                          <span className={`text-sm font-bold mp-mono w-8 text-right ${
+                            (v.roadStock ?? v.currentStock) <= 0 ? 'text-[#F87171]' :
+                            (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-[#F87171]' :
+                            (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-[#FBBF24]' :
+                            'text-[#4ADE80]'}`}>
+                            {v.roadStock ?? v.currentStock}
+                          </span>
+                          <button
+                            onClick={() => setAdjustingVariant({ variantId: v.id, productId: product.id, variantName: v.name, currentStock: v.currentStock })}
+                            className="w-8 h-7 flex items-center justify-center rounded-lg text-xs font-bold text-[#7C6DFF] hover:text-white hover:bg-[rgba(124,109,255,0.15)] transition-colors"
+                            style={{ border: '1px solid rgba(124,109,255,0.25)' }}>
+                            <Edit2 size={11} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {products.length === 0 && (
+                <div className="mp-card p-6 text-center">
+                  <p className="text-sm text-[#7B7F93]">No products to manage</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Past shows summary */}
         {shows.filter(s => s.status === 'completed').length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-2">Past Shows</p>
-            <div className="space-y-2">
+            <button onClick={() => setSecPastShows(v => !v)} className="flex items-center gap-1.5 group mb-2">
+              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Past Shows</p>
+              <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secPastShows ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+            </button>
+            {secPastShows && <div className="space-y-2">
               {shows.filter(s => s.status === 'completed').map(s => (
                 <div key={s.id} className="mp-card p-3 flex items-center justify-between">
                   <div>
@@ -726,7 +810,7 @@ export default function MerchOffice() {
                   <TrendingUp size={16} className="text-[#7B7F93]" />
                 </div>
               ))}
-            </div>
+            </div>}
           </div>
         )}
 
@@ -734,6 +818,16 @@ export default function MerchOffice() {
       </div>
 
       {/* Modals */}
+      {adjustingVariant && (
+        <AdjustmentModal
+          {...adjustingVariant}
+          onSave={async (delta, reason, notes) => {
+            await adjustStock(adjustingVariant.variantId, adjustingVariant.productId, adjustingVariant.variantName, delta, reason, notes);
+            setAdjustingVariant(null);
+          }}
+          onClose={() => setAdjustingVariant(null)}
+        />
+      )}
       {editingProduct !== null && (
         <ProductEditor
           product={editingProduct !== 'new' ? (editingProduct as Product) : undefined}

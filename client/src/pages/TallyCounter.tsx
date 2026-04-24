@@ -867,8 +867,10 @@ export default function TallyCounter() {
       </div>
 
       {/* Bottom action bar */}
-      {(tallyMode ? stickyBarTally : stickyBarRegister) && (
-      <div className="fixed left-0 right-0 bottom-16 z-30 px-4 pb-2">
+      {(() => {
+        const isSticky = tallyMode ? stickyBarTally : stickyBarRegister;
+        return (
+        <div className={isSticky ? 'fixed left-0 right-0 bottom-16 z-30 px-4 pb-2' : 'px-4 pb-4 mt-4'}>
         <div className={cn(
           'rounded-2xl p-3 shadow-2xl transition-all duration-300',
         )}
@@ -933,7 +935,8 @@ export default function TallyCounter() {
           )}
         </div>
       </div>
-      )}
+        );
+      })()}
       {/* Spacer */}
       <div className="h-60" />
 
