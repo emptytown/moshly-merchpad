@@ -297,6 +297,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function boot() {
+      try {
       await seedDemoData();
       const db = await getDB();
 
@@ -330,6 +331,11 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_PENDING_SYNC_COUNT', payload: pending.length });
 
       dispatch({ type: 'SET_LOADING', payload: false });
+      } catch (err) {
+        console.error('[MerchPad] Boot error:', err);
+        // Still clear loading so the UI renders instead of hanging forever
+        dispatch({ type: 'SET_LOADING', payload: false });
+      }
     }
     boot();
   }, []);

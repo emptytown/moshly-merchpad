@@ -161,7 +161,18 @@ export async function getDB(): Promise<IDBPDatabase<MerchPadDB>> {
   if (dbInstance) return dbInstance;
 
   dbInstance = await openDB<MerchPadDB>('merchpad', 3, {
-    upgrade(db, oldVersion) {
+    blocked() {
+      console.warn('[MerchPad] DB upgrade blocked by another tab. Please close other tabs and reload.');
+    },
+    blocking() {
+      // This tab is blocking an upgrade in another tab — close our connection
+      dbInstance?.close();
+      dbInstance = null;
+    },
+    terminated() {
+      dbInstance = null;
+    },
+    upgrade(db, oldVersion, _newVersion, transaction) {
       // ── v1 → create all stores ─────────────────────────────────────────
       if (oldVersion < 1) {
         const products = db.createObjectStore('products', { keyPath: 'id' });
@@ -197,14 +208,16 @@ export async function getDB(): Promise<IDBPDatabase<MerchPadDB>> {
 
       // ── v2 → add by-type index on sessions ────────────────────────────
       if (oldVersion < 2) {
-        const tx = db as unknown as { transaction: { objectStore: (name: string) => IDBObjectStore } };
+        // When upgrading from v1, sessions store already exists in the transaction
+        // Use the idb upgrade transaction's objectStore method directly
         try {
-          const sessionStore = tx.transaction.objectStore('sessions');
+          const sessionStore = transaction.objectStore('sessions');
           if (!sessionStore.indexNames.contains('by-type')) {
             sessionStore.createIndex('by-type', 'sessionType');
           }
         } catch {
-          // Index creation may fail if store doesn't exist yet (handled by v1 block)
+          // If sessions store doesn't exist yet (fresh install via v1 block above),
+          // the by-type index will be created there. Safe to ignore.
         }
       }
 
