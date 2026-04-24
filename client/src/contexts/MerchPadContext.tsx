@@ -8,7 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import {
   getDB, getDeviceId, getSetting, setSetting, enqueueSync, addAuditEntry, seedDemoData,
   Product, ProductVariant, Show, SaleSession, TallyBatch, StockAdjustment, AuditEntry,
-  calcStockStatus, StockStatus,
+  calcStockStatus, StockStatus, TeamMember,
 } from '../lib/db';
 
 // ── Tally State ────────────────────────────────────────────────────────────
@@ -34,6 +34,7 @@ export interface AppState {
   repName: string;
   products: Product[];
   shows: Show[];
+  teamMembers: TeamMember[];
   activeSession: SaleSession | null;
   tally: TallyState;
   syncStatus: SyncStatus;
@@ -70,7 +71,10 @@ type Action =
   | { type: 'DELETE_PRODUCT'; payload: string }
   | { type: 'ADD_SHOW'; payload: Show }
   | { type: 'UPDATE_SHOW'; payload: Show }
-  | { type: 'UPDATE_VARIANT_STOCK'; payload: { variantId: string; productId: string; delta: number } };
+  | { type: 'UPDATE_VARIANT_STOCK'; payload: { variantId: string; productId: string; delta: number } }
+  | { type: 'SET_TEAM_MEMBERS'; payload: TeamMember[] }
+  | { type: 'UPSERT_TEAM_MEMBER'; payload: TeamMember }
+  | { type: 'DELETE_TEAM_MEMBER'; payload: string };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -185,6 +189,22 @@ function reducer(state: AppState, action: Action): AppState {
         shows: state.shows.map(s => s.id === action.payload.id ? action.payload : s),
       };
 
+    case 'SET_TEAM_MEMBERS':
+      return { ...state, teamMembers: action.payload };
+
+    case 'UPSERT_TEAM_MEMBER': {
+      const exists = state.teamMembers.some(m => m.id === action.payload.id);
+      return {
+        ...state,
+        teamMembers: exists
+          ? state.teamMembers.map(m => m.id === action.payload.id ? action.payload : m)
+          : [...state.teamMembers, action.payload],
+      };
+    }
+
+    case 'DELETE_TEAM_MEMBER':
+      return { ...state, teamMembers: state.teamMembers.filter(m => m.id !== action.payload) };
+
     case 'UPDATE_VARIANT_STOCK': {
       const { variantId, productId, delta } = action.payload;
       return {
@@ -226,6 +246,9 @@ interface MerchPadContextValue {
   getAuditLog: (sessionId?: string) => Promise<AuditEntry[]>;
   transferStock: (variantId: string, productId: string, variantName: string, direction: 'to_road' | 'to_warehouse', qty: number) => Promise<void>;
   startOneOffSession: (repName: string) => Promise<SaleSession>;
+  saveTeamMember: (member: TeamMember) => Promise<void>;
+  deleteTeamMember: (memberId: string) => Promise<void>;
+  getTeamMemberStats: (memberId: string) => Promise<{ shifts: number; hoursWorked: number; totalItems: number; totalRevenue: number }>;
 }
 
 const MerchPadContext = createContext<MerchPadContextValue | null>(null);
@@ -243,6 +266,7 @@ const initialState: AppState = {
   repName: '',
   products: [],
   shows: [],
+  teamMembers: [],
   activeSession: null,
   tally: { items: {}, lastAction: null },
   syncStatus: navigator.onLine ? 'online' : 'offline',
@@ -284,12 +308,13 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
         getSetting<boolean>('stickyBarRegister', true),
       ]);
 
+      const teamMembers = await db.getAll('teamMembers');
       dispatch({ type: 'SET_PRODUCTS', payload: products });
       dispatch({ type: 'SET_SHOWS', payload: shows });
+      dispatch({ type: 'SET_TEAM_MEMBERS', payload: teamMembers });
       dispatch({ type: 'SET_REP_NAME', payload: repName });
       dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister } });
-
-      // Restore active session if any
+      // Restore active session if anyy
       const activeSessions = await db.getAllFromIndex('sessions', 'by-status', 'active');
       if (activeSessions.length > 0) {
         dispatch({ type: 'SET_ACTIVE_SESSION', payload: activeSessions[0] });
@@ -524,6 +549,46 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'DELETE_PRODUCT', payload: productId });
   }, []);
 
+  const saveTeamMember = useCallback(async (member: TeamMember) => {
+    const db = await getDB();
+    await db.put('teamMembers', member);
+    dispatch({ type: 'UPSERT_TEAM_MEMBER', payload: member });
+  }, []);
+
+  const deleteTeamMember = useCallback(async (memberId: string) => {
+    const db = await getDB();
+    await db.delete('teamMembers', memberId);
+    dispatch({ type: 'DELETE_TEAM_MEMBER', payload: memberId });
+  }, []);
+
+  const getTeamMemberStats = useCallback(async (memberId: string) => {
+    const db = await getDB();
+    const member = stateRef.current.teamMembers.find(m => m.id === memberId);
+    if (!member) return { shifts: 0, hoursWorked: 0, totalItems: 0, totalRevenue: 0 };
+    // Sessions where repName matches member name
+    const allSessions = await db.getAll('sessions');
+    const memberSessions = allSessions.filter(s => s.repName === member.name);
+    const shifts = memberSessions.length;
+    const hoursWorked = memberSessions.reduce((sum, s) => {
+      if (!s.endedAt) return sum;
+      const ms = new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime();
+      return sum + ms / 3_600_000;
+    }, 0);
+    // Tally batches for those sessions
+    let totalItems = 0;
+    let totalRevenue = 0;
+    for (const s of memberSessions) {
+      const batches = await db.getAllFromIndex('tallyBatches', 'by-session', s.id);
+      for (const b of batches) {
+        if (b.status !== 'voided') {
+          totalItems += b.totalItems;
+          totalRevenue += b.totalPrice;
+        }
+      }
+    }
+    return { shifts, hoursWorked, totalItems, totalRevenue };
+  }, []);
+
   const saveShow = useCallback(async (show: Show) => {
     const db = await getDB();
     await db.put('shows', show);
@@ -687,6 +752,9 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       getAuditLog,
       transferStock,
       startOneOffSession,
+      saveTeamMember,
+      deleteTeamMember,
+      getTeamMemberStats,
     }}>
       {children}
     </MerchPadContext.Provider>

@@ -16,6 +16,7 @@ import { loadCatalogue, CatalogueTemplate } from '../lib/catalogue';
 import StockTransferModal from '../components/StockTransferModal';
 import { AdjustmentModal } from './DetailInfo';
 import { RightDrawer } from '../components/RightDrawer';
+import TeamSection from '../components/TeamSection';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -479,11 +480,13 @@ export default function MerchOffice() {
   const [showOneOff, setShowOneOff] = useState(false);
   const [transferProduct, setTransferProduct] = useState<Product | null>(null);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
+  const [expandedStockProduct, setExpandedStockProduct] = useState<Set<string>>(() => new Set());
   // Collapsible section state (all open by default)
   const [secShow, setSecShow] = useState(true);
   const [secProducts, setSecProducts] = useState(true);
   const [secStock, setSecStock] = useState(true);
   const [secPastShows, setSecPastShows] = useState(true);
+  const [secTeam, setSecTeam] = useState(true);
   // Stock adjustment
   const [adjustingVariant, setAdjustingVariant] = useState<{
     variantId: string; productId: string; variantName: string; currentStock: number;
@@ -701,6 +704,17 @@ export default function MerchOffice() {
             )}
           </div>}
         </div>
+        {/* Team */}
+        {state.teamMembers.filter(m => m.active).length > 0 && (
+          <div>
+            <button onClick={() => setSecTeam(v => !v)} className="flex items-center gap-1.5 group mb-2">
+              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Team</p>
+              <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secTeam ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+            </button>
+            {secTeam && <TeamSection />}
+          </div>
+        )}
+
         {/* Stock Management */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -711,53 +725,88 @@ export default function MerchOffice() {
           </div>
           {secStock && (
             <div className="space-y-2">
-              {products.map(product => (
-                <div key={product.id} className="mp-card overflow-hidden">
-                  <div className="p-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-[#E6E7EB]">{product.name}</p>
-                      <p className="text-xs text-[#7B7F93]">{product.variants.length} variants</p>
-                    </div>
-                    <button onClick={() => setTransferProduct(product)}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors"
-                      style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
-                      <ArrowRightLeft size={11} /> Transfer
-                    </button>
-                  </div>
-                  <div className="border-t border-[#24273A] p-3 space-y-1.5">
-                    <div className="flex items-center justify-between px-2 pb-1">
-                      <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Variant</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-semibold text-purple-400 uppercase tracking-wider w-8 text-right">WH</span>
-                        <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider w-8 text-right">Road</span>
-                        <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider w-8 text-right">Adj</span>
-                      </div>
-                    </div>
-                    {product.variants.map(v => (
-                      <div key={v.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
-                        style={{ background: 'rgba(14,15,20,0.4)' }}>
-                        <span className="text-sm text-[#A4A7B5]">{v.name}</span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-bold mp-mono text-purple-300 w-8 text-right">{v.warehouseStock ?? 0}</span>
-                          <span className={`text-sm font-bold mp-mono w-8 text-right ${
-                            (v.roadStock ?? v.currentStock) <= 0 ? 'text-[#F87171]' :
-                            (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-[#F87171]' :
-                            (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-[#FBBF24]' :
-                            'text-[#4ADE80]'}`}>
-                            {v.roadStock ?? v.currentStock}
-                          </span>
-                          <button
-                            onClick={() => setAdjustingVariant({ variantId: v.id, productId: product.id, variantName: v.name, currentStock: v.currentStock })}
-                            className="w-8 h-7 flex items-center justify-center rounded-lg text-xs font-bold text-[#7C6DFF] hover:text-white hover:bg-[rgba(124,109,255,0.15)] transition-colors"
-                            style={{ border: '1px solid rgba(124,109,255,0.25)' }}>
-                            <Edit2 size={11} />
-                          </button>
+              {products.map(product => {
+                const isExpanded = expandedStockProduct.has(product.id);
+                const totalRoad = product.variants.reduce((s, v) => s + (v.roadStock ?? v.currentStock), 0);
+                const totalWH = product.variants.reduce((s, v) => s + (v.warehouseStock ?? 0), 0);
+                return (
+                  <div key={product.id} className="mp-card overflow-hidden">
+                    {/* Collapsible header */}
+                    <button
+                      onClick={() => setExpandedStockProduct(prev => {
+                        const next = new Set(prev);
+                        if (next.has(product.id)) next.delete(product.id); else next.add(product.id);
+                        return next;
+                      })}
+                      className="w-full p-3 flex items-center justify-between text-left"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-[#7B7F93] flex-shrink-0">
+                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[#E6E7EB] truncate">{product.name}</p>
+                          <p className="text-xs text-[#7B7F93]">{product.variants.length} variants</p>
                         </div>
                       </div>
-                    ))}
+                      {!isExpanded && (
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs font-bold mp-mono text-purple-300">{totalWH} WH</span>
+                          <span className="text-xs font-bold mp-mono text-green-400">{totalRoad} Road</span>
+                          <button
+                            onClick={e => { e.stopPropagation(); setTransferProduct(product); }}
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors ml-1"
+                            style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
+                            <ArrowRightLeft size={11} /> Transfer
+                          </button>
+                        </div>
+                      )}
+                      {isExpanded && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setTransferProduct(product); }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors"
+                          style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
+                          <ArrowRightLeft size={11} /> Transfer
+                        </button>
+                      )}
+                    </button>
+                    {isExpanded && (
+                      <div className="border-t border-[#24273A] p-3 space-y-1.5">
+                        <div className="flex items-center justify-between px-2 pb-1">
+                          <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Variant</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-semibold text-purple-400 uppercase tracking-wider w-8 text-right">WH</span>
+                            <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider w-8 text-right">Road</span>
+                            <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider w-8 text-right">Adj</span>
+                          </div>
+                        </div>
+                        {product.variants.map(v => (
+                          <div key={v.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
+                            style={{ background: 'rgba(14,15,20,0.4)' }}>
+                            <span className="text-sm text-[#A4A7B5]">{v.name}</span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-bold mp-mono text-purple-300 w-8 text-right">{v.warehouseStock ?? 0}</span>
+                              <span className={`text-sm font-bold mp-mono w-8 text-right ${
+                                (v.roadStock ?? v.currentStock) <= 0 ? 'text-[#F87171]' :
+                                (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-[#F87171]' :
+                                (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-[#FBBF24]' :
+                                'text-[#4ADE80]'}`}>
+                                {v.roadStock ?? v.currentStock}
+                              </span>
+                              <button
+                                onClick={() => setAdjustingVariant({ variantId: v.id, productId: product.id, variantName: v.name, currentStock: v.currentStock })}
+                                className="w-8 h-7 flex items-center justify-center rounded-lg text-xs font-bold text-[#7C6DFF] hover:text-white hover:bg-[rgba(124,109,255,0.15)] transition-colors"
+                                style={{ border: '1px solid rgba(124,109,255,0.25)' }}>
+                                <Edit2 size={11} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {products.length === 0 && (
                 <div className="mp-card p-6 text-center">
                   <p className="text-sm text-[#7B7F93]">No products to manage</p>

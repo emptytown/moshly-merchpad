@@ -129,6 +129,16 @@ export interface AppSettings {
   value: unknown;
 }
 
+export interface TeamMember {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── DB Schema ──────────────────────────────────────────────────────────────
 
 interface MerchPadDB extends DBSchema {
@@ -140,6 +150,7 @@ interface MerchPadDB extends DBSchema {
   stockAdjustments: { key: string; value: StockAdjustment; indexes: { 'by-variant': string; 'by-session': string } };
   syncQueue: { key: string; value: SyncQueueItem; indexes: { 'by-status': string } };
   settings: { key: string; value: AppSettings };
+  teamMembers: { key: string; value: TeamMember; indexes: { 'by-active': number } };
 }
 
 // ── DB Instance ────────────────────────────────────────────────────────────
@@ -149,7 +160,7 @@ let dbInstance: IDBPDatabase<MerchPadDB> | null = null;
 export async function getDB(): Promise<IDBPDatabase<MerchPadDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<MerchPadDB>('merchpad', 2, {
+  dbInstance = await openDB<MerchPadDB>('merchpad', 3, {
     upgrade(db, oldVersion) {
       // ── v1 → create all stores ─────────────────────────────────────────
       if (oldVersion < 1) {
@@ -185,12 +196,7 @@ export async function getDB(): Promise<IDBPDatabase<MerchPadDB>> {
       }
 
       // ── v2 → add by-type index on sessions ────────────────────────────
-      // (warehouseStock / roadStock are added in-place on product records
-      //  via the boot migration in MerchPadContext; no schema change needed)
       if (oldVersion < 2) {
-        // sessions store already exists from v1; add the new index
-        // The upgrade transaction is available via the IDBPDatabase upgrade callback
-        // We check if the index already exists to avoid duplicate creation
         const tx = db as unknown as { transaction: { objectStore: (name: string) => IDBObjectStore } };
         try {
           const sessionStore = tx.transaction.objectStore('sessions');
@@ -199,6 +205,14 @@ export async function getDB(): Promise<IDBPDatabase<MerchPadDB>> {
           }
         } catch {
           // Index creation may fail if store doesn't exist yet (handled by v1 block)
+        }
+      }
+
+      // ── v3 → add teamMembers store ────────────────────────────────────
+      if (oldVersion < 3) {
+        if (!db.objectStoreNames.contains('teamMembers')) {
+          const team = db.createObjectStore('teamMembers', { keyPath: 'id' });
+          team.createIndex('by-active', 'active');
         }
       }
     },

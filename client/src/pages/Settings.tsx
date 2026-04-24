@@ -15,6 +15,7 @@ import { Slider } from '../components/ui/slider';
 import ProjectsSettings from './ProjectsSettings';
 import MasterCatalogue from './MasterCatalogue';
 import DangerZone from '../components/DangerZone';
+import TeamEditor from '../components/TeamEditor';
 
 type SettingsView = 'main' | 'projects' | 'catalogue';
 
@@ -194,6 +195,11 @@ export default function Settings() {
               />
             </div>
           </div>
+        </div>
+
+        {/* Team Editor */}
+        <div className="mp-card p-4">
+          <TeamEditor />
         </div>
 
         {/* Stock thresholds */}
