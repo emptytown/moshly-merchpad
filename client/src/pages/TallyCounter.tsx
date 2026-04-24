@@ -637,6 +637,8 @@ export default function TallyCounter() {
     setTimeout(async () => {
       const batch = await confirmSale();
       if (batch) {
+        // Remove this variant from basket (sale confirmed) — sessionSold counter stays
+        dispatch({ type: 'TALLY_REMOVE_VARIANT', payload: { variantId } });
         // Accumulate session sold count
         setSessionSold(prev => ({ ...prev, [variantId]: (prev[variantId] ?? 0) + 1 }));
         setJustConfirmed(true);

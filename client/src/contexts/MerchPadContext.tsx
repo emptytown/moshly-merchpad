@@ -62,6 +62,7 @@ type Action =
   | { type: 'TALLY_INCREMENT'; payload: { variantId: string; variantName: string; unitPrice: number } }
   | { type: 'TALLY_DECREMENT'; payload: { variantId: string; variantName: string } }
   | { type: 'TALLY_UNDO_LAST' }
+  | { type: 'TALLY_REMOVE_VARIANT'; payload: { variantId: string } }
   | { type: 'TALLY_CLEAR' }
   | { type: 'SET_SYNC_STATUS'; payload: SyncStatus }
   | { type: 'SET_PENDING_SYNC_COUNT'; payload: number }
@@ -159,6 +160,11 @@ function reducer(state: AppState, action: Action): AppState {
 
     case 'TALLY_CLEAR':
       return { ...state, tally: { items: {}, lastAction: null } };
+    case 'TALLY_REMOVE_VARIANT': {
+      const newItems = { ...state.tally.items };
+      delete newItems[action.payload.variantId];
+      return { ...state, tally: { ...state.tally, items: newItems } };
+    }
 
     case 'SET_SYNC_STATUS':
       return { ...state, syncStatus: action.payload };
