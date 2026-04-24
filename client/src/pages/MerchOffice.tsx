@@ -731,16 +731,19 @@ export default function MerchOffice() {
                 const totalWH = product.variants.reduce((s, v) => s + (v.warehouseStock ?? 0), 0);
                 return (
                   <div key={product.id} className="mp-card overflow-hidden">
-                    {/* Collapsible header */}
-                    <button
-                      onClick={() => setExpandedStockProduct(prev => {
-                        const next = new Set(prev);
-                        if (next.has(product.id)) next.delete(product.id); else next.add(product.id);
-                        return next;
-                      })}
-                      className="w-full p-3 flex items-center justify-between text-left"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
+                    {/* Collapsible header — use div to avoid nested <button> */}
+                    <div className="p-3 flex items-center justify-between">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setExpandedStockProduct(prev => {
+                          const next = new Set(prev);
+                          if (next.has(product.id)) next.delete(product.id); else next.add(product.id);
+                          return next;
+                        })}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedStockProduct(prev => { const next = new Set(prev); if (next.has(product.id)) next.delete(product.id); else next.add(product.id); return next; }); } }}
+                        className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                      >
                         <span className="text-[#7B7F93] flex-shrink-0">
                           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </span>
@@ -748,28 +751,20 @@ export default function MerchOffice() {
                           <p className="text-sm font-semibold text-[#E6E7EB] truncate">{product.name}</p>
                           <p className="text-xs text-[#7B7F93]">{product.variants.length} variants</p>
                         </div>
+                        {!isExpanded && (
+                          <div className="flex items-center gap-2 ml-2">
+                            <span className="text-xs font-bold mp-mono text-purple-300">{totalWH} WH</span>
+                            <span className="text-xs font-bold mp-mono text-green-400">{totalRoad} Road</span>
+                          </div>
+                        )}
                       </div>
-                      {!isExpanded && (
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-xs font-bold mp-mono text-purple-300">{totalWH} WH</span>
-                          <span className="text-xs font-bold mp-mono text-green-400">{totalRoad} Road</span>
-                          <button
-                            onClick={e => { e.stopPropagation(); setTransferProduct(product); }}
-                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors ml-1"
-                            style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
-                            <ArrowRightLeft size={11} /> Transfer
-                          </button>
-                        </div>
-                      )}
-                      {isExpanded && (
-                        <button
-                          onClick={e => { e.stopPropagation(); setTransferProduct(product); }}
-                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors"
-                          style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
-                          <ArrowRightLeft size={11} /> Transfer
-                        </button>
-                      )}
-                    </button>
+                      <button
+                        onClick={() => setTransferProduct(product)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors flex-shrink-0 ml-2"
+                        style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
+                        <ArrowRightLeft size={11} /> Transfer
+                      </button>
+                    </div>
                     {isExpanded && (
                       <div className="border-t border-[#24273A] p-3 space-y-1.5">
                         <div className="flex items-center justify-between px-2 pb-1">
