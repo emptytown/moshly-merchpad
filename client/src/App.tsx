@@ -3,7 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { ThemeProvider } from "./contexts/ThemeContext";
+import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { MerchPadProvider } from "./contexts/MerchPadContext";
 import { ProjectProvider } from "./contexts/ProjectContext";
 import AppShell from "./components/AppShell";
@@ -12,6 +12,25 @@ import TallyCounter from "./pages/TallyCounter";
 import DetailInfo from "./pages/DetailInfo";
 import Settings from "./pages/Settings";
 import EndSaleScreen from "./pages/EndSaleScreen";
+
+function ThemedToaster() {
+  const { mode, skin } = useTheme();
+  const isDark = mode === 'dark';
+  const isMono = skin === 'mono';
+  return (
+    <Toaster
+      theme={isDark ? 'dark' : 'light'}
+      toastOptions={{
+        style: {
+          background: isDark ? (isMono ? '#141414' : '#1B1E2E') : (isMono ? '#F5F5F5' : '#FFFFFF'),
+          border: `1px solid ${isDark ? (isMono ? '#2A2A2A' : '#2D3048') : (isMono ? '#E0E0E0' : '#D8D8E8')}`,
+          color: isDark ? (isMono ? '#F0F0F0' : '#E6E7EB') : '#0A0A0A',
+          fontFamily: 'Inter, sans-serif',
+        },
+      }}
+    />
+  );
+}
 
 function Router() {
   return (
@@ -36,17 +55,7 @@ function App() {
         <ProjectProvider>
           <MerchPadProvider>
             <TooltipProvider>
-              <Toaster
-                theme="dark"
-                toastOptions={{
-                  style: {
-                    background: '#1B1E2E',
-                    border: '1px solid #2D3048',
-                    color: '#E6E7EB',
-                    fontFamily: 'Inter, sans-serif',
-                  },
-                }}
-              />
+              <ThemedToaster />
               <Router />
             </TooltipProvider>
           </MerchPadProvider>

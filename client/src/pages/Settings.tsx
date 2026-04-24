@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight, BookOpen, Package } from 'lucide-react';
+import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight, BookOpen, Package, Palette, Sun, Moon } from 'lucide-react';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { setSetting } from '../lib/db';
@@ -16,10 +16,12 @@ import ProjectsSettings from './ProjectsSettings';
 import MasterCatalogue from './MasterCatalogue';
 import DangerZone from '../components/DangerZone';
 import TeamEditor from '../components/TeamEditor';
+import { useTheme, type Skin, type Mode } from '../contexts/ThemeContext';
 
 type SettingsView = 'main' | 'projects' | 'catalogue';
 
 export default function Settings() {
+  const { skin, mode, setSkin, setMode } = useTheme();
   const { state, dispatch } = useMerchPad();
   const { settings, deviceId, repName } = state;
   const { activeProject, localProjects } = useProjects();
@@ -194,6 +196,77 @@ export default function Settings() {
                 }}
               />
             </div>
+          </div>
+        </div>
+
+        {/* Appearance */}
+        <div className="mp-card p-4 space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Palette size={15} style={{ color: 'var(--color-mp-accent)' }} />
+            <p className="text-sm font-bold" style={{ color: 'var(--color-mp-text-primary)' }}>Appearance</p>
+          </div>
+          {/* Skin chooser */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-mp-text-tertiary)' }}>Skin</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(['neon', 'mono'] as Skin[]).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSkin(s)}
+                  className="relative flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all"
+                  style={{
+                    background: skin === s ? 'var(--color-mp-accent-muted)' : 'var(--color-mp-bg-secondary)',
+                    borderColor: skin === s ? 'var(--color-mp-accent)' : 'var(--color-mp-border-strong)',
+                  }}>
+                  {/* Mini preview swatch */}
+                  <div className="w-full h-10 rounded-lg overflow-hidden flex">
+                    {s === 'neon' ? (
+                      <>
+                        <div className="flex-1" style={{ background: '#0E0F14' }} />
+                        <div className="flex-1" style={{ background: 'linear-gradient(135deg,#6B5CFF,#C026D3)' }} />
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex-1" style={{ background: mode === 'light' ? '#FFFFFF' : '#0A0A0A' }} />
+                        <div className="flex-1" style={{ background: mode === 'light' ? '#888888' : '#D0D0D0' }} />
+                      </>
+                    )}
+                  </div>
+                  <span className="text-xs font-bold capitalize" style={{ color: skin === s ? 'var(--color-mp-accent)' : 'var(--color-mp-text-secondary)' }}>
+                    {s === 'neon' ? 'Neon Ledger' : 'Mono'}
+                  </span>
+                  {skin === s && (
+                    <div className="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: 'var(--color-mp-accent)' }}>
+                      <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 4L3.5 6L6.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Light / Dark toggle */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {mode === 'dark'
+                ? <Moon size={14} style={{ color: 'var(--color-mp-text-secondary)' }} />
+                : <Sun size={14} style={{ color: 'var(--color-mp-text-secondary)' }} />}
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-mp-text-primary)' }}>
+                {mode === 'dark' ? 'Dark Mode' : 'Light Mode'}
+              </span>
+            </div>
+            <button
+              onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}
+              className="relative w-12 h-6 rounded-full transition-all flex-shrink-0"
+              style={{ background: mode === 'dark' ? 'var(--color-mp-accent)' : 'var(--color-mp-border-strong)' }}>
+              <span
+                className="absolute top-0.5 w-5 h-5 rounded-full transition-all"
+                style={{
+                  background: 'white',
+                  left: mode === 'dark' ? 'calc(100% - 1.375rem)' : '0.125rem',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                }}
+              />
+            </button>
           </div>
         </div>
 
