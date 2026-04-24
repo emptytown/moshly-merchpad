@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, BookOpen, Sparkles, AlertCircle, ArrowRightLeft, Warehouse, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { Product, ProductVariant, Show } from '../lib/db';
+import { Product, ProductVariant, Show, getDB } from '../lib/db';
 import { cn } from '../lib/utils';
 import { loadCatalogue, CatalogueTemplate } from '../lib/catalogue';
 import StockTransferModal from '../components/StockTransferModal';
@@ -468,9 +468,118 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
 
 // ── Main Screen ────────────────────────────────────────────────────────────
 
+
+// ── Past Shows Section ────────────────────────────────────────────────────
+interface PastShowsSectionProps {
+  shows: Show[];
+  secPastShows: boolean;
+  setSecPastShows: (v: (prev: boolean) => boolean) => void;
+  expandedPastShow: string | null;
+  setExpandedPastShow: (id: string | null) => void;
+  pastShowStats: Record<string, { sessions: number; items: number; revenue: number }>;
+  setPastShowStats: React.Dispatch<React.SetStateAction<Record<string, { sessions: number; items: number; revenue: number }>>>;
+  onDelete: (showId: string) => Promise<void>;
+}
+function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastShow, setExpandedPastShow, pastShowStats, setPastShowStats, onDelete }: PastShowsSectionProps) {
+  useEffect(() => {
+    if (!shows.length) return;
+    async function loadStats() {
+      const db = await getDB();
+      const allBatches = await db.getAll('tallyBatches');
+      const allSessions = await db.getAll('sessions');
+      const stats: Record<string, { sessions: number; items: number; revenue: number }> = {};
+      for (const show of shows) {
+        const showBatches = allBatches.filter(b => b.showId === show.id && b.status !== 'voided');
+        const showSessions = allSessions.filter(s => s.showId === show.id);
+        stats[show.id] = {
+          sessions: showSessions.length,
+          items: showBatches.reduce((s, b) => s + b.totalItems, 0),
+          revenue: showBatches.reduce((s, b) => s + b.totalPrice, 0),
+        };
+      }
+      setPastShowStats(stats);
+    }
+    loadStats();
+  }, [shows, setPastShowStats]);
+
+  if (!shows.length) return null;
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <button onClick={() => setSecPastShows(v => !v)} className="flex items-center gap-1.5 group">
+          <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Past Shows</p>
+          <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secPastShows ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+        </button>
+        <span className="text-[10px] text-[#7B7F93]">{shows.length} show{shows.length !== 1 ? 's' : ''}</span>
+      </div>
+      {secPastShows && (
+        <div className="space-y-2">
+          {shows.map(show => {
+            const isExpanded = expandedPastShow === show.id;
+            const stats = pastShowStats[show.id];
+            return (
+              <div key={show.id} className="mp-card overflow-hidden">
+                {/* Header row — div[role=button] to avoid nested button */}
+                <div className="p-3 flex items-center justify-between">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setExpandedPastShow(isExpanded ? null : show.id)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedPastShow(isExpanded ? null : show.id); } }}
+                    className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                  >
+                    <span className="text-[#7B7F93] flex-shrink-0">{isExpanded ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[#E6E7EB] truncate">{show.name}</p>
+                      <p className="text-xs text-[#7B7F93] truncate">{show.venue}{show.city ? ` · ${show.city}` : ''} · {show.date}</p>
+                    </div>
+                    {!isExpanded && stats && (
+                      <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                        <span className="text-xs font-bold mp-mono text-green-400">€{stats.revenue.toFixed(0)}</span>
+                        <span className="text-xs text-[#7B7F93]">{stats.items} items</span>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => onDelete(show.id)}
+                    className="flex-shrink-0 ml-2 w-7 h-7 flex items-center justify-center rounded-lg text-[#F87171] hover:bg-[rgba(248,113,113,0.12)] transition-colors"
+                    style={{ border: '1px solid rgba(248,113,113,0.25)' }}
+                    title="Permanently delete show">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+                {/* Expanded stats */}
+                {isExpanded && (
+                  <div className="border-t border-[#24273A] p-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="rounded-lg p-2 text-center" style={{ background: 'rgba(14,15,20,0.5)' }}>
+                        <p className="text-[10px] text-[#7B7F93] uppercase tracking-wider mb-0.5">Sessions</p>
+                        <p className="text-base font-black mp-mono text-[#E6E7EB]">{stats?.sessions ?? '—'}</p>
+                      </div>
+                      <div className="rounded-lg p-2 text-center" style={{ background: 'rgba(14,15,20,0.5)' }}>
+                        <p className="text-[10px] text-[#7B7F93] uppercase tracking-wider mb-0.5">Items</p>
+                        <p className="text-base font-black mp-mono text-[#E6E7EB]">{stats?.items ?? '—'}</p>
+                      </div>
+                      <div className="rounded-lg p-2 text-center" style={{ background: 'rgba(14,15,20,0.5)' }}>
+                        <p className="text-[10px] text-[#7B7F93] uppercase tracking-wider mb-0.5">Revenue</p>
+                        <p className="text-base font-black mp-mono text-green-400">€{stats?.revenue.toFixed(0) ?? '—'}</p>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-[#4A4D5E] mt-2 text-center">Trash icon permanently removes this show and all its data</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MerchOffice() {
   const [, navigate] = useLocation();
-  const { state, saveProduct, deleteProduct, saveShow, startSession, startOneOffSession, adjustStock } = useMerchPad();
+  const { state, saveProduct, deleteProduct, saveShow, deleteShow, startSession, startOneOffSession, adjustStock } = useMerchPad();
   const { products, shows, activeSession, isLoading } = state;
 
   const [selectedShowId, setSelectedShowId] = useState(shows.find(s => s.status === 'upcoming')?.id ?? shows[0]?.id ?? '');
@@ -486,6 +595,8 @@ export default function MerchOffice() {
   const [secProducts, setSecProducts] = useState(true);
   const [secStock, setSecStock] = useState(true);
   const [secPastShows, setSecPastShows] = useState(true);
+  const [expandedPastShow, setExpandedPastShow] = useState<string | null>(null);
+  const [pastShowStats, setPastShowStats] = useState<Record<string, { sessions: number; items: number; revenue: number }>>({});
   const [secTeam, setSecTeam] = useState(true);
   // Stock adjustment
   const [adjustingVariant, setAdjustingVariant] = useState<{
@@ -812,25 +923,20 @@ export default function MerchOffice() {
         </div>
 
         {/* Past shows summary */}
-        {shows.filter(s => s.status === 'completed').length > 0 && (
-          <div>
-            <button onClick={() => setSecPastShows(v => !v)} className="flex items-center gap-1.5 group mb-2">
-              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Past Shows</p>
-              <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secPastShows ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
-            </button>
-            {secPastShows && <div className="space-y-2">
-              {shows.filter(s => s.status === 'completed').map(s => (
-                <div key={s.id} className="mp-card p-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-[#E6E7EB]">{s.name}</p>
-                    <p className="text-xs text-[#7B7F93]">{s.venue} · {formatDate(s.date)}</p>
-                  </div>
-                  <TrendingUp size={16} className="text-[#7B7F93]" />
-                </div>
-              ))}
-            </div>}
-          </div>
-        )}
+        <PastShowsSection
+          shows={shows.filter(s => s.status === 'completed' || s.status === 'archived')}
+          secPastShows={secPastShows}
+          setSecPastShows={setSecPastShows}
+          expandedPastShow={expandedPastShow}
+          setExpandedPastShow={setExpandedPastShow}
+          pastShowStats={pastShowStats}
+          setPastShowStats={setPastShowStats}
+          onDelete={async (showId) => {
+            if (!confirm('Permanently delete this show and all its data? This cannot be undone.')) return;
+            await deleteShow(showId);
+            toast.success('Show deleted');
+          }}
+        />
 
         <div className="h-4" />
       </div>

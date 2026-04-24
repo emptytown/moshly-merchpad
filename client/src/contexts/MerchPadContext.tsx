@@ -74,7 +74,8 @@ type Action =
   | { type: 'UPDATE_VARIANT_STOCK'; payload: { variantId: string; productId: string; delta: number } }
   | { type: 'SET_TEAM_MEMBERS'; payload: TeamMember[] }
   | { type: 'UPSERT_TEAM_MEMBER'; payload: TeamMember }
-  | { type: 'DELETE_TEAM_MEMBER'; payload: string };
+  | { type: 'DELETE_TEAM_MEMBER'; payload: string }
+  | { type: 'DELETE_SHOW'; payload: string };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -189,6 +190,9 @@ function reducer(state: AppState, action: Action): AppState {
         shows: state.shows.map(s => s.id === action.payload.id ? action.payload : s),
       };
 
+    case 'DELETE_SHOW':
+      return { ...state, shows: state.shows.filter(s => s.id !== action.payload) };
+
     case 'SET_TEAM_MEMBERS':
       return { ...state, teamMembers: action.payload };
 
@@ -240,6 +244,7 @@ interface MerchPadContextValue {
   saveProduct: (product: Product) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
   saveShow: (show: Show) => Promise<void>;
+  deleteShow: (showId: string) => Promise<void>;
   getVariantStockStatus: (variant: ProductVariant) => StockStatus;
   getSessionSoldQty: (variantId: string) => number;
   getTallyTotal: () => { units: number; revenue: number };
@@ -543,12 +548,16 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const deleteProduct = useCallback(async (productId: string) => {
+   const deleteProduct = useCallback(async (productId: string) => {
     const db = await getDB();
     await db.delete('products', productId);
     dispatch({ type: 'DELETE_PRODUCT', payload: productId });
   }, []);
-
+  const deleteShow = useCallback(async (showId: string) => {
+    const db = await getDB();
+    await db.delete('shows', showId);
+    dispatch({ type: 'DELETE_SHOW', payload: showId });
+  }, []);
   const saveTeamMember = useCallback(async (member: TeamMember) => {
     const db = await getDB();
     await db.put('teamMembers', member);
@@ -746,6 +755,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       saveProduct,
       deleteProduct,
       saveShow,
+      deleteShow,
       getVariantStockStatus,
       getSessionSoldQty,
       getTallyTotal,

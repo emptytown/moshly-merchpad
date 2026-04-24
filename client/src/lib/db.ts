@@ -47,7 +47,7 @@ export interface Show {
   venue: string;
   date: string;
   city?: string;
-  status: 'upcoming' | 'active' | 'completed';
+  status: 'upcoming' | 'active' | 'completed' | 'archived';
   createdAt: string;
 }
 
