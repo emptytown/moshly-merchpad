@@ -42,12 +42,15 @@ export interface AppState {
   pendingSyncCount: number;
   settings: {
     undoEnabled: boolean;
-    stockThresholdYellow: number; // 0.3
-    stockThresholdRed: number;    // 0.1
-    requireMoneyInput: boolean;   // shade Complete Sale until money entered in Client Mode
-    allowMidSaleRestock: boolean; // show Restock button on Tally cards during a session
-    stickyBarTally: boolean;      // keep bottom action bar visible in Tally mode
-    stickyBarRegister: boolean;   // keep bottom action bar visible in Register mode
+    stockThresholdYellow: number;
+    stockThresholdRed: number;
+    requireMoneyInput: boolean;
+    allowMidSaleRestock: boolean;
+    stickyBarTally: boolean;
+    stickyBarRegister: boolean;
+    requireDiscountReason: boolean;
+    allowSellerDebt: boolean;
+    requireDebtReason: boolean;
   };
 }
 
@@ -245,7 +248,13 @@ interface MerchPadContextValue {
   // High-level actions
   startSession: (showId: string, repName: string, standName?: string) => Promise<SaleSession>;
   endSession: () => Promise<void>;
-  confirmSale: () => Promise<TallyBatch | null>;
+  confirmSale: (opts?: {
+    shortfallType?: 'discount' | 'seller_debt';
+    shortfallAmount?: number;
+    shortfallReason?: string;
+    shortfallMemberId?: string;
+  }) => Promise<TallyBatch | null>;
+  recordSellerDebt: (memberId: string, amount: number) => Promise<void>;
   adjustStock: (variantId: string, productId: string, variantName: string, delta: number, reason: StockAdjustment['reason'], notes?: string) => Promise<void>;
   saveProduct: (product: Product) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
@@ -291,6 +300,9 @@ const initialState: AppState = {
     allowMidSaleRestock: false,
     stickyBarTally: true,
     stickyBarRegister: true,
+    requireDiscountReason: true,
+    allowSellerDebt: true,
+    requireDebtReason: true,
   },
 };
 
@@ -307,7 +319,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       await seedDemoData();
       const db = await getDB();
 
-      const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister] = await Promise.all([
+      const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason] = await Promise.all([
         db.getAll('products'),
         db.getAll('shows'),
         getSetting<string>('repName', ''),
@@ -318,6 +330,9 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
         getSetting<number>('stockThresholdRed', 0.1),
         getSetting<boolean>('stickyBarTally', true),
         getSetting<boolean>('stickyBarRegister', true),
+        getSetting<boolean>('requireDiscountReason', true),
+        getSetting<boolean>('allowSellerDebt', true),
+        getSetting<boolean>('requireDebtReason', true),
       ]);
 
       const teamMembers = await db.getAll('teamMembers');
@@ -325,7 +340,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_SHOWS', payload: shows });
       dispatch({ type: 'SET_TEAM_MEMBERS', payload: teamMembers });
       dispatch({ type: 'SET_REP_NAME', payload: repName });
-      dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister } });
+      dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason } });
       // Restore active session if anyy
       const activeSessions = await db.getAllFromIndex('sessions', 'by-status', 'active');
       if (activeSessions.length > 0) {
@@ -429,7 +444,12 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_ACTIVE_SESSION', payload: null });
   }, []);
 
-  const confirmSale = useCallback(async (): Promise<TallyBatch | null> => {
+  const confirmSale = useCallback(async (opts?: {
+    shortfallType?: 'discount' | 'seller_debt';
+    shortfallAmount?: number;
+    shortfallReason?: string;
+    shortfallMemberId?: string;
+  }): Promise<TallyBatch | null> => {
     const { tally, activeSession, repName, products: stateProducts } = stateRef.current;
     const items = Object.values(tally.items).filter(i => i.qty > 0);
     if (items.length === 0 || !activeSession) return null;
@@ -450,6 +470,12 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       totalPrice,
       confirmedAt: now,
       status: 'pending',
+      ...(opts?.shortfallType && {
+        shortfallType: opts.shortfallType,
+        shortfallAmount: opts.shortfallAmount,
+        shortfallReason: opts.shortfallReason,
+        shortfallMemberId: opts.shortfallMemberId,
+      }),
     };
 
     await db.put('tallyBatches', batch);
@@ -459,9 +485,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       for (const p of stateProducts) {
         const v = p.variants.find(v => v.id === item.variantId);
         if (v) {
-          // Compute new stock from current in-memory value
           const newStock = Math.max(0, v.currentStock - item.qty);
-          // Build updated product with new stock and persist
           const updatedProduct = {
             ...p,
             variants: p.variants.map(pv =>
@@ -469,7 +493,6 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
             ),
           };
           await db.put('products', updatedProduct);
-          // Dispatch delta so reducer updates state.products in one step
           dispatch({ type: 'UPDATE_VARIANT_STOCK', payload: { variantId: v.id, productId: p.id, delta: -item.qty } });
         }
       }
@@ -488,11 +511,39 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       timestamp: now,
     });
 
+    // Write shortfall-specific audit entry
+    if (opts?.shortfallType === 'discount') {
+      await addAuditEntry({
+        sessionId: activeSession.id,
+        showId: activeSession.showId,
+        deviceId: activeSession.deviceId,
+        action: 'sale_discounted',
+        entityType: 'tally_batch',
+        entityId: batch.id,
+        description: `Discount applied: €${opts.shortfallAmount?.toFixed(2)} shortfall${opts.shortfallReason ? ` — ${opts.shortfallReason}` : ''}`,
+        actorName: repName,
+        reason: opts.shortfallReason,
+        timestamp: now,
+      });
+    } else if (opts?.shortfallType === 'seller_debt' && opts.shortfallMemberId) {
+      const member = stateRef.current.teamMembers.find(m => m.id === opts.shortfallMemberId);
+      await addAuditEntry({
+        sessionId: activeSession.id,
+        showId: activeSession.showId,
+        deviceId: activeSession.deviceId,
+        action: 'seller_debt_recorded',
+        entityType: 'team_member',
+        entityId: opts.shortfallMemberId,
+        description: `Seller debt: €${opts.shortfallAmount?.toFixed(2)} owed by ${member?.name ?? 'Unknown'}${opts.shortfallReason ? ` — ${opts.shortfallReason}` : ''}`,
+        actorName: repName,
+        reason: opts.shortfallReason,
+        timestamp: now,
+      });
+    }
+
     await enqueueSync('tally_batch', batch);
     const pending = await db.getAllFromIndex('syncQueue', 'by-status', 'pending');
     dispatch({ type: 'SET_PENDING_SYNC_COUNT', payload: pending.length });
-    // Tally counts intentionally NOT cleared here — they persist across sales.
-    // Only explicit user commands (Clear button, session close, settings reset) clear the tally.
     return batch;
   }, []);
 
@@ -608,6 +659,15 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       }
     }
     return { shifts, hoursWorked, totalItems, totalRevenue };
+  }, []);
+
+  const recordSellerDebt = useCallback(async (memberId: string, amount: number) => {
+    const db = await getDB();
+    const member = await db.get('teamMembers', memberId);
+    if (!member) return;
+    const updated: TeamMember = { ...member, totalDebt: (member.totalDebt ?? 0) + amount, updatedAt: new Date().toISOString() };
+    await db.put('teamMembers', updated);
+    dispatch({ type: 'UPSERT_TEAM_MEMBER', payload: updated });
   }, []);
 
   const saveShow = useCallback(async (show: Show) => {
@@ -777,6 +837,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       saveTeamMember,
       deleteTeamMember,
       getTeamMemberStats,
+      recordSellerDebt,
     }}>
       {children}
     </MerchPadContext.Provider>

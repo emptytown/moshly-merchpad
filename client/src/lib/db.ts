@@ -76,6 +76,10 @@ export interface TallyBatch {
   confirmedAt: string;
   syncedAt?: string;
   status: 'pending' | 'synced' | 'voided';
+  shortfallType?: 'discount' | 'seller_debt';
+  shortfallAmount?: number;
+  shortfallReason?: string;
+  shortfallMemberId?: string;
 }
 
 export interface AuditEntry {
@@ -90,8 +94,10 @@ export interface AuditEntry {
     | 'session_started'
     | 'session_ended'
     | 'tally_undo'
-    | 'stock_transferred';   // NEW — warehouse → road transfer
-  entityType: 'tally_batch' | 'product_variant' | 'session';
+    | 'stock_transferred'
+    | 'sale_discounted'
+    | 'seller_debt_recorded';
+  entityType: 'tally_batch' | 'product_variant' | 'session' | 'team_member';
   entityId: string;
   description: string;
   actorName: string;
@@ -137,6 +143,7 @@ export interface TeamMember {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  totalDebt?: number;
 }
 
 // ── DB Schema ──────────────────────────────────────────────────────────────
