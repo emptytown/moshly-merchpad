@@ -16,7 +16,9 @@ interface MemberStats {
 
 export default function TeamSection({ onEditMember }: { onEditMember?: (m: TeamMember) => void } = {}) {
   const { state, getTeamMemberStats } = useMerchPad();
-  const { teamMembers } = state;
+  const { teamMembers, settings } = state;
+  const currency = settings.currency ?? 'EUR';
+  const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
   const active = teamMembers.filter(m => m.active);
 
   const [stats, setStats] = useState<Record<string, MemberStats>>({});
@@ -50,7 +52,7 @@ export default function TeamSection({ onEditMember }: { onEditMember?: (m: TeamM
         {active.map(member => {
           const s = stats[member.id];
           return (
-            <MemberCard key={member.id} member={member} stats={s} onEdit={onEditMember} />
+            <MemberCard key={member.id} member={member} stats={s} onEdit={onEditMember} symbol={symbol} />
           );
         })}
       </div>
@@ -58,7 +60,7 @@ export default function TeamSection({ onEditMember }: { onEditMember?: (m: TeamM
   );
 }
 
-function MemberCard({ member, stats, onEdit }: { member: TeamMember; stats?: MemberStats; onEdit?: (m: TeamMember) => void }) {
+function MemberCard({ member, stats, onEdit, symbol }: { member: TeamMember; stats?: MemberStats; onEdit?: (m: TeamMember) => void, symbol: string }) {
   const initials = member.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
   return (
@@ -75,7 +77,7 @@ function MemberCard({ member, stats, onEdit }: { member: TeamMember; stats?: Mem
         </div>
         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-[#4ADE80] bg-[#4ADE80]/10">Active</span>
         {member.totalDebt && member.totalDebt > 0 ? (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-[#F87171] bg-[#F87171]/10">−€{member.totalDebt.toFixed(0)}</span>
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-[#F87171] bg-[#F87171]/10">−{symbol}{member.totalDebt.toFixed(0)}</span>
         ) : null}
       </div>
 
@@ -103,7 +105,7 @@ function MemberCard({ member, stats, onEdit }: { member: TeamMember; stats?: Mem
           <StatChip
             icon={<DollarSign size={10} />}
             label="Revenue"
-            value={stats.totalRevenue > 0 ? `€${stats.totalRevenue % 1 === 0 ? stats.totalRevenue : stats.totalRevenue.toFixed(0)}` : '—'}
+            value={stats.totalRevenue > 0 ? `${symbol}${stats.totalRevenue % 1 === 0 ? stats.totalRevenue : stats.totalRevenue.toFixed(0)}` : '—'}
             color="#FBBF24"
           />
         </div>

@@ -143,7 +143,7 @@ function TallyCard({
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-[#7B7F93]">Price</span>
-                    <span className="text-[10px] font-semibold text-[#A4A7B5]">€{variant.price.toFixed(2)}</span>
+                    <span className="text-[10px] font-semibold text-[#A4A7B5]">{symbol}{variant.price.toFixed(2)}</span>
                   </div>
                   {variant.sku && (
                     <div className="flex items-center justify-between">
@@ -215,10 +215,10 @@ function TallyCard({
       )}
       {/* Price / running total */}
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground mp-mono">€{variant.price.toFixed(2)}</span>
+        <span className="text-xs text-muted-foreground mp-mono">{symbol}{variant.price.toFixed(2)}</span>
         {!tallyMode && basketQty > 0 ? (
           <span className="text-xs font-bold mp-mono text-foreground">
-            €{(basketQty * variant.price).toFixed(2)}
+            {symbol}{(basketQty * variant.price).toFixed(2)}
           </span>
         ) : tallyMode ? (
           (() => {
@@ -278,7 +278,7 @@ function BasketPreview({ items, totalRevenue, onClose, onAdjust }: BasketPreview
                 </div>
                 <div className="flex items-center gap-1.5 ml-2">
                   <span className="text-sm font-bold text-[#E6E7EB] mp-mono mr-2">
-                    €{(item.qty * item.unitPrice).toFixed(2)}
+                    {symbol}{(item.qty * item.unitPrice).toFixed(2)}
                   </span>
                   <button
                     onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, -1)}
@@ -297,7 +297,7 @@ function BasketPreview({ items, totalRevenue, onClose, onAdjust }: BasketPreview
             ))}
             <div className="flex items-center justify-between pt-2 border-t border-[#24273A]">
               <span className="text-sm font-semibold text-[#A4A7B5]">Total</span>
-              <span className="text-base font-black mp-gradient-text mp-mono">€{totalRevenue.toFixed(2)}</span>
+              <span className="text-base font-black mp-gradient-text mp-mono">{symbol}{totalRevenue.toFixed(2)}</span>
             </div>
           </div>
         )}
@@ -364,7 +364,7 @@ function ShortfallModal({
     else onGoBack();
   }
 
-  const paidStr = shortfall < totalRevenue ? `€${(totalRevenue - shortfall).toFixed(2)} paid` : '';
+  const paidStr = shortfall < totalRevenue ? `${symbol}${(totalRevenue - shortfall).toFixed(2)} paid` : '';
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
@@ -377,9 +377,9 @@ function ShortfallModal({
           <div>
             <h2 className="text-base font-black text-[#F87171]">Cash is not enough!</h2>
             <p className="text-xs text-[#7B7F93] mt-0.5">
-              <span className="font-bold text-[#F87171]">€{shortfall.toFixed(2)} short</span>
+              <span className="font-bold text-[#F87171]">{symbol}{shortfall.toFixed(2)} short</span>
               {paidStr && <span> · {paidStr}</span>}
-              {' · '}Total €{totalRevenue.toFixed(2)}
+              {' · '}Total {symbol}{totalRevenue.toFixed(2)}
             </p>
           </div>
         </div>
@@ -392,7 +392,7 @@ function ShortfallModal({
                 className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-between px-4 transition-all active:scale-[0.98]"
                 style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: '#FBBF24' }}>
                 <span>Confirm as Discount</span>
-                <span className="text-xs opacity-60">−€{shortfall.toFixed(2)}</span>
+                <span className="text-xs opacity-60">−{symbol}{shortfall.toFixed(2)}</span>
               </button>
 
               {allowSellerDebt && activeMembers.length > 0 && (
@@ -400,7 +400,7 @@ function ShortfallModal({
                   className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-between px-4 transition-all active:scale-[0.98]"
                   style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: '#F87171' }}>
                   <span>Confirm as Seller Debt</span>
-                  <span className="text-xs opacity-60">−€{shortfall.toFixed(2)}</span>
+                  <span className="text-xs opacity-60">−{symbol}{shortfall.toFixed(2)}</span>
                 </button>
               )}
 
@@ -461,7 +461,7 @@ function ShortfallModal({
                     style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', color: '#E6E7EB' }}>
                     {m.name}
                     {m.totalDebt && m.totalDebt > 0 ? (
-                      <span className="ml-2 text-xs text-[#F87171]">−€{m.totalDebt.toFixed(0)} existing debt</span>
+                      <span className="ml-2 text-xs text-[#F87171]">−{symbol}{m.totalDebt.toFixed(0)} existing debt</span>
                     ) : null}
                   </button>
                 ))}
@@ -587,7 +587,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
             </div>
             <div>
               <h2 className="text-base font-bold text-[#E6E7EB]">Confirm Sale</h2>
-              <p className="text-xs text-[#7B7F93]">{totalUnits} items · €{totalRevenue.toFixed(2)}</p>
+              <p className="text-xs text-[#7B7F93]">{totalUnits} items · {symbol}{totalRevenue.toFixed(2)}</p>
             </div>
           </div>
           <button onClick={onCancel} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
@@ -607,7 +607,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
               </div>
               <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
                 <span className="text-sm font-bold text-[#E6E7EB] mp-mono mr-1">
-                  €{(item.qty * item.unitPrice).toFixed(2)}
+                  {symbol}{(item.qty * item.unitPrice).toFixed(2)}
                 </span>
                 <button
                   onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, -1)}
@@ -629,7 +629,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
         {/* Total row */}
         <div className="flex items-center justify-between px-4 py-2 border-t border-b border-[#24273A]">
           <span className="text-sm font-semibold text-[#A4A7B5]">Total</span>
-          <span className="text-xl font-black mp-gradient-text mp-mono">€{totalRevenue.toFixed(2)}</span>
+          <span className="text-xl font-black mp-gradient-text mp-mono">{symbol}{totalRevenue.toFixed(2)}</span>
         </div>
 
         {/* Money received */}
@@ -648,7 +648,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
               background: '#0E0F14',
               border: `1px solid ${validInput && sufficient ? 'rgba(74,222,128,0.4)' : validInput && !sufficient ? 'rgba(248,113,113,0.4)' : '#2D3048'}`,
             }}>
-            <span className="text-sm font-bold text-[#7B7F93]">€</span>
+            <span className="text-sm font-bold text-[#7B7F93]">{symbol}</span>
             <span className="text-xl font-black text-[#E6E7EB] mp-mono flex-1">
               {moneyIn === 0 ? <span className="text-[#2D3048]">0</span> : moneyIn.toFixed(2)}
             </span>
@@ -665,7 +665,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
                   border: '1px solid #2D3048',
                   color: '#A4A7B5',
                 }}>
-                €{d}
+                {symbol}{d}
               </button>
             ))}
           </div>
@@ -683,7 +683,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
           </span>
           <span className="text-lg font-black mp-mono"
             style={{ color: change === null ? '#2D3048' : sufficient ? '#4ADE80' : '#F87171' }}>
-            {change === null ? '—' : sufficient ? `€${change.toFixed(2)}` : `-€${Math.abs(change).toFixed(2)}`}
+            {change === null ? '—' : sufficient ? `${symbol}${change.toFixed(2)}` : `-${symbol}${Math.abs(change).toFixed(2)}`}
           </span>
         </div>
 
@@ -739,6 +739,8 @@ export default function TallyCounter() {
   const [, navigate] = useLocation();
   const { state, dispatch, confirmSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock } = useMerchPad();
   const { products, activeSession, tally, settings, teamMembers } = state;
+  const currency = settings.currency ?? 'EUR';
+  const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
   const allowMidSaleRestock = settings.allowMidSaleRestock ?? false;
   const stickyBarTally = settings.stickyBarTally ?? true;
   const stickyBarRegister = settings.stickyBarRegister ?? true;
@@ -832,12 +834,12 @@ export default function TallyCounter() {
       setJustConfirmed(true);
       toast.success(
         opts?.shortfallType === 'discount'
-          ? `Discount applied · €${batch.totalPrice.toFixed(2)}`
+          ? `Discount applied · ${symbol}${batch.totalPrice.toFixed(2)}`
           : opts?.shortfallType === 'seller_debt'
-          ? `Seller debt recorded · €${(opts.shortfallAmount ?? 0).toFixed(2)} owed`
+          ? `Seller debt recorded · ${symbol}${(opts.shortfallAmount ?? 0).toFixed(2)} owed`
           : moneyIn > 0
-          ? `Sale complete! €${batch.totalPrice.toFixed(2)} · Change: €${change.toFixed(2)}`
-          : `Sale confirmed! ${batch.totalItems} items · €${batch.totalPrice.toFixed(2)}`,
+          ? `Sale complete! ${symbol}${batch.totalPrice.toFixed(2)} · Change: ${symbol}${change.toFixed(2)}`
+          : `Sale confirmed! ${batch.totalItems} items · ${symbol}${batch.totalPrice.toFixed(2)}`,
         { duration: 4000 }
       );
       setTimeout(() => setJustConfirmed(false), 2000);
@@ -863,7 +865,7 @@ export default function TallyCounter() {
     const shortfall = totalRevenue - pendingMoneyIn;
     await finishSale(pendingMoneyIn, { shortfallType: 'seller_debt', shortfallAmount: shortfall, shortfallReason: reason, shortfallMemberId: memberId });
     await recordSellerDebt(memberId, shortfall);
-    toast(`${memberName} owes €${shortfall.toFixed(2)}`, { duration: 3000 });
+    toast(`${memberName} owes ${symbol}${shortfall.toFixed(2)}`, { duration: 3000 });
   }, [finishSale, recordSellerDebt, totalRevenue, pendingMoneyIn]);
 
   // Instant sell (Tally mode — single variant, qty=1, immediate confirm)
@@ -883,7 +885,7 @@ export default function TallyCounter() {
         // Accumulate session sold count
         setSessionSold(prev => ({ ...prev, [variantId]: (prev[variantId] ?? 0) + 1 }));
         setJustConfirmed(true);
-        toast.success(`${variantName} · €${unitPrice.toFixed(2)}`, { duration: 1500 });
+        toast.success(`${variantName} · ${symbol}${unitPrice.toFixed(2)}`, { duration: 1500 });
         setTimeout(() => setJustConfirmed(false), 1500);
       }
     }, 50);
@@ -1136,7 +1138,7 @@ export default function TallyCounter() {
               <div>
                 <p className="text-xs text-[#7B7F93]">Total</p>
                 <p className="text-lg font-black mp-gradient-text mp-mono leading-none">
-                  €{(tallyMode ? sessionTotalRevenue : totalRevenue).toFixed(2)}
+                  {symbol}{(tallyMode ? sessionTotalRevenue : totalRevenue).toFixed(2)}
                 </p>
               </div>
             </div>

@@ -23,7 +23,10 @@ import { cn } from '../lib/utils';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function formatCurrency(n: number) { return `€${n.toFixed(2)}`; }
+function formatCurrency(n: number, currency = 'EUR') {
+  const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
+  return `${symbol}${n.toFixed(2)}`;
+}
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
@@ -42,7 +45,7 @@ const CHART_COLORS = ['#6B5CFF', '#C026D3', '#00E5FF', '#4ADE80', '#FBBF24', '#F
 
 // ── Custom Tooltip ─────────────────────────────────────────────────────────
 
-function ChartTooltip({ active, payload, label }: any) {
+function ChartTooltip({ active, payload, label, currency }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="px-3 py-2 rounded-xl text-xs"
@@ -51,7 +54,7 @@ function ChartTooltip({ active, payload, label }: any) {
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color ?? p.fill ?? '#E6E7EB' }}>
           {p.name}: <strong>{typeof p.value === 'number' && p.name?.toLowerCase().includes('rev')
-            ? formatCurrency(p.value) : p.value}</strong>
+            ? formatCurrency(p.value, currency) : p.value}</strong>
         </p>
       ))}
     </div>
@@ -169,7 +172,8 @@ type Tab = 'analytics' | 'stock' | 'audit';
 
 export default function DetailInfo() {
   const { state, adjustStock, getVariantStockStatus } = useMerchPad();
-  const { products, activeSession } = state;
+  const { products, activeSession, settings } = state;
+  const currency = settings.currency ?? 'EUR';
 
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
@@ -451,7 +455,7 @@ export default function DetailInfo() {
                   <BarChart data={salesOverTime} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                     <XAxis dataKey="time" tick={{ fill: '#7B7F93', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: '#7B7F93', fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<ChartTooltip />} />
+                    <Tooltip content={<ChartTooltip currency={currency} />} />
                     <Bar dataKey="units" name="Units" radius={[4, 4, 0, 0]}>
                       {salesOverTime.map((_, i) => (
                         <Cell key={i} fill={`rgba(192,38,211,${0.5 + (i / salesOverTime.length) * 0.5})`} />
@@ -469,10 +473,10 @@ export default function DetailInfo() {
                 <ResponsiveContainer width="100%" height={Math.max(120, revenueByProduct.length * 36)}>
                   <BarChart data={revenueByProduct} layout="vertical" margin={{ top: 0, right: 8, bottom: 0, left: 0 }}>
                     <XAxis type="number" tick={{ fill: '#7B7F93', fontSize: 10 }} axisLine={false} tickLine={false}
-                      tickFormatter={v => `€${v}`} />
+                      tickFormatter={v => formatCurrency(v, currency)} />
                     <YAxis type="category" dataKey="name" tick={{ fill: '#A4A7B5', fontSize: 11 }} axisLine={false}
                       tickLine={false} width={80} />
-                    <Tooltip content={<ChartTooltip />} />
+                    <Tooltip content={<ChartTooltip currency={currency} />} />
                     <Bar dataKey="revenue" name="Revenue" radius={[0, 4, 4, 0]}>
                       {revenueByProduct.map((_, i) => (
                         <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
@@ -494,7 +498,7 @@ export default function DetailInfo() {
                         paddingAngle={3} strokeWidth={0}>
                         {stockHealth.map((d, i) => <Cell key={i} fill={d.color} />)}
                       </Pie>
-                      <Tooltip content={<ChartTooltip />} />
+                      <Tooltip content={<ChartTooltip currency={currency} />} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="flex-1 space-y-2">
@@ -531,7 +535,7 @@ export default function DetailInfo() {
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-bold text-[#E6E7EB]">{formatCurrency(item.revenue)}</p>
+                      <p className="text-sm font-bold text-[#E6E7EB]">{formatCurrency(item.revenue, currency)}</p>
                       <p className="text-xs text-[#7B7F93]">×{item.units}</p>
                     </div>
                   </div>
@@ -609,7 +613,7 @@ export default function DetailInfo() {
                           <div className="flex items-center justify-between mb-1.5">
                             <div>
                               <p className="text-sm text-[#E6E7EB]">{v.name}</p>
-                              <p className="text-xs text-[#7B7F93]">{formatCurrency(v.price)}</p>
+                              <p className="text-xs text-[#7B7F93]">{formatCurrency(v.price, currency)}</p>
                             </div>
                             <div className="flex items-center gap-3">
                               <div className="text-right">

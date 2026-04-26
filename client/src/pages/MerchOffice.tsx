@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, BookOpen, Sparkles, AlertCircle, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign } from 'lucide-react';
+import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, BookOpen, Sparkles, AlertCircle, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign, Info, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { Product, ProductVariant, Show, TeamMember, getDB } from '../lib/db';
@@ -17,11 +17,13 @@ import StockTransferModal from '../components/StockTransferModal';
 import { AdjustmentModal } from './DetailInfo';
 import { RightDrawer } from '../components/RightDrawer';
 import TeamSection from '../components/TeamSection';
+import { Switch } from '../components/ui/switch';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function formatCurrency(n: number) {
-  return `€${n.toFixed(2)}`;
+function formatCurrency(n: number, currency = 'EUR') {
+  const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
+  return `${symbol}${n.toFixed(2)}`;
 }
 
 function formatDate(d: string) {
@@ -37,6 +39,10 @@ interface ProductEditorProps {
 }
 
 function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
+  const { state } = useMerchPad();
+  const { settings } = state;
+  const currency = settings.currency ?? 'EUR';
+  const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
   const [name, setName] = useState(product?.name ?? '');
   const [category, setCategory] = useState(product?.category ?? '');
   const [variants, setVariants] = useState<ProductVariant[]>(product?.variants ?? []);
@@ -47,6 +53,10 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
   const [bulkStock, setBulkStock] = useState('');
   const [showCatPicker, setShowCatPicker] = useState(false);
   const [nameWarning, setNameWarning] = useState<string | null>(null);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [showBulkNote, setShowBulkNote] = useState(() => {
+    return localStorage.getItem('mp_hide_bulk_note') !== 'true';
+  });
 
   // Load catalogue for autocomplete + template picker
   const catalogue = useMemo(() => loadCatalogue(), []);
@@ -177,7 +187,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
                       <p className="text-sm font-semibold text-[#E6E7EB]">{t.name}</p>
                       <p className="text-[10px] text-[#7B7F93]">{t.category} · {t.variantAxes.map(a => a.key).join(', ') || 'no axes'}</p>
                     </div>
-                    <span className="text-xs font-bold text-[#7B7F93]">€{t.defaultPrice.toFixed(2)}</span>
+                    <span className="text-xs font-bold text-[#7B7F93]">{formatCurrency(t.defaultPrice, currency)}</span>
                   </button>
                 ))}
                 {catalogue.length === 0 && (
@@ -191,7 +201,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Product Name</label>
-              <input value={name} onChange={e => checkName(e.target.value)}
+              <input value={name} onFocus={e => e.target.value = ''} onChange={e => checkName(e.target.value)}
                 placeholder="T-Shirt"
                 list="catalogue-name-suggestions"
                 className={cn(
@@ -210,7 +220,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Category</label>
-              <input value={category} onChange={e => setCategory(e.target.value)}
+              <input value={category} onFocus={e => e.target.value = ''} onChange={e => setCategory(e.target.value)}
                 placeholder="Apparel"
                 list="catalogue-category-suggestions"
                 className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors" />
@@ -221,61 +231,109 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
           </div>
 
           {/* Bulk generator */}
-          <div className="rounded-xl p-3 space-y-3" style={{ background: 'var(--primary)/5', border: '1px solid var(--border)' }}>
-            <p className="text-xs font-semibold text-primary uppercase tracking-wider">⚡ Bulk Variant Generator</p>
-            <div className="grid grid-cols-2 gap-2">
-              <input value={bulkBase} onChange={e => setBulkBase(e.target.value)}
-                placeholder="Base name (e.g. T-Shirt Black)"
-                className="col-span-2 px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
-              <div className="relative">
-                <input value={bulkAttr} onChange={e => setBulkAttr(e.target.value)}
-                  placeholder="Attribute (e.g. size)"
-                  list="bulk-attr-suggestions"
-                  className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
-                <datalist id="bulk-attr-suggestions">
-                  {Array.from(new Set(catalogue.flatMap(t => t.variantAxes.map(a => a.key)))).map(k => (
-                    <option key={k} value={k} />
-                  ))}
-                </datalist>
+          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+            <button
+              type="button"
+              onClick={() => setIsBulkOpen(!isBulkOpen)}
+              className="w-full flex items-center justify-between p-3 hover:bg-primary/5 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold text-primary uppercase tracking-wider">⚡ Bulk Variant Generator</p>
+                <div className="group relative">
+                  <Info size={14} className="text-primary/60 cursor-help" />
+                  <div className="absolute bottom-full left-0 mb-2 w-64 p-3 rounded-lg bg-popover border border-border shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[60]">
+                    <p className="text-[11px] leading-relaxed text-foreground">
+                      Generate multiple variants at once by specifying an attribute (like Size or Color) and its values (separated by commas).
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="relative">
-                <input value={bulkValues} onChange={e => setBulkValues(e.target.value)}
-                  placeholder="Values (e.g. M, L, XL)"
-                  className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
-                {/* Show suggested values from catalogue when axis key matches */}
-                {bulkAttr && (() => {
-                  const axisKey = bulkAttr.trim().toLowerCase();
-                  const suggested = Array.from(new Set(
-                    catalogue.flatMap(t => t.variantAxes.filter(a => a.key === axisKey).flatMap(a => a.values))
-                  ));
-                  return suggested.length > 0 ? (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {suggested.map(v => (
-                        <button key={v} type="button"
-                          onClick={() => setBulkValues(prev => prev ? `${prev}, ${v}` : v)}
-                          className="px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors"
-                          style={{ background: 'var(--primary)/10', color: 'var(--primary)', border: '1px solid var(--primary)/20' }}>
-                          + {v}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null;
-                })()}
-              </div>
-              <input value={bulkPrice} onChange={e => setBulkPrice(e.target.value)}
-                placeholder="Price (€)"
-                type="number" min="0" step="0.01"
-                className="px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
-              <input value={bulkStock} onChange={e => setBulkStock(e.target.value)}
-                placeholder="Initial stock"
-                type="number" min="0"
-                className="px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
-            </div>
-            <button onClick={bulkGenerate}
-              className="w-full py-2 rounded-lg text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
-              style={{ border: '1px solid var(--border)' }}>
-              Generate Variants
+              {isBulkOpen ? <ChevronUp size={16} className="text-primary" /> : <ChevronDown size={16} className="text-primary" />}
             </button>
+
+            {isBulkOpen && (
+              <div className="p-3 pt-0 space-y-3">
+                {showBulkNote && (
+                  <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10 flex flex-col gap-2">
+                    <p className="text-[11px] text-primary/80 leading-snug">
+                      <strong>Pro tip:</strong> You can quickly create all your sizes or colors here. Just enter "Size" and "S, M, L, XL" to generate 4 variants instantly.
+                    </p>
+                    <label className="flex items-center gap-1.5 cursor-pointer self-end">
+                      <input
+                        type="checkbox"
+                        className="w-3 h-3 rounded border-primary/30 text-primary focus:ring-0 focus:ring-offset-0 bg-transparent"
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            localStorage.setItem('mp_hide_bulk_note', 'true');
+                            setShowBulkNote(false);
+                          }
+                        }}
+                      />
+                      <span className="text-[9px] font-medium text-primary/60 uppercase tracking-tighter">Never show again</span>
+                    </label>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={bulkBase} onChange={e => setBulkBase(e.target.value)}
+                    placeholder="Base name (e.g. T-Shirt Black)"
+                    className="col-span-2 px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+                  <div className="relative">
+                    <input value={bulkAttr} onFocus={e => e.target.value = ''} onChange={e => setBulkAttr(e.target.value)}
+                      placeholder="Attribute (e.g. size)"
+                      list="bulk-attr-suggestions"
+                      className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+                    <datalist id="bulk-attr-suggestions">
+                      {Array.from(new Set(catalogue.flatMap(t => t.variantAxes.map(a => a.key)))).map(k => (
+                        <option key={k} value={k} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="relative">
+                    <input value={bulkValues} onChange={e => setBulkValues(e.target.value)}
+                      placeholder="Values (e.g. M, L, XL)"
+                      className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+                    {/* Show suggested values from catalogue when axis key matches */}
+                    {bulkAttr && (() => {
+                      const axisKey = bulkAttr.trim().toLowerCase();
+                      const suggested = Array.from(new Set(
+                        catalogue.flatMap(t => t.variantAxes.filter(a => a.key === axisKey).flatMap(a => a.values))
+                      ));
+                      return suggested.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {suggested.map(v => (
+                            <button key={v} type="button"
+                              onClick={() => setBulkValues(prev => prev ? `${prev}, ${v}` : v)}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors"
+                              style={{ background: 'var(--primary)/10', color: 'var(--primary)', border: '1px solid var(--primary)/20' }}>
+                              + {v}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-tighter">Price</label>
+                    <input value={bulkPrice} onChange={e => setBulkPrice(e.target.value)}
+                      placeholder={`Price (${currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€'})`}
+                      type="number" min="0" step="1"
+                      className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-tighter">Initial stock</label>
+                    <input value={bulkStock} onChange={e => setBulkStock(e.target.value)}
+                      placeholder="Initial stock"
+                      type="number" min="0"
+                      className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+                  </div>
+                </div>
+                <button onClick={bulkGenerate}
+                  className="w-full py-2 rounded-lg text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
+                  style={{ border: '1px solid var(--border)' }}>
+                  Generate Variants
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Variants list */}
@@ -287,17 +345,28 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
               </button>
             </div>
             <div className="space-y-2">
+              <div className="flex items-center gap-2 px-2 text-[10px] font-bold text-[#7B7F93] uppercase tracking-wider">
+                <span className="flex-1">Name</span>
+                <span className="w-16 text-right">Price</span>
+                <span className="w-16 text-right">Stock</span>
+                <span className="w-6"></span>
+              </div>
               {variants.map(v => (
                 <div key={v.id} className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-                  <input value={v.name} onChange={e => updateVariant(v.id, 'name', e.target.value)}
+                  <input value={v.name} onFocus={e => e.target.value = ''} onChange={e => updateVariant(v.id, 'name', e.target.value)}
                     className="flex-1 min-w-0 px-2 py-1 rounded text-sm text-foreground bg-transparent focus:outline-none" />
-                  <input value={v.price} onChange={e => updateVariant(v.id, 'price', parseFloat(e.target.value) || 0)}
-                    type="number" min="0" step="0.01" placeholder="€"
-                    className="w-16 px-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right" />
+                  <div className="relative w-16">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-bold pointer-events-none">
+                      {currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€'}
+                    </span>
+                    <input value={v.price} onChange={e => updateVariant(v.id, 'price', parseFloat(e.target.value) || 0)}
+                      type="number" min="0" step="1"
+                      className="w-full pl-5 pr-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right" />
+                  </div>
                   <input value={v.currentStock} onChange={e => { const n = parseInt(e.target.value) || 0; updateVariant(v.id, 'currentStock', n); updateVariant(v.id, 'initialStock', n); }}
                     type="number" min="0" placeholder="Stock"
                     className="w-16 px-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right" />
-                  <button onClick={() => removeVariant(v.id)} className="text-[#7B7F93] hover:text-[#F87171] p-1">
+                  <button onClick={() => removeVariant(v.id)} className="text-[#7B7F93] hover:text-[#F87171] p-1 flex-shrink-0">
                     <Trash2 size={13} />
                   </button>
                 </div>
@@ -535,7 +604,7 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
                     </div>
                     {!isExpanded && stats && (
                       <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                        <span className="text-xs font-bold mp-mono text-green-400">€{stats.revenue.toFixed(0)}</span>
+                        <span className="text-xs font-bold mp-mono text-green-400">{symbol}{stats.revenue.toFixed(0)}</span>
                         <span className="text-xs text-[#7B7F93]">{stats.items} items</span>
                       </div>
                     )}
@@ -562,7 +631,7 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
                       </div>
                       <div className="rounded-lg p-2 text-center" style={{ background: 'var(--muted)' }}>
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Revenue</p>
-                        <p className="text-base font-black mp-mono text-green-500">€{stats?.revenue.toFixed(0) ?? '—'}</p>
+                        <p className="text-base font-black mp-mono text-green-500">{symbol}{stats?.revenue.toFixed(0) ?? '—'}</p>
                       </div>
                     </div>
                     <p className="text-[10px] text-[#4A4D5E] mt-2 text-center">Trash icon permanently removes this show and all its data</p>
@@ -579,8 +648,10 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
 
 export default function MerchOffice() {
   const [, navigate] = useLocation();
-  const { state, saveProduct, deleteProduct, saveShow, deleteShow, startSession, startOneOffSession, adjustStock, saveTeamMember, getTeamMemberStats } = useMerchPad();
-  const { products, shows, activeSession, isLoading } = state;
+  const { state, saveProduct, deleteProduct, saveShow, deleteShow, startSession, startOneOffSession, adjustStock, saveTeamMember, deleteTeamMember, getTeamMemberStats } = useMerchPad();
+  const { products, shows, activeSession, isLoading, settings } = state;
+  const currency = settings.currency ?? 'EUR';
+  const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
 
   const [selectedShowId, setSelectedShowId] = useState(shows.find(s => s.status === 'upcoming')?.id ?? shows[0]?.id ?? '');
   const [editingProduct, setEditingProduct] = useState<Product | 'new' | null>(null);
@@ -602,6 +673,7 @@ export default function MerchOffice() {
   const [editingMember, setEditingMember] = useState<TeamMember | 'new' | null>(null);
   const [memberForm, setMemberForm] = useState({ name: '', phone: '', email: '', active: true });
   const [memberStats, setMemberStats] = useState<{ shifts: number; hoursWorked: number; totalItems: number; totalRevenue: number } | null>(null);
+  const [confirmDeleteMember, setConfirmDeleteMember] = useState<string | null>(null);
   // Stock adjustment
   const [adjustingVariant, setAdjustingVariant] = useState<{
     variantId: string; productId: string; variantName: string; currentStock: number;
@@ -651,7 +723,7 @@ export default function MerchOffice() {
           {[
             { label: 'Products', value: products.length, sub: `${totalVariants} variants` },
             { label: 'Units', value: totalUnits, sub: 'in stock' },
-            { label: 'Stock Value', value: formatCurrency(totalStockValue), sub: 'at retail' },
+            { label: 'Stock Value', value: formatCurrency(totalStockValue, currency), sub: 'at retail' },
           ].map(({ label, value, sub }) => (
             <div key={label} className="mp-card p-3 text-center">
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
@@ -762,7 +834,7 @@ export default function MerchOffice() {
                           style={{ background: 'var(--background)', border: '2px solid var(--border)' }}>
                           <span className="text-sm text-muted-foreground">{v.name}</span>
                           <div className="flex items-center gap-3">
-                            <span className="text-xs text-muted-foreground mp-mono w-12 text-right">{formatCurrency(v.price)}</span>
+                            <span className="text-xs text-muted-foreground mp-mono w-12 text-right">{formatCurrency(v.price, currency)}</span>
                             <span className="text-sm font-bold mp-mono text-primary w-8 text-right">{v.warehouseStock ?? 0}</span>
                             <span className={cn('text-sm font-bold mp-mono w-8 text-right',
                               (v.roadStock ?? v.currentStock) <= 0 ? 'text-destructive' :
@@ -834,18 +906,16 @@ export default function MerchOffice() {
             </button>
           </div>
           {secTeam && (
-            state.teamMembers.filter(m => m.active).length > 0
-              ? <TeamSection onEditMember={(m) => {
-                  setEditingMember(m);
-                  setMemberForm({ name: m.name, phone: m.phone ?? '', email: m.email ?? '', active: m.active });
-                  setMemberStats(null);
-                  getTeamMemberStats(m.id).then(setMemberStats).catch(() => {});
-                }} />
-              : <div className="mp-card p-6 text-center">
-                  <ShoppingBag size={24} className="text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-muted-foreground">No active members</p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">Add members to track personal sales stats</p>
-                </div>
+            <div className="space-y-4">
+              {state.teamMembers.filter(m => m.active).length > 0
+                ? <TeamSection />
+                : <div className="mp-card p-6 text-center">
+                    <ShoppingBag size={24} className="text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-muted-foreground">No active members</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">Add members to track personal sales stats</p>
+                  </div>
+              }
+            </div>
           )}
         </div>
 
@@ -982,7 +1052,7 @@ export default function MerchOffice() {
                       { label: 'Shifts', value: String(memberStats.shifts), icon: <ShoppingBag size={11}/>, color: '#7C6DFF' },
                       { label: 'Hours', value: memberStats.hoursWorked > 0 ? memberStats.hoursWorked.toFixed(1) : '—', icon: <Clock size={11}/>, color: '#00E5FF' },
                       { label: 'Items', value: memberStats.totalItems > 0 ? String(memberStats.totalItems) : '—', icon: <TrendingUp size={11}/>, color: '#4ADE80' },
-                      { label: 'Revenue', value: memberStats.totalRevenue > 0 ? `€${Math.round(memberStats.totalRevenue)}` : '—', icon: <DollarSign size={11}/>, color: '#FBBF24' },
+                      { label: 'Revenue', value: memberStats.totalRevenue > 0 ? `${symbol}${Math.round(memberStats.totalRevenue)}` : '—', icon: <DollarSign size={11}/>, color: '#FBBF24' },
                     ].map(s => (
                       <div key={s.label} className="flex flex-col items-center justify-center py-2 rounded-lg gap-0.5"
                         style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
@@ -1003,7 +1073,7 @@ export default function MerchOffice() {
                     style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
                     <span className="text-xs font-semibold text-[#F87171]">Outstanding Debt</span>
                     <span className="text-sm font-black mp-mono text-[#F87171]">
-                      −€{(editingMember as TeamMember).totalDebt!.toFixed(2)}
+                      −{symbol}{(editingMember as TeamMember).totalDebt!.toFixed(2)}
                     </span>
                   </div>
                 ) : null}
@@ -1043,17 +1113,22 @@ export default function MerchOffice() {
                   <span className="text-sm text-foreground">Active</span>
                   <span className="text-xs text-muted-foreground">{memberForm.active ? 'On roster' : 'Hidden'}</span>
                 </div>
-                <button
-                  onClick={() => setMemberForm(f => ({ ...f, active: !f.active }))}
-                  className={cn('w-10 h-6 rounded-full transition-colors relative', memberForm.active ? 'bg-green-500' : 'bg-muted-foreground/30')}
-                >
-                  <span className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform shadow-sm', memberForm.active ? 'translate-x-4' : 'translate-x-0.5')} />
-                </button>
+                <Switch
+                  checked={memberForm.active}
+                  onCheckedChange={val => setMemberForm(f => ({ ...f, active: val }))}
+                />
               </div>
             </div>
           </div>
 
           <div className="flex gap-2 p-4 flex-shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+            {editingMember !== 'new' && (
+              <button onClick={() => setConfirmDeleteMember(editingMember.id)}
+                className="w-11 h-11 flex items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 transition-colors"
+                style={{ border: '1px solid var(--border)' }}>
+                <Trash2 size={18} />
+              </button>
+            )}
             <button onClick={() => setEditingMember(null)}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground"
               style={{ border: '1px solid var(--border)' }}>
@@ -1076,6 +1151,28 @@ export default function MerchOffice() {
           </div>
         </RightDrawer>
       )}
+
+      {/* Confirm delete member dialog */}
+      {confirmDeleteMember && (() => {
+        const m = state.teamMembers.find(x => x.id === confirmDeleteMember);
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)' }}>
+            <div className="mp-card p-5 max-w-xs w-full space-y-3 animate-in zoom-in-95 duration-200">
+              <p className="text-sm font-bold text-foreground uppercase tracking-tight">Remove {m?.name}?</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">This only removes the team member record. Historical sales data is preserved.</p>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setConfirmDeleteMember(null)} className="flex-1 py-2 rounded-lg text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors" style={{ border: '1px solid var(--border)' }}>Cancel</button>
+                <button onClick={async () => {
+                  await deleteTeamMember(confirmDeleteMember);
+                  toast.success('Team member removed');
+                  setConfirmDeleteMember(null);
+                  setEditingMember(null);
+                }} className="flex-1 py-2 rounded-lg text-sm font-bold text-white bg-destructive/20 hover:bg-destructive/30 border border-destructive/40 transition-colors">Remove</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modals */}
       {adjustingVariant && (

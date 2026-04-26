@@ -63,7 +63,9 @@ async function buildSummary(sessionId: string): Promise<SessionSummary> {
 export default function EndSaleScreen() {
   const [, navigate] = useLocation();
   const { state, endSession } = useMerchPad();
-  const { activeSession } = state;
+  const { activeSession, settings } = state;
+  const currency = settings.currency ?? 'EUR';
+  const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
 
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -138,7 +140,7 @@ export default function EndSaleScreen() {
             {[
               { label: 'Batches', value: summary.totalBatches, icon: Package },
               { label: 'Units', value: summary.totalUnits, icon: TrendingUp },
-              { label: 'Revenue', value: `€${summary.totalRevenue.toFixed(2)}`, icon: TrendingUp },
+              { label: 'Revenue', value: `${symbol}${summary.totalRevenue.toFixed(2)}`, icon: TrendingUp },
             ].map(({ label, value, icon: Icon }) => (
               <div key={label} className="mp-card p-3 text-center">
                 <p className="text-xs text-[#7B7F93] uppercase tracking-wider mb-1">{label}</p>
@@ -162,7 +164,7 @@ export default function EndSaleScreen() {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-[#E6E7EB]">×{item.qty}</span>
-                      <span className="text-xs text-[#7B7F93]">€{item.revenue.toFixed(2)}</span>
+                      <span className="text-xs text-[#7B7F93]">{symbol}{item.revenue.toFixed(2)}</span>
                     </div>
                   </div>
                 ))}

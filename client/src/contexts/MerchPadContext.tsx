@@ -6,10 +6,11 @@
 import React, { createContext, useContext, useEffect, useReducer, useCallback, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import {
-  getDB, getDeviceId, getSetting, setSetting, enqueueSync, addAuditEntry, seedDemoData,
+  getDB, getDeviceId, getSetting, setSetting, enqueueSync, addAuditEntry,
   Product, ProductVariant, Show, SaleSession, TallyBatch, StockAdjustment, AuditEntry,
   calcStockStatus, StockStatus, TeamMember,
 } from '../lib/db';
+import { useProjects } from './ProjectContext';
 
 // ── Tally State ────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ export interface AppState {
     requireDiscountReason: boolean;
     allowSellerDebt: boolean;
     requireDebtReason: boolean;
+    currency: string;
   };
 }
 
@@ -303,10 +305,12 @@ const initialState: AppState = {
     requireDiscountReason: true,
     allowSellerDebt: true,
     requireDebtReason: true,
+    currency: 'EUR',
   },
 };
 
 export function MerchPadProvider({ children }: { children: React.ReactNode }) {
+  const { activeProject } = useProjects();
   const [state, dispatch] = useReducer(reducer, initialState);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -315,40 +319,47 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function boot() {
+      if (!activeProject) return;
       try {
-      await seedDemoData();
       const db = await getDB();
+      const projectId = activeProject.id;
 
-      const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason] = await Promise.all([
-        db.getAll('products'),
-        db.getAll('shows'),
-        getSetting<string>('repName', ''),
-        getSetting<boolean>('undoEnabled', true),
-        getSetting<boolean>('requireMoneyInput', false),
-        getSetting<boolean>('allowMidSaleRestock', false),
-        getSetting<number>('stockThresholdYellow', 0.3),
-        getSetting<number>('stockThresholdRed', 0.1),
-        getSetting<boolean>('stickyBarTally', true),
-        getSetting<boolean>('stickyBarRegister', true),
-        getSetting<boolean>('requireDiscountReason', true),
-        getSetting<boolean>('allowSellerDebt', true),
-        getSetting<boolean>('requireDebtReason', true),
+      const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason, currency] = await Promise.all([
+        db.getAllFromIndex('products', 'by-project', projectId),
+        db.getAllFromIndex('shows', 'by-project', projectId),
+        getSetting<string>(projectId, 'repName', ''),
+        getSetting<boolean>(projectId, 'undoEnabled', true),
+        getSetting<boolean>(projectId, 'requireMoneyInput', false),
+        getSetting<boolean>(projectId, 'allowMidSaleRestock', false),
+        getSetting<number>(projectId, 'stockThresholdYellow', 0.3),
+        getSetting<number>(projectId, 'stockThresholdRed', 0.1),
+        getSetting<boolean>(projectId, 'stickyBarTally', true),
+        getSetting<boolean>(projectId, 'stickyBarRegister', true),
+        getSetting<boolean>(projectId, 'requireDiscountReason', true),
+        getSetting<boolean>(projectId, 'allowSellerDebt', true),
+        getSetting<boolean>(projectId, 'requireDebtReason', true),
+        getSetting<string>(projectId, 'currency', 'EUR'),
       ]);
 
-      const teamMembers = await db.getAll('teamMembers');
+      const teamMembers = await db.getAllFromIndex('teamMembers', 'by-project', projectId);
       dispatch({ type: 'SET_PRODUCTS', payload: products });
       dispatch({ type: 'SET_SHOWS', payload: shows });
       dispatch({ type: 'SET_TEAM_MEMBERS', payload: teamMembers });
       dispatch({ type: 'SET_REP_NAME', payload: repName });
-      dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason } });
+      dispatch({ type: 'SET_SETTINGS', payload: {
+        undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed,
+        stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason,
+        currency
+      } });
       // Restore active session if anyy
       const activeSessions = await db.getAllFromIndex('sessions', 'by-status', 'active');
-      if (activeSessions.length > 0) {
-        dispatch({ type: 'SET_ACTIVE_SESSION', payload: activeSessions[0] });
+      const projectActiveSessions = activeSessions.filter(s => s.projectId === projectId);
+      if (projectActiveSessions.length > 0) {
+        dispatch({ type: 'SET_ACTIVE_SESSION', payload: projectActiveSessions[0] });
       }
 
       // Count pending sync items
-      const pending = await db.getAllFromIndex('syncQueue', 'by-status', 'pending');
+      const pending = await getPendingSyncItems(projectId);
       dispatch({ type: 'SET_PENDING_SYNC_COUNT', payload: pending.length });
 
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -359,7 +370,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       }
     }
     boot();
-  }, []);
+  }, [activeProject]);
 
   // ── Online/Offline detection ─────────────────────────────────────────────
 
@@ -377,11 +388,13 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
   // ── Actions ──────────────────────────────────────────────────────────────
 
   const startSession = useCallback(async (showId: string, repName: string, standName?: string): Promise<SaleSession> => {
+    if (!activeProject) throw new Error('No active project');
     const db = await getDB();
     const deviceId = getDeviceId();
+    const projectId = activeProject.id;
 
     // Build stock snapshot from current product state
-    const products = await db.getAll('products');
+    const products = await db.getAllFromIndex('products', 'by-project', projectId);
     const stockSnapshot: Record<string, number> = {};
     for (const p of products) {
       for (const v of p.variants) {
@@ -391,6 +404,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
 
     const session: SaleSession = {
       id: uuidv4(),
+      projectId,
       showId,
       deviceId,
       repName,
@@ -402,8 +416,8 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     };
 
     await db.put('sessions', session);
-    await setSetting('repName', repName);
-    await addAuditEntry({
+    await setSetting(projectId, 'repName', repName);
+    await addAuditEntry(projectId, {
       sessionId: session.id,
       showId,
       deviceId,
@@ -414,7 +428,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       actorName: repName,
       timestamp: session.startedAt,
     });
-    await enqueueSync('session_start', session);
+    await enqueueSync(projectId, 'session_start', session);
 
     dispatch({ type: 'SET_ACTIVE_SESSION', payload: session });
     dispatch({ type: 'SET_REP_NAME', payload: repName });
@@ -424,12 +438,13 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
 
   const endSession = useCallback(async () => {
     const session = stateRef.current.activeSession;
-    if (!session) return;
+    if (!session || !activeProject) return;
 
     const db = await getDB();
+    const projectId = activeProject.id;
     const updatedSession: SaleSession = { ...session, status: 'ended', endedAt: new Date().toISOString() };
     await db.put('sessions', updatedSession);
-    await addAuditEntry({
+    await addAuditEntry(projectId, {
       sessionId: session.id,
       showId: session.showId,
       deviceId: session.deviceId,
@@ -440,9 +455,9 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       actorName: session.repName,
       timestamp: updatedSession.endedAt!,
     });
-    await enqueueSync('session_end', updatedSession);
+    await enqueueSync(projectId, 'session_end', updatedSession);
     dispatch({ type: 'SET_ACTIVE_SESSION', payload: null });
-  }, []);
+  }, [activeProject]);
 
   const confirmSale = useCallback(async (opts?: {
     shortfallType?: 'discount' | 'seller_debt';
@@ -461,6 +476,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
 
     const batch: TallyBatch = {
       id: uuidv4(),
+      projectId,
       sessionId: activeSession.id,
       showId: activeSession.showId,
       deviceId: activeSession.deviceId,
@@ -498,7 +514,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    await addAuditEntry({
+    await addAuditEntry(projectId, {
       sessionId: activeSession.id,
       showId: activeSession.showId,
       deviceId: activeSession.deviceId,
@@ -513,7 +529,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
 
     // Write shortfall-specific audit entry
     if (opts?.shortfallType === 'discount') {
-      await addAuditEntry({
+      await addAuditEntry(projectId, {
         sessionId: activeSession.id,
         showId: activeSession.showId,
         deviceId: activeSession.deviceId,
@@ -527,7 +543,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       });
     } else if (opts?.shortfallType === 'seller_debt' && opts.shortfallMemberId) {
       const member = stateRef.current.teamMembers.find(m => m.id === opts.shortfallMemberId);
-      await addAuditEntry({
+      await addAuditEntry(projectId, {
         sessionId: activeSession.id,
         showId: activeSession.showId,
         deviceId: activeSession.deviceId,
@@ -541,8 +557,8 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    await enqueueSync('tally_batch', batch);
-    const pending = await db.getAllFromIndex('syncQueue', 'by-status', 'pending');
+    await enqueueSync(projectId, 'tally_batch', batch);
+    const pending = await getPendingSyncItems(projectId);
     dispatch({ type: 'SET_PENDING_SYNC_COUNT', payload: pending.length });
     return batch;
   }, []);
@@ -555,12 +571,15 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     reason: StockAdjustment['reason'],
     notes?: string
   ) => {
+    if (!activeProject) return;
     const db = await getDB();
+    const projectId = activeProject.id;
     const { activeSession, repName } = stateRef.current;
     const now = new Date().toISOString();
 
     const adjustment: StockAdjustment = {
       id: uuidv4(),
+      projectId,
       variantId,
       variantName,
       sessionId: activeSession?.id ?? 'no-session',
@@ -575,7 +594,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     await db.put('stockAdjustments', adjustment);
 
     // Update product stock
-    const products = await db.getAll('products');
+    const products = await db.getAllFromIndex('products', 'by-project', projectId);
     for (const p of products) {
       if (p.id !== productId) continue;
       const v = p.variants.find(v => v.id === variantId);
@@ -586,7 +605,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    await addAuditEntry({
+    await addAuditEntry(projectId, {
       sessionId: activeSession?.id ?? 'no-session',
       showId: activeSession?.showId ?? 'no-show',
       deviceId: getDeviceId(),
@@ -598,34 +617,40 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       reason,
       timestamp: now,
     });
-  }, []);
+  }, [activeProject]);
 
   const saveProduct = useCallback(async (product: Product) => {
+    if (!activeProject) return;
     const db = await getDB();
-    await db.put('products', product);
-    const existing = stateRef.current.products.find(p => p.id === product.id);
+    const taggedProduct = { ...product, projectId: activeProject.id };
+    await db.put('products', taggedProduct);
+    const existing = stateRef.current.products.find(p => p.id === taggedProduct.id);
     if (existing) {
-      dispatch({ type: 'UPDATE_PRODUCT', payload: product });
+      dispatch({ type: 'UPDATE_PRODUCT', payload: taggedProduct });
     } else {
-      dispatch({ type: 'ADD_PRODUCT', payload: product });
+      dispatch({ type: 'ADD_PRODUCT', payload: taggedProduct });
     }
-  }, []);
+  }, [activeProject]);
 
-   const deleteProduct = useCallback(async (productId: string) => {
+  const deleteProduct = useCallback(async (productId: string) => {
     const db = await getDB();
     await db.delete('products', productId);
     dispatch({ type: 'DELETE_PRODUCT', payload: productId });
   }, []);
+
   const deleteShow = useCallback(async (showId: string) => {
     const db = await getDB();
     await db.delete('shows', showId);
     dispatch({ type: 'DELETE_SHOW', payload: showId });
   }, []);
+
   const saveTeamMember = useCallback(async (member: TeamMember) => {
+    if (!activeProject) return;
     const db = await getDB();
-    await db.put('teamMembers', member);
-    dispatch({ type: 'UPSERT_TEAM_MEMBER', payload: member });
-  }, []);
+    const taggedMember = { ...member, projectId: activeProject.id };
+    await db.put('teamMembers', taggedMember);
+    dispatch({ type: 'UPSERT_TEAM_MEMBER', payload: taggedMember });
+  }, [activeProject]);
 
   const deleteTeamMember = useCallback(async (memberId: string) => {
     const db = await getDB();
@@ -634,11 +659,13 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const getTeamMemberStats = useCallback(async (memberId: string) => {
+    if (!activeProject) return { shifts: 0, hoursWorked: 0, totalItems: 0, totalRevenue: 0 };
     const db = await getDB();
+    const projectId = activeProject.id;
     const member = stateRef.current.teamMembers.find(m => m.id === memberId);
     if (!member) return { shifts: 0, hoursWorked: 0, totalItems: 0, totalRevenue: 0 };
     // Sessions where repName matches member name
-    const allSessions = await db.getAll('sessions');
+    const allSessions = await db.getAllFromIndex('sessions', 'by-project', projectId);
     const memberSessions = allSessions.filter(s => s.repName === member.name);
     const shifts = memberSessions.length;
     const hoursWorked = memberSessions.reduce((sum, s) => {
@@ -659,27 +686,30 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       }
     }
     return { shifts, hoursWorked, totalItems, totalRevenue };
-  }, []);
+  }, [activeProject]);
 
   const recordSellerDebt = useCallback(async (memberId: string, amount: number) => {
+    if (!activeProject) return;
     const db = await getDB();
     const member = await db.get('teamMembers', memberId);
     if (!member) return;
     const updated: TeamMember = { ...member, totalDebt: (member.totalDebt ?? 0) + amount, updatedAt: new Date().toISOString() };
     await db.put('teamMembers', updated);
     dispatch({ type: 'UPSERT_TEAM_MEMBER', payload: updated });
-  }, []);
+  }, [activeProject]);
 
   const saveShow = useCallback(async (show: Show) => {
+    if (!activeProject) return;
     const db = await getDB();
-    await db.put('shows', show);
-    const existing = stateRef.current.shows.find(s => s.id === show.id);
+    const taggedShow = { ...show, projectId: activeProject.id };
+    await db.put('shows', taggedShow);
+    const existing = stateRef.current.shows.find(s => s.id === taggedShow.id);
     if (existing) {
-      dispatch({ type: 'UPDATE_SHOW', payload: show });
+      dispatch({ type: 'UPDATE_SHOW', payload: taggedShow });
     } else {
-      dispatch({ type: 'ADD_SHOW', payload: show });
+      dispatch({ type: 'ADD_SHOW', payload: taggedShow });
     }
-  }, []);
+  }, [activeProject]);
 
   // NOTE: intentionally NOT wrapped in useCallback with empty deps — must close over
   // reactive `state` so Tally cards re-render with fresh stock after each confirmed sale.
@@ -708,13 +738,15 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const getAuditLog = useCallback(async (sessionId?: string): Promise<AuditEntry[]> => {
+    if (!activeProject) return [];
     const db = await getDB();
+    const projectId = activeProject.id;
     if (sessionId) {
       return db.getAllFromIndex('auditLog', 'by-session', sessionId);
     }
-    const all = await db.getAll('auditLog');
+    const all = await db.getAllFromIndex('auditLog', 'by-project', projectId);
     return all.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  }, []);
+  }, [activeProject]);
 
   const transferStock = useCallback(async (
     variantId: string,
@@ -723,7 +755,9 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     direction: 'to_road' | 'to_warehouse',
     qty: number
   ) => {
+    if (!activeProject) return;
     const db = await getDB();
+    const projectId = activeProject.id;
     const { repName } = stateRef.current;
     const now = new Date().toISOString();
 
@@ -764,7 +798,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     await db.put('products', updatedProduct);
     dispatch({ type: 'UPDATE_PRODUCT', payload: updatedProduct });
 
-    await addAuditEntry({
+    await addAuditEntry(projectId, {
       sessionId: stateRef.current.activeSession?.id ?? 'no-session',
       showId: stateRef.current.activeSession?.showId ?? 'no-show',
       deviceId: getDeviceId(),
@@ -777,11 +811,13 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       newValue: { warehouseStock: newWarehouse, roadStock: newRoad },
       timestamp: now,
     });
-  }, []);
+  }, [activeProject]);
 
   const startOneOffSession = useCallback(async (repName: string): Promise<SaleSession> => {
+    if (!activeProject) throw new Error('No active project');
     const db = await getDB();
     const deviceId = getDeviceId();
+    const projectId = activeProject.id;
     const products = stateRef.current.products;
     const stockSnapshot: Record<string, number> = {};
     for (const p of products) {
@@ -789,6 +825,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     }
     const session: SaleSession = {
       id: uuidv4(),
+      projectId,
       showId: 'oneoff',
       deviceId,
       repName,
@@ -798,8 +835,8 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       stockSnapshot,
     };
     await db.put('sessions', session);
-    await setSetting('repName', repName);
-    await addAuditEntry({
+    await setSetting(projectId, 'repName', repName);
+    await addAuditEntry(projectId, {
       sessionId: session.id,
       showId: 'oneoff',
       deviceId,
@@ -810,11 +847,11 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       actorName: repName,
       timestamp: session.startedAt,
     });
-    await enqueueSync('session_start', session);
+    await enqueueSync(projectId, 'session_start', session);
     dispatch({ type: 'SET_ACTIVE_SESSION', payload: session });
     dispatch({ type: 'SET_REP_NAME', payload: repName });
     return session;
-  }, []);
+  }, [activeProject]);
 
   return (
     <MerchPadContext.Provider value={{

@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight, BookOpen, Package, Palette, Sun, Moon } from 'lucide-react';
+import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight, BookOpen, Package, Palette, Sun, Moon, DollarSign } from 'lucide-react';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { setSetting } from '../lib/db';
@@ -121,6 +121,34 @@ export default function Settings() {
             </button>
           </div>
           <p className="text-xs text-[#7B7F93] mt-2">Shown on the tally screen and attached to all audit entries.</p>
+        </div>
+
+        {/* Tally settings */}
+        <div className="mp-card p-4 space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <DollarSign size={15} className="text-[#7C6DFF]" />
+            <p className="text-sm font-bold text-[#E6E7EB]">Currency</p>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-[#A4A7B5]">Display Currency</p>
+              <p className="text-xs text-[#7B7F93]">Default currency for all products</p>
+            </div>
+            <select
+              value={settings.currency || 'EUR'}
+              onChange={async (e) => {
+                const val = e.target.value;
+                await setSetting('currency', val);
+                dispatch({ type: 'SET_SETTINGS', payload: { currency: val } });
+                toast.success(`Currency set to ${val}`);
+              }}
+              className="bg-[#0E0F14] text-[#E6E7EB] text-sm font-bold rounded-lg border border-[#2D3048] px-2 py-1 focus:border-[#6B5CFF] focus:outline-none"
+            >
+              <option value="EUR">Euro (€)</option>
+              <option value="USD">Dollar ($)</option>
+              <option value="GBP">Pound (£)</option>
+            </select>
+          </div>
         </div>
 
         {/* Tally settings */}

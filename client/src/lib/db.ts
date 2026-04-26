@@ -34,6 +34,7 @@ export interface ProductVariant {
 
 export interface Product {
   id: string;
+  projectId: string; // SCOPED
   name: string;
   category?: string;
   variants: ProductVariant[];
@@ -43,6 +44,7 @@ export interface Product {
 
 export interface Show {
   id: string;
+  projectId: string; // SCOPED
   name: string;
   venue: string;
   date: string;
@@ -53,6 +55,7 @@ export interface Show {
 
 export interface SaleSession {
   id: string;
+  projectId: string; // SCOPED
   showId: string;           // 'oneoff' for OneOff Sales
   deviceId: string;
   repName: string;
@@ -66,6 +69,7 @@ export interface SaleSession {
 
 export interface TallyBatch {
   id: string;
+  projectId: string; // SCOPED
   sessionId: string;
   showId: string;
   deviceId: string;
@@ -84,6 +88,7 @@ export interface TallyBatch {
 
 export interface AuditEntry {
   id: string;
+  projectId: string; // SCOPED
   sessionId: string;
   showId: string;
   deviceId: string;
@@ -109,6 +114,7 @@ export interface AuditEntry {
 
 export interface StockAdjustment {
   id: string;
+  projectId: string; // SCOPED
   variantId: string;
   variantName: string;
   sessionId: string;
@@ -122,6 +128,7 @@ export interface StockAdjustment {
 
 export interface SyncQueueItem {
   id: string;
+  projectId: string; // SCOPED
   type: 'tally_batch' | 'stock_adjustment' | 'session_start' | 'session_end';
   payload: unknown;
   createdAt: string;
@@ -131,12 +138,14 @@ export interface SyncQueueItem {
 }
 
 export interface AppSettings {
-  key: string;
+  key: string;       // composed: project_id:setting_key
+  projectId: string; // SCOPED
   value: unknown;
 }
 
 export interface TeamMember {
   id: string;
+  projectId: string; // SCOPED
   name: string;
   phone?: string;
   email?: string;
@@ -149,15 +158,15 @@ export interface TeamMember {
 // ── DB Schema ──────────────────────────────────────────────────────────────
 
 interface MerchPadDB extends DBSchema {
-  products: { key: string; value: Product; indexes: { 'by-name': string } };
-  shows: { key: string; value: Show; indexes: { 'by-date': string; 'by-status': string } };
-  sessions: { key: string; value: SaleSession; indexes: { 'by-show': string; 'by-status': string; 'by-type': string } };
-  tallyBatches: { key: string; value: TallyBatch; indexes: { 'by-session': string; 'by-show': string; 'by-status': string } };
-  auditLog: { key: string; value: AuditEntry; indexes: { 'by-session': string; 'by-show': string; 'by-timestamp': string } };
-  stockAdjustments: { key: string; value: StockAdjustment; indexes: { 'by-variant': string; 'by-session': string } };
-  syncQueue: { key: string; value: SyncQueueItem; indexes: { 'by-status': string } };
-  settings: { key: string; value: AppSettings };
-  teamMembers: { key: string; value: TeamMember; indexes: { 'by-active': number } };
+  products: { key: string; value: Product; indexes: { 'by-name': string; 'by-project': string } };
+  shows: { key: string; value: Show; indexes: { 'by-date': string; 'by-status': string; 'by-project': string } };
+  sessions: { key: string; value: SaleSession; indexes: { 'by-show': string; 'by-status': string; 'by-type': string; 'by-project': string } };
+  tallyBatches: { key: string; value: TallyBatch; indexes: { 'by-session': string; 'by-show': string; 'by-status': string; 'by-project': string } };
+  auditLog: { key: string; value: AuditEntry; indexes: { 'by-session': string; 'by-show': string; 'by-timestamp': string; 'by-project': string } };
+  stockAdjustments: { key: string; value: StockAdjustment; indexes: { 'by-variant': string; 'by-session': string; 'by-project': string } };
+  syncQueue: { key: string; value: SyncQueueItem; indexes: { 'by-status': string; 'by-project': string } };
+  settings: { key: string; value: AppSettings; indexes: { 'by-project': string } };
+  teamMembers: { key: string; value: TeamMember; indexes: { 'by-active': number; 'by-project': string } };
 }
 
 // ── DB Instance ────────────────────────────────────────────────────────────
@@ -167,7 +176,7 @@ let dbInstance: IDBPDatabase<MerchPadDB> | null = null;
 export async function getDB(): Promise<IDBPDatabase<MerchPadDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<MerchPadDB>('merchpad', 3, {
+  dbInstance = await openDB<MerchPadDB>('merchpad', 4, {
     blocked() {
       console.warn('[MerchPad] DB upgrade blocked by another tab. Please close other tabs and reload.');
     },
@@ -215,17 +224,12 @@ export async function getDB(): Promise<IDBPDatabase<MerchPadDB>> {
 
       // ── v2 → add by-type index on sessions ────────────────────────────
       if (oldVersion < 2) {
-        // When upgrading from v1, sessions store already exists in the transaction
-        // Use the idb upgrade transaction's objectStore method directly
         try {
           const sessionStore = transaction.objectStore('sessions');
           if (!sessionStore.indexNames.contains('by-type')) {
             sessionStore.createIndex('by-type', 'sessionType');
           }
-        } catch {
-          // If sessions store doesn't exist yet (fresh install via v1 block above),
-          // the by-type index will be created there. Safe to ignore.
-        }
+        } catch { /* ignore */ }
       }
 
       // ── v3 → add teamMembers store ────────────────────────────────────
@@ -234,6 +238,23 @@ export async function getDB(): Promise<IDBPDatabase<MerchPadDB>> {
           const team = db.createObjectStore('teamMembers', { keyPath: 'id' });
           team.createIndex('by-active', 'active');
         }
+      }
+
+      // ── v4 → add by-project indexes to ALL stores ─────────────────────
+      if (oldVersion < 4) {
+        const stores = [
+          'products', 'shows', 'sessions', 'tallyBatches',
+          'auditLog', 'stockAdjustments', 'syncQueue',
+          'settings', 'teamMembers'
+        ];
+        stores.forEach(s => {
+          try {
+            const store = transaction.objectStore(s as any);
+            if (!store.indexNames.contains('by-project')) {
+              store.createIndex('by-project', 'projectId');
+            }
+          } catch { /* ignore */ }
+        });
       }
     },
   });
@@ -252,30 +273,32 @@ export function getDeviceId(): string {
 
 // ── Settings helpers ───────────────────────────────────────────────────────
 
-export async function getSetting<T>(key: string, defaultValue: T): Promise<T> {
+export async function getSetting<T>(projectId: string, key: string, defaultValue: T): Promise<T> {
   const db = await getDB();
-  const record = await db.get('settings', key);
+  const fullKey = `${projectId}:${key}`;
+  const record = await db.get('settings', fullKey);
   return record ? (record.value as T) : defaultValue;
 }
 
-export async function setSetting(key: string, value: unknown): Promise<void> {
+export async function setSetting(projectId: string, key: string, value: unknown): Promise<void> {
   const db = await getDB();
-  await db.put('settings', { key, value });
+  const fullKey = `${projectId}:${key}`;
+  await db.put('settings', { key: fullKey, projectId, value });
 }
 
 // ── Sync Queue ─────────────────────────────────────────────────────────────
 
-export async function enqueueSync(type: SyncQueueItem['type'], payload: unknown): Promise<void> {
+export async function enqueueSync(projectId: string, type: SyncQueueItem['type'], payload: unknown): Promise<void> {
   const db = await getDB();
   await db.put('syncQueue', {
-    id: uuidv4(), type, payload,
+    id: uuidv4(), projectId, type, payload,
     createdAt: new Date().toISOString(), attempts: 0, status: 'pending',
   });
 }
 
-export async function getPendingSyncItems(): Promise<SyncQueueItem[]> {
+export async function getPendingSyncItems(projectId: string): Promise<SyncQueueItem[]> {
   const db = await getDB();
-  return db.getAllFromIndex('syncQueue', 'by-status', 'pending');
+  return db.getAllFromIndex('syncQueue', 'by-project', projectId);
 }
 
 export async function markSyncItemDone(id: string): Promise<void> {
@@ -285,9 +308,9 @@ export async function markSyncItemDone(id: string): Promise<void> {
 
 // ── Audit Log helpers ──────────────────────────────────────────────────────
 
-export async function addAuditEntry(entry: Omit<AuditEntry, 'id'>): Promise<void> {
+export async function addAuditEntry(projectId: string, entry: Omit<AuditEntry, 'id' | 'projectId'>): Promise<void> {
   const db = await getDB();
-  await db.put('auditLog', { id: uuidv4(), ...entry });
+  await db.put('auditLog', { id: uuidv4(), projectId, ...entry });
 }
 
 // ── Stock helpers ──────────────────────────────────────────────────────────
@@ -333,6 +356,9 @@ export async function seedDemoData(): Promise<void> {
   const db = await getDB();
   const existing = await db.getAll('products');
   if (existing.length > 0) return;
+  // NO-OP: seedDemoData is no longer called during boot.
+  // Kept for reference or manual execution if needed.
+  return;
 
   const now = new Date().toISOString();
 
@@ -422,9 +448,9 @@ export async function seedDemoData(): Promise<void> {
 
 // ── Danger Zone Operations ────────────────────────────────────────────────
 
-export async function resetAllStock(): Promise<void> {
+export async function resetAllStock(projectId: string): Promise<void> {
   const db = await getDB();
-  const products = await db.getAll('products');
+  const products = await db.getAllFromIndex('products', 'by-project', projectId);
   for (const product of products) {
     const updated = {
       ...product,
@@ -439,18 +465,22 @@ export async function resetAllStock(): Promise<void> {
   }
 }
 
-export async function deleteAllProducts(): Promise<void> {
+export async function deleteAllProducts(projectId: string): Promise<void> {
   const db = await getDB();
-  await db.clear('products');
+  const products = await db.getAllFromIndex('products', 'by-project', projectId);
+  for (const p of products) await db.delete('products', p.id);
 }
 
-export async function deleteProjectData(): Promise<void> {
+export async function deleteProjectData(projectId: string): Promise<void> {
   const db = await getDB();
-  await Promise.all([
-    db.clear('products'), db.clear('shows'), db.clear('sessions'),
-    db.clear('tallyBatches'), db.clear('auditLog'),
-    db.clear('stockAdjustments'), db.clear('syncQueue'),
-  ]);
+  const stores = ['products', 'shows', 'sessions', 'tallyBatches', 'auditLog', 'stockAdjustments', 'syncQueue', 'settings', 'teamMembers'] as const;
+
+  for (const s of stores) {
+    const items = await db.getAllFromIndex(s as any, 'by-project', projectId);
+    for (const item of items) {
+      await db.delete(s as any, (item as any).id || (item as any).key);
+    }
+  }
 }
 
 export async function resetAndDeleteAll(): Promise<void> {
@@ -459,22 +489,31 @@ export async function resetAndDeleteAll(): Promise<void> {
     db.clear('products'), db.clear('shows'), db.clear('sessions'),
     db.clear('tallyBatches'), db.clear('auditLog'),
     db.clear('stockAdjustments'), db.clear('syncQueue'), db.clear('settings'),
+    db.clear('teamMembers'),
   ]);
   localStorage.removeItem('mp_projects');
   localStorage.removeItem('mp_active_project_id');
   localStorage.removeItem('mp_device_id');
 }
 
-export async function removeMockData(): Promise<void> {
+export async function removeMockData(projectId: string): Promise<void> {
   const MOCK_PRODUCT_NAMES = ['T-Shirt', 'Poster', 'Vinyl Record', 'Enamel Pin', 'Hoodie'];
   const MOCK_SHOW_NAMES = ['Summer Solstice Tour', 'NOS Alive 2026'];
   const db = await getDB();
-  const products = await db.getAll('products');
+
+  const products = await db.getAllFromIndex('products', 'by-project', projectId);
   for (const p of products) {
     if (MOCK_PRODUCT_NAMES.includes(p.name)) await db.delete('products', p.id);
   }
-  const shows = await db.getAll('shows');
+
+  const shows = await db.getAllFromIndex('shows', 'by-project', projectId);
   for (const s of shows) {
     if (MOCK_SHOW_NAMES.includes(s.name)) await db.delete('shows', s.id);
   }
+}
+
+export async function hasProducts(projectId: string): Promise<boolean> {
+  const db = await getDB();
+  const products = await db.getAllFromIndex('products', 'by-project', projectId);
+  return products.length > 0;
 }

@@ -117,6 +117,10 @@ interface TemplateEditorProps {
 const COMMON_CATEGORIES = ['Apparel', 'Accessories', 'Print', 'Music', 'Digital', 'Other'];
 
 function TemplateEditor({ initial, existingCategories, onSave, onCancel }: TemplateEditorProps) {
+  const { state } = useMerchPad();
+  const { settings } = state;
+  const currency = settings.currency ?? 'EUR';
+  const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
   const [name, setName] = useState(initial?.name ?? '');
   const [category, setCategory] = useState(initial?.category ?? '');
   const [price, setPrice] = useState(String(initial?.defaultPrice ?? ''));
@@ -166,7 +170,7 @@ function TemplateEditor({ initial, existingCategories, onSave, onCancel }: Templ
 
       {/* Default price */}
       <div>
-        <label className="block text-xs font-bold text-[#7B7F93] uppercase tracking-wider mb-1.5">Default Price (€)</label>
+        <label className="block text-xs font-bold text-[#7B7F93] uppercase tracking-wider mb-1.5">Default Price ({symbol})</label>
         <input
           type="number"
           min="0"
@@ -219,6 +223,10 @@ interface TemplateCardProps {
 }
 
 function TemplateCard({ template, onEdit, onDelete }: TemplateCardProps) {
+  const { state } = useMerchPad();
+  const { settings } = state;
+  const currency = settings.currency ?? 'EUR';
+  const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
   return (
     <div className="mp-card p-3">
       <div className="flex items-start justify-between gap-2">
@@ -241,7 +249,7 @@ function TemplateCard({ template, onEdit, onDelete }: TemplateCardProps) {
               <span className="text-[10px] text-[#7B7F93] italic">No axes defined</span>
             )}
           </div>
-          <p className="text-xs text-[#7B7F93] mt-1.5">Default: €{template.defaultPrice.toFixed(2)}</p>
+          <p className="text-xs text-[#7B7F93] mt-1.5">Default: {symbol}{template.defaultPrice.toFixed(2)}</p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button onClick={onEdit}
