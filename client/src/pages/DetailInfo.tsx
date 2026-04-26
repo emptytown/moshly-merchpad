@@ -77,23 +77,24 @@ export function AdjustmentModal({ variantName, currentStock, onSave, onClose }: 
   return (
     <RightDrawer open={true} onClose={onClose} title="Stock Adjustment" subtitle={variantName}>
       <div className="p-4 space-y-4">
-        <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid #2D3048' }}>
+        <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
           {(['remove', 'add'] as const).map(m => (
             <button key={m} onClick={() => setMode(m)}
               className={cn('flex-1 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-1.5',
-                mode === m ? 'text-white' : 'text-[#7B7F93]')}
-              style={mode === m ? { background: m === 'remove' ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)' } : {}}>
+                mode === m ? 'text-foreground' : 'text-muted-foreground')}
+              style={mode === m ? { background: m === 'remove' ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)' } : { background: 'var(--muted)' }}>
               {m === 'remove' ? <><TrendingDown size={14} /> Remove</> : <><TrendingUp size={14} /> Add</>}
             </button>
           ))}
         </div>
         <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg text-lg font-bold text-center text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'rgba(14,15,20,0.5)' }}>
-          <span className="text-xs text-[#7B7F93]">Current → New</span>
+          className="w-full px-3 py-2 rounded-lg text-lg font-bold text-center text-foreground border focus:outline-none"
+          style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'var(--muted)' }}>
+          <span className="text-xs text-muted-foreground">Current → New</span>
           <span className="text-sm font-bold">
-            <span className="text-[#A4A7B5]">{currentStock}</span>
-            <span className="text-[#7B7F93] mx-1">→</span>
+            <span className="text-foreground">{currentStock}</span>
+            <span className="text-muted-foreground mx-1">→</span>
             <span className={newStock < currentStock ? 'text-[#F87171]' : 'text-[#4ADE80]'}>{newStock}</span>
           </span>
         </div>
@@ -101,20 +102,21 @@ export function AdjustmentModal({ variantName, currentStock, onSave, onClose }: 
           {(['damaged', 'theft', 'counting_error', 'restock', 'other'] as const).map(r => (
             <button key={r} onClick={() => setReason(r)}
               className={cn('py-2 rounded-lg text-xs font-semibold capitalize',
-                reason === r ? 'text-[#7C6DFF]' : 'text-[#7B7F93]')}
+                reason === r ? 'text-primary' : 'text-muted-foreground')}
               style={reason === r
-                ? { background: 'rgba(107,92,255,0.15)', border: '1px solid rgba(107,92,255,0.3)' }
-                : { background: '#1B1E2E', border: '1px solid #24273A' }}>
+                ? { background: 'rgba(107,92,255,0.15)', border: '1px solid var(--primary)', color: 'var(--primary)' }
+                : { background: 'var(--muted)', border: '1px solid var(--border)' }}>
               {r.replace('_', ' ')}
             </button>
           ))}
         </div>
         <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes (optional)…"
-          className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+          className="w-full px-3 py-2 rounded-lg text-sm text-foreground border focus:outline-none placeholder:text-muted-foreground"
+          style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
       </div>
-      <div className="flex gap-2 p-4 border-t border-[#24273A] flex-shrink-0">
-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]"
-          style={{ border: '1px solid #2D3048' }}>Cancel</button>
+      <div className="flex gap-2 p-4 flex-shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground"
+          style={{ border: '1px solid var(--border)' }}>Cancel</button>
         <button onClick={() => { if (!qty || parseInt(qty) <= 0) { toast.error('Enter a valid quantity'); return; } onSave(delta, reason, notes); }}
           className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">Apply</button>
       </div>
@@ -312,6 +314,11 @@ export default function DetailInfo() {
 
   const activeFiltersCount = (timeRange !== 'all' ? 1 : 0) + (filterCategory !== 'all' ? 1 : 0) + (filterProduct !== 'all' ? 1 : 0);
 
+  const pillStyle = (active: boolean) => {
+    if (active) return { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' };
+    return { background: 'var(--pill-bg)', border: '1px solid var(--pill-border)' };
+  };
+
   return (
     <div className="min-h-full animate-fade-in">
       {/* Header */}
@@ -334,10 +341,8 @@ export default function DetailInfo() {
           {(['today', 'session', 'all'] as TimeRange[]).map(t => (
             <button key={t} onClick={() => setTimeRange(t)}
               className={cn('flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all capitalize',
-                timeRange === t ? 'text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]')}
-              style={timeRange === t
-                ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }
-                : { background: '#1B1E2E', border: '1px solid #2D3048' }}>
+                timeRange === t ? 'text-white' : 'text-[var(--pill-text)] hover:text-[#A4A7B5]')}
+              style={pillStyle(timeRange === t)}>
               {t === 'session' ? 'This Session' : t === 'today' ? 'Today' : 'All Time'}
             </button>
           ))}
@@ -347,7 +352,7 @@ export default function DetailInfo() {
           {/* Category filter */}
           {categories.length > 0 && (
             <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
-              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-[#7B7F93] bg-[#1B1E2E] border border-[#2D3048] focus:outline-none appearance-none cursor-pointer">
+              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-[var(--pill-text)] bg-[var(--pill-bg)] border border-[var(--pill-border)] focus:outline-none appearance-none cursor-pointer">
               <option value="all">All Categories</option>
               {categories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -355,7 +360,7 @@ export default function DetailInfo() {
 
           {/* Product filter */}
           <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)}
-            className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-[#7B7F93] bg-[#1B1E2E] border border-[#2D3048] focus:outline-none appearance-none cursor-pointer">
+            className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-[var(--pill-text)] bg-[var(--pill-bg)] border border-[var(--pill-border)] focus:outline-none appearance-none cursor-pointer">
             <option value="all">All Products</option>
             {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
@@ -390,7 +395,7 @@ export default function DetailInfo() {
 
       {/* Tabs */}
       <div className="px-4 mb-4">
-        <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid #2D3048', background: '#1B1E2E' }}>
+        <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--pill-border)', background: 'var(--pill-bg)' }}>
           {([
             { id: 'analytics', label: 'Charts', icon: BarChart2 },
             { id: 'stock', label: 'Stock', icon: Package },
@@ -398,8 +403,8 @@ export default function DetailInfo() {
           ] as { id: Tab; label: string; icon: any }[]).map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setActiveTab(id)}
               className={cn('flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5',
-                activeTab === id ? 'text-white' : 'text-[#7B7F93]')}
-              style={activeTab === id ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' } : {}}>
+                activeTab === id ? 'text-white' : 'text-[var(--pill-text)]')}
+              style={pillStyle(activeTab === id)}>
               <Icon size={13} /> {label}
             </button>
           ))}
@@ -509,7 +514,7 @@ export default function DetailInfo() {
 
             {/* Top items table */}
             {revenueByProduct.length > 0 && (
-              <div className="mp-card overflow-hidden">
+              <div className="mp-card mp-top-items overflow-hidden">
                 <div className="px-3 py-2.5 border-b border-[#24273A] flex items-center justify-between">
                   <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Top Items</p>
                   <p className="text-xs text-[#7B7F93]">Revenue · Units</p>

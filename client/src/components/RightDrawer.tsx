@@ -58,20 +58,20 @@ export function RightDrawer({ open, onClose, title, subtitle, children, classNam
           'animate-slide-in-right',
           className
         )}
-        style={{ background: '#141624', borderLeft: '1px solid #2D3048' }}
+        style={{ background: 'var(--card)', borderLeft: '1px solid var(--border)' }}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between px-4 py-4 border-b border-[#24273A] flex-shrink-0"
-          style={{ background: '#141624' }}
+          className="flex items-center justify-between px-4 py-4 flex-shrink-0"
+          style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)' }}
         >
           <div className="min-w-0 flex-1 pr-3">
-            <h2 className="text-base font-bold text-[#E6E7EB] truncate">{title}</h2>
-            {subtitle && <p className="text-xs text-[#7B7F93] truncate mt-0.5">{subtitle}</p>}
+            <h2 className="text-base font-bold text-foreground truncate">{title}</h2>
+            {subtitle && <p className="text-xs text-muted-foreground truncate mt-0.5">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
-            className="flex-shrink-0 p-1.5 rounded-lg text-[#7B7F93] hover:text-[#E6E7EB] hover:bg-[#1B1E2E] transition-colors"
+            className="flex-shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             aria-label="Close"
           >
             <X size={18} />

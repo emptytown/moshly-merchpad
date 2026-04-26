@@ -1,0 +1,2035 @@
+diff --git a/client/src/components/StockTransferModal.tsx b/client/src/components/StockTransferModal.tsx
+index 10f311f..7ad3cab 100644
+--- a/client/src/components/StockTransferModal.tsx
++++ b/client/src/components/StockTransferModal.tsx
+@@ -1,23 +1,10 @@
+-/**
+- * StockTransferModal
+- * Design: Neon Ledger — dark glass, Moshly purple/magenta accents
+- *
+- * Allows transferring stock between Warehouse and On The Road tiers.
+- * Supports:
+- *   - Per-variant transfer (single row)
+- *   - Per-product transfer (all variants at once)
+- */
+-
+-import { useState } from 'react';
++import { useState, useMemo } from 'react';
++import { Warehouse, Truck, ArrowRight, Plus, Minus, ChevronsRight, RotateCcw } from 'lucide-react';
+ import { Button } from '@/components/ui/button';
+-import { Input } from '@/components/ui/input';
+-import { Badge } from '@/components/ui/badge';
+-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+-import { ArrowRight, ArrowLeft, Warehouse, Truck } from 'lucide-react';
+ import { RightDrawer } from './RightDrawer';
+ import { toast } from 'sonner';
+ import { useMerchPad } from '@/contexts/MerchPadContext';
+-import { Product, ProductVariant } from '@/lib/db';
++import { Product } from '@/lib/db';
+
+ interface Props {
+   product: Product;
+@@ -25,209 +12,275 @@ interface Props {
+   onClose: () => void;
+ }
+
+-interface VariantTransfer {
+-  variantId: string;
+-  qty: string; // string for input control
+-}
++type Direction = 'to_road' | 'to_warehouse';
+
+ export default function StockTransferModal({ product, open, onClose }: Props) {
+   const { transferStock } = useMerchPad();
+-  const [direction, setDirection] = useState<'to_road' | 'to_warehouse'>('to_road');
+-  const [tab, setTab] = useState<'product' | 'variant'>('product');
++  const [direction, setDirection] = useState<Direction>('to_road');
++  const [qtys, setQtys] = useState<Record<string, number>>(() =>
++    Object.fromEntries(product.variants.map(v => [v.id, 0]))
++  );
++  const [loading, setLoading] = useState(false);
+
+-  // Per-product: single qty applied to all variants
+-  const [productQty, setProductQty] = useState('');
++  function sourceStock(v: typeof product.variants[0]) {
++    return direction === 'to_road' ? (v.warehouseStock ?? 0) : (v.roadStock ?? v.currentStock);
++  }
+
+-  // Per-variant: individual qty per variant
+-  const [variantQtys, setVariantQtys] = useState<VariantTransfer[]>(
+-    product.variants.map(v => ({ variantId: v.id, qty: '' }))
+-  );
++  function setQty(id: string, val: number) {
++    const v = product.variants.find(x => x.id === id)!;
++    setQtys(prev => ({ ...prev, [id]: Math.max(0, Math.min(val, sourceStock(v))) }));
++  }
+
+-  function updateVariantQty(variantId: string, qty: string) {
+-    setVariantQtys(prev => prev.map(vt => vt.variantId === variantId ? { ...vt, qty } : vt));
++  function setMax(id: string) {
++    const v = product.variants.find(x => x.id === id)!;
++    setQtys(prev => ({ ...prev, [id]: sourceStock(v) }));
+   }
+
+-  function getVariant(id: string): ProductVariant | undefined {
+-    return product.variants.find(v => v.id === id);
++  function clearAll() {
++    setQtys(Object.fromEntries(product.variants.map(v => [v.id, 0])));
+   }
+
+-  function maxQty(v: ProductVariant): number {
+-    return direction === 'to_road' ? v.warehouseStock : v.roadStock;
++  function fillAll() {
++    setQtys(Object.fromEntries(product.variants.map(v => [v.id, sourceStock(v)])));
+   }
+
+-  async function handleProductTransfer() {
+-    const qty = parseInt(productQty);
+-    if (isNaN(qty) || qty <= 0) { toast.error('Enter a valid quantity'); return; }
+-
+-    let errors = 0;
+-    for (const v of product.variants) {
+-      const available = maxQty(v);
+-      const transferQty = Math.min(qty, available);
+-      if (transferQty > 0) {
+-        await transferStock(v.id, product.id, v.name, direction, transferQty);
+-      } else {
+-        errors++;
+-      }
+-    }
++  const totalUnits = useMemo(() => Object.values(qtys).reduce((s, q) => s + q, 0), [qtys]);
++  const hasAny = totalUnits > 0;
+
+-    if (errors === product.variants.length) {
+-      toast.error(`No stock available to transfer ${direction === 'to_road' ? 'from Warehouse' : 'from Road'}`);
+-    } else {
+-      toast.success(`Transferred ${qty} units per variant (${direction === 'to_road' ? 'Warehouse → Road' : 'Road → Warehouse'})`);
+-      setProductQty('');
+-      onClose();
+-    }
++  function switchDirection(d: Direction) {
++    setDirection(d);
++    clearAll();
+   }
+
+-  async function handleVariantTransfer() {
+-    const transfers = variantQtys.filter(vt => {
+-      const qty = parseInt(vt.qty);
+-      return !isNaN(qty) && qty > 0;
+-    });
+-
+-    if (transfers.length === 0) { toast.error('Enter at least one quantity to transfer'); return; }
+-
+-    let success = 0;
+-    for (const vt of transfers) {
+-      const qty = parseInt(vt.qty);
+-      const v = getVariant(vt.variantId);
+-      if (!v) continue;
+-      const available = maxQty(v);
+-      if (qty > available) {
+-        toast.error(`${v.name}: only ${available} available`);
+-        continue;
++  async function handleTransfer() {
++    const transfers = product.variants.filter(v => qtys[v.id] > 0);
++    if (transfers.length === 0) { toast.error('Set at least one quantity'); return; }
++    setLoading(true);
++    try {
++      for (const v of transfers) {
++        await transferStock(v.id, product.id, v.name, direction, qtys[v.id]);
+       }
+-      await transferStock(v.id, product.id, v.name, direction, qty);
+-      success++;
+-    }
+-
+-    if (success > 0) {
+-      toast.success(`Transferred ${success} variant${success > 1 ? 's' : ''} (${direction === 'to_road' ? 'Warehouse → Road' : 'Road → Warehouse'})`);
+-      setVariantQtys(product.variants.map(v => ({ variantId: v.id, qty: '' })));
++      const label = direction === 'to_road' ? 'WH → Road' : 'Road → WH';
++      toast.success(`Transferred ${totalUnits} unit${totalUnits !== 1 ? 's' : ''} (${label})`);
++      clearAll();
+       onClose();
++    } finally {
++      setLoading(false);
+     }
+   }
+
+   return (
+-    <RightDrawer open={open} onClose={onClose} title={`Stock Transfer — ${product.name}`} className="max-w-md">
+-      <div className="p-4 space-y-4">
+-        {/* Direction toggle */}
+-        <div className="flex gap-2 p-1 bg-white/5 rounded-lg">
+-          <button
+-            onClick={() => setDirection('to_road')}
+-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+-              direction === 'to_road'
+-                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow'
+-                : 'text-white/50 hover:text-white/80'
+-            }`}
+-          >
+-            <Warehouse className="w-4 h-4" />
+-            <ArrowRight className="w-3 h-3" />
+-            <Truck className="w-4 h-4" />
+-            Warehouse → Road
+-          </button>
+-          <button
+-            onClick={() => setDirection('to_warehouse')}
+-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+-              direction === 'to_warehouse'
+-                ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow'
+-                : 'text-white/50 hover:text-white/80'
+-            }`}
+-          >
+-            <Warehouse className="w-4 h-4" />
+-            <ArrowLeft className="w-3 h-3" />
+-            <Truck className="w-4 h-4" />
+-            Road → Warehouse
+-          </button>
+-        </div>
++    <RightDrawer open={open} onClose={onClose} title={product.name} subtitle="Stock Transfer">
++      <div className="flex flex-col h-full">
++        <div className="flex-1 overflow-y-auto p-4 space-y-5">
+
+-        {/* Tab: product-level vs variant-level */}
+-        <Tabs value={tab} onValueChange={v => setTab(v as 'product' | 'variant')}>
+-          <TabsList className="bg-white/5 w-full">
+-            <TabsTrigger value="product" className="flex-1 data-[state=active]:bg-white/10">All Variants</TabsTrigger>
+-            <TabsTrigger value="variant" className="flex-1 data-[state=active]:bg-white/10">Per Variant</TabsTrigger>
+-          </TabsList>
+-
+-          {/* Product-level transfer */}
+-          <TabsContent value="product" className="mt-4 space-y-4">
+-            <p className="text-sm text-white/50">
+-              Transfer the same quantity from each variant's{' '}
+-              <span className={direction === 'to_road' ? 'text-purple-400' : 'text-amber-400'}>
+-                {direction === 'to_road' ? 'Warehouse' : 'Road'} stock
+-              </span>.
+-            </p>
+-
+-            {/* Stock overview */}
+-            <div className="space-y-2">
+-              {product.variants.map(v => (
+-                <div key={v.id} className="flex items-center justify-between text-xs bg-white/5 rounded px-3 py-2">
+-                  <span className="text-white/70">{v.name}</span>
+-                  <div className="flex gap-3">
+-                    <span className="text-purple-300">WH: {v.warehouseStock ?? 0}</span>
+-                    <span className="text-green-300">Road: {v.roadStock ?? v.currentStock}</span>
++          {/* Direction picker */}
++          <div className="grid grid-cols-2 gap-2">
++            {(['to_road', 'to_warehouse'] as Direction[]).map(d => {
++              const active = direction === d;
++              const isToRoad = d === 'to_road';
++              return (
++                <button
++                  key={d}
++                  onClick={() => switchDirection(d)}
++                  className="relative flex flex-col items-center gap-2 rounded-xl p-4 transition-all"
++                  style={{
++                    border: active
++                      ? `2px solid ${isToRoad ? '#6B5CFF' : '#f59e0b'}`
++                      : '2px solid var(--border)',
++                    background: active
++                      ? isToRoad ? 'rgba(107,92,255,0.08)' : 'rgba(245,158,11,0.08)'
++                      : 'var(--muted)',
++                  }}
++                >
++                  {active && (
++                    <div
++                      className="absolute top-2 right-2 w-2 h-2 rounded-full"
++                      style={{ background: isToRoad ? '#6B5CFF' : '#f59e0b' }}
++                    />
++                  )}
++                  <div className="flex items-center gap-1.5">
++                    {isToRoad ? (
++                      <>
++                        <Warehouse size={18} className={active ? 'text-primary' : 'text-muted-foreground'} />
++                        <ArrowRight size={13} className={active ? 'text-primary' : 'text-muted-foreground'} />
++                        <Truck size={18} className={active ? 'text-primary' : 'text-muted-foreground'} />
++                      </>
++                    ) : (
++                      <>
++                        <Truck size={18} className={active ? 'text-amber-500' : 'text-muted-foreground'} />
++                        <ArrowRight size={13} className={active ? 'text-amber-500' : 'text-muted-foreground'} />
++                        <Warehouse size={18} className={active ? 'text-amber-500' : 'text-muted-foreground'} />
++                      </>
++                    )}
+                   </div>
+-                </div>
+-              ))}
+-            </div>
++                  <span
++                    className="text-xs font-bold tracking-wide"
++                    style={{ color: active ? (isToRoad ? '#6B5CFF' : '#f59e0b') : 'var(--muted-foreground)' }}
++                  >
++                    {isToRoad ? 'WH → Road' : 'Road → WH'}
++                  </span>
++                  <span className="text-[10px] text-muted-foreground text-center leading-tight">
++                    {isToRoad ? 'Load van for the show' : 'Return unsold stock'}
++                  </span>
++                </button>
++              );
++            })}
++          </div>
+
++          {/* Quick actions */}
++          <div className="flex items-center justify-between">
++            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Variants</span>
+             <div className="flex gap-2">
+-              <Input
+-                type="number"
+-                min="1"
+-                placeholder="Qty per variant"
+-                value={productQty}
+-                onChange={e => setProductQty(e.target.value)}
+-                className="bg-white/5 border-white/10 text-white placeholder:text-white/30"
+-              />
+-              <Button
+-                onClick={handleProductTransfer}
+-                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 text-white shrink-0"
++              <button
++                onClick={fillAll}
++                className="flex items-center gap-1 text-xs font-semibold text-primary hover:opacity-80 transition-opacity"
+               >
+-                Transfer
+-              </Button>
++                <ChevronsRight size={12} /> Move all
++              </button>
++              <span className="text-muted-foreground/40 text-xs">·</span>
++              <button
++                onClick={clearAll}
++                className="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
++              >
++                <RotateCcw size={11} /> Clear
++              </button>
+             </div>
+-          </TabsContent>
++          </div>
+
+-          {/* Per-variant transfer */}
+-          <TabsContent value="variant" className="mt-4 space-y-3">
+-            <p className="text-sm text-white/50">Set individual quantities for each variant.</p>
++          {/* Variant rows */}
++          <div className="space-y-2">
+             {product.variants.map(v => {
+-              const vt = variantQtys.find(x => x.variantId === v.id);
++              const src = sourceStock(v);
++              const qty = qtys[v.id] ?? 0;
++              const wh = v.warehouseStock ?? 0;
++              const road = v.roadStock ?? v.currentStock;
++              const newWH = direction === 'to_road' ? wh - qty : wh + qty;
++              const newRoad = direction === 'to_road' ? road + qty : road - qty;
++              const exhausted = src === 0;
++
+               return (
+-                <div key={v.id} className="bg-white/5 rounded-lg p-3 space-y-2">
+-                  <div className="flex items-center justify-between">
+-                    <span className="text-sm font-medium text-white">{v.name}</span>
+-                    <div className="flex gap-2">
+-                      <Badge variant="outline" className="text-purple-300 border-purple-400/30 text-xs">
+-                        WH {v.warehouseStock ?? 0}
+-                      </Badge>
+-                      <Badge variant="outline" className="text-green-300 border-green-400/30 text-xs">
+-                        Road {v.roadStock ?? v.currentStock}
+-                      </Badge>
++                <div
++                  key={v.id}
++                  className="rounded-xl p-3 space-y-3"
++                  style={{
++                    background: 'var(--muted)',
++                    opacity: exhausted ? 0.5 : 1,
++                  }}
++                >
++                  {/* Variant name + stock badges */}
++                  <div className="flex items-center justify-between gap-2">
++                    <span className="text-sm font-semibold text-foreground truncate">{v.name}</span>
++                    <div className="flex items-center gap-1.5 flex-shrink-0">
++                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-primary"
++                        style={{ background: 'rgba(107,92,255,0.12)' }}>
++                        WH {wh}
++                      </span>
++                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-green-500"
++                        style={{ background: 'rgba(34,197,94,0.12)' }}>
++                        Road {road}
++                      </span>
+                     </div>
+                   </div>
+-                  <div className="flex gap-2">
+-                    <Input
++
++                  {/* Stepper + Max */}
++                  <div className="flex items-center gap-2">
++                    <button
++                      onClick={() => setQty(v.id, qty - 1)}
++                      disabled={qty === 0}
++                      className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors flex-shrink-0"
++                      style={{ border: '1px solid var(--border)', background: 'var(--background)' }}
++                    >
++                      <Minus size={13} />
++                    </button>
++
++                    <input
+                       type="number"
+-                      min="1"
+-                      max={maxQty(v)}
+-                      placeholder={`Max ${maxQty(v)}`}
+-                      value={vt?.qty ?? ''}
+-                      onChange={e => updateVariantQty(v.id, e.target.value)}
+-                      className="bg-white/5 border-white/10 text-white placeholder:text-white/30 h-8 text-sm"
++                      min={0}
++                      max={src}
++                      value={qty === 0 ? '' : qty}
++                      placeholder="0"
++                      disabled={exhausted}
++                      onChange={e => setQty(v.id, parseInt(e.target.value) || 0)}
++                      className="flex-1 h-8 text-center text-sm font-bold rounded-lg outline-none focus:ring-1 ring-primary bg-transparent text-foreground"
++                      style={{ border: '1px solid var(--border)', background: 'var(--background)' }}
+                     />
++
++                    <button
++                      onClick={() => setQty(v.id, qty + 1)}
++                      disabled={qty >= src || exhausted}
++                      className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors flex-shrink-0"
++                      style={{ border: '1px solid var(--border)', background: 'var(--background)' }}
++                    >
++                      <Plus size={13} />
++                    </button>
++
++                    <button
++                      onClick={() => setMax(v.id)}
++                      disabled={exhausted || qty === src}
++                      className="px-2 h-8 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-30 flex-shrink-0"
++                      style={{
++                        border: '1px solid var(--border)',
++                        background: 'var(--background)',
++                        color: 'var(--muted-foreground)',
++                      }}
++                    >
++                      Max
++                    </button>
+                   </div>
++
++                  {/* After-transfer preview */}
++                  {qty > 0 && (
++                    <div className="flex items-center gap-2 text-[11px] font-medium pt-1 border-t"
++                      style={{ borderColor: 'var(--border)' }}>
++                      <span className="text-muted-foreground">After:</span>
++                      <span className="text-primary">WH {newWH}</span>
++                      <ArrowRight size={10} className="text-muted-foreground/40" />
++                      <span className="text-green-500">Road {newRoad}</span>
++                    </div>
++                  )}
++
++                  {exhausted && (
++                    <p className="text-[11px] text-muted-foreground">
++                      No {direction === 'to_road' ? 'warehouse' : 'road'} stock available
++                    </p>
++                  )}
+                 </div>
+               );
+             })}
+-            <Button
+-              onClick={handleVariantTransfer}
+-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 text-white"
+-            >
+-              Transfer Selected
+-            </Button>
+-          </TabsContent>
+-        </Tabs>
++          </div>
++        </div>
++
++        {/* Sticky footer */}
++        <div
++          className="flex-shrink-0 p-4 space-y-3"
++          style={{ borderTop: '1px solid var(--border)', background: 'var(--card)' }}
++        >
++          {hasAny && (
++            <div className="flex items-center justify-between text-sm">
++              <span className="text-muted-foreground">Total moving</span>
++              <span className="font-bold text-foreground mp-mono">{totalUnits} unit{totalUnits !== 1 ? 's' : ''}</span>
++            </div>
++          )}
++          <Button
++            onClick={handleTransfer}
++            disabled={!hasAny || loading}
++            className="w-full font-bold text-white"
++            style={{
++              background: hasAny
++                ? direction === 'to_road'
++                  ? 'linear-gradient(to right, #6B5CFF, #c026d3)'
++                  : 'linear-gradient(to right, #f59e0b, #ea580c)'
++                : undefined,
++            }}
++          >
++            {loading
++              ? 'Transferring…'
++              : hasAny
++                ? `${direction === 'to_road' ? 'Load Van' : 'Return to WH'} · ${totalUnits} unit${totalUnits !== 1 ? 's' : ''}`
++                : 'Set quantities above'}
++          </Button>
++        </div>
+       </div>
+     </RightDrawer>
+   );
+diff --git a/client/src/components/TeamSection.tsx b/client/src/components/TeamSection.tsx
+index 627eaf5..55fb2ac 100644
+--- a/client/src/components/TeamSection.tsx
++++ b/client/src/components/TeamSection.tsx
+@@ -14,7 +14,7 @@ interface MemberStats {
+   totalRevenue: number;
+ }
+
+-export default function TeamSection() {
++export default function TeamSection({ onEditMember }: { onEditMember?: (m: TeamMember) => void } = {}) {
+   const { state, getTeamMemberStats } = useMerchPad();
+   const { teamMembers } = state;
+   const active = teamMembers.filter(m => m.active);
+@@ -50,7 +50,7 @@ export default function TeamSection() {
+         {active.map(member => {
+           const s = stats[member.id];
+           return (
+-            <MemberCard key={member.id} member={member} stats={s} />
++            <MemberCard key={member.id} member={member} stats={s} onEdit={onEditMember} />
+           );
+         })}
+       </div>
+@@ -58,11 +58,11 @@ export default function TeamSection() {
+   );
+ }
+
+-function MemberCard({ member, stats }: { member: TeamMember; stats?: MemberStats }) {
++function MemberCard({ member, stats, onEdit }: { member: TeamMember; stats?: MemberStats; onEdit?: (m: TeamMember) => void }) {
+   const initials = member.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+
+   return (
+-    <div className="mp-card p-3">
++    <div className="mp-card p-3" onClick={() => onEdit?.(member)} style={onEdit ? { cursor: 'pointer' } : {}}>
+       <div className="flex items-center gap-3 mb-2.5">
+         {/* Avatar */}
+         <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
+@@ -74,6 +74,9 @@ function MemberCard({ member, stats }: { member: TeamMember; stats?: MemberStats
+           {member.phone && <p className="text-xs text-[#7B7F93] truncate">{member.phone}</p>}
+         </div>
+         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-[#4ADE80] bg-[#4ADE80]/10">Active</span>
++        {member.totalDebt && member.totalDebt > 0 ? (
++          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-[#F87171] bg-[#F87171]/10">−€{member.totalDebt.toFixed(0)}</span>
++        ) : null}
+       </div>
+
+       {/* Stats row */}
+diff --git a/client/src/pages/DetailInfo.tsx b/client/src/pages/DetailInfo.tsx
+index f59acbf..95677f2 100644
+--- a/client/src/pages/DetailInfo.tsx
++++ b/client/src/pages/DetailInfo.tsx
+@@ -77,23 +77,24 @@ export function AdjustmentModal({ variantName, currentStock, onSave, onClose }:
+   return (
+     <RightDrawer open={true} onClose={onClose} title="Stock Adjustment" subtitle={variantName}>
+       <div className="p-4 space-y-4">
+-        <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid #2D3048' }}>
++        <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+           {(['remove', 'add'] as const).map(m => (
+             <button key={m} onClick={() => setMode(m)}
+               className={cn('flex-1 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-1.5',
+-                mode === m ? 'text-white' : 'text-[#7B7F93]')}
+-              style={mode === m ? { background: m === 'remove' ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)' } : {}}>
++                mode === m ? 'text-foreground' : 'text-muted-foreground')}
++              style={mode === m ? { background: m === 'remove' ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)' } : { background: 'var(--muted)' }}>
+               {m === 'remove' ? <><TrendingDown size={14} /> Remove</> : <><TrendingUp size={14} /> Add</>}
+             </button>
+           ))}
+         </div>
+         <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)}
+-          className="w-full px-3 py-2 rounded-lg text-lg font-bold text-center text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+-        <div className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'rgba(14,15,20,0.5)' }}>
+-          <span className="text-xs text-[#7B7F93]">Current → New</span>
++          className="w-full px-3 py-2 rounded-lg text-lg font-bold text-center text-foreground border focus:outline-none"
++          style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
++        <div className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'var(--muted)' }}>
++          <span className="text-xs text-muted-foreground">Current → New</span>
+           <span className="text-sm font-bold">
+-            <span className="text-[#A4A7B5]">{currentStock}</span>
+-            <span className="text-[#7B7F93] mx-1">→</span>
++            <span className="text-foreground">{currentStock}</span>
++            <span className="text-muted-foreground mx-1">→</span>
+             <span className={newStock < currentStock ? 'text-[#F87171]' : 'text-[#4ADE80]'}>{newStock}</span>
+           </span>
+         </div>
+@@ -101,20 +102,21 @@ export function AdjustmentModal({ variantName, currentStock, onSave, onClose }:
+           {(['damaged', 'theft', 'counting_error', 'restock', 'other'] as const).map(r => (
+             <button key={r} onClick={() => setReason(r)}
+               className={cn('py-2 rounded-lg text-xs font-semibold capitalize',
+-                reason === r ? 'text-[#7C6DFF]' : 'text-[#7B7F93]')}
++                reason === r ? 'text-primary' : 'text-muted-foreground')}
+               style={reason === r
+-                ? { background: 'rgba(107,92,255,0.15)', border: '1px solid rgba(107,92,255,0.3)' }
+-                : { background: '#1B1E2E', border: '1px solid #24273A' }}>
++                ? { background: 'rgba(107,92,255,0.15)', border: '1px solid var(--primary)', color: 'var(--primary)' }
++                : { background: 'var(--muted)', border: '1px solid var(--border)' }}>
+               {r.replace('_', ' ')}
+             </button>
+           ))}
+         </div>
+         <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes (optional)…"
+-          className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
++          className="w-full px-3 py-2 rounded-lg text-sm text-foreground border focus:outline-none placeholder:text-muted-foreground"
++          style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
+       </div>
+-      <div className="flex gap-2 p-4 border-t border-[#24273A] flex-shrink-0">
+-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]"
+-          style={{ border: '1px solid #2D3048' }}>Cancel</button>
++      <div className="flex gap-2 p-4 flex-shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
++        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground"
++          style={{ border: '1px solid var(--border)' }}>Cancel</button>
+         <button onClick={() => { if (!qty || parseInt(qty) <= 0) { toast.error('Enter a valid quantity'); return; } onSave(delta, reason, notes); }}
+           className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">Apply</button>
+       </div>
+@@ -312,6 +314,11 @@ export default function DetailInfo() {
+
+   const activeFiltersCount = (timeRange !== 'all' ? 1 : 0) + (filterCategory !== 'all' ? 1 : 0) + (filterProduct !== 'all' ? 1 : 0);
+
++  const pillStyle = (active: boolean) => {
++    if (active) return { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' };
++    return { background: 'var(--pill-bg)', border: '1px solid var(--pill-border)' };
++  };
++
+   return (
+     <div className="min-h-full animate-fade-in">
+       {/* Header */}
+@@ -334,10 +341,8 @@ export default function DetailInfo() {
+           {(['today', 'session', 'all'] as TimeRange[]).map(t => (
+             <button key={t} onClick={() => setTimeRange(t)}
+               className={cn('flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all capitalize',
+-                timeRange === t ? 'text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]')}
+-              style={timeRange === t
+-                ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }
+-                : { background: '#1B1E2E', border: '1px solid #2D3048' }}>
++                timeRange === t ? 'text-white' : 'text-[var(--pill-text)] hover:text-[#A4A7B5]')}
++              style={pillStyle(timeRange === t)}>
+               {t === 'session' ? 'This Session' : t === 'today' ? 'Today' : 'All Time'}
+             </button>
+           ))}
+@@ -347,7 +352,7 @@ export default function DetailInfo() {
+           {/* Category filter */}
+           {categories.length > 0 && (
+             <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+-              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-[#7B7F93] bg-[#1B1E2E] border border-[#2D3048] focus:outline-none appearance-none cursor-pointer">
++              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-[var(--pill-text)] bg-[var(--pill-bg)] border border-[var(--pill-border)] focus:outline-none appearance-none cursor-pointer">
+               <option value="all">All Categories</option>
+               {categories.map(c => <option key={c} value={c}>{c}</option>)}
+             </select>
+@@ -355,7 +360,7 @@ export default function DetailInfo() {
+
+           {/* Product filter */}
+           <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)}
+-            className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-[#7B7F93] bg-[#1B1E2E] border border-[#2D3048] focus:outline-none appearance-none cursor-pointer">
++            className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-[var(--pill-text)] bg-[var(--pill-bg)] border border-[var(--pill-border)] focus:outline-none appearance-none cursor-pointer">
+             <option value="all">All Products</option>
+             {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+           </select>
+@@ -390,7 +395,7 @@ export default function DetailInfo() {
+
+       {/* Tabs */}
+       <div className="px-4 mb-4">
+-        <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid #2D3048', background: '#1B1E2E' }}>
++        <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--pill-border)', background: 'var(--pill-bg)' }}>
+           {([
+             { id: 'analytics', label: 'Charts', icon: BarChart2 },
+             { id: 'stock', label: 'Stock', icon: Package },
+@@ -398,8 +403,8 @@ export default function DetailInfo() {
+           ] as { id: Tab; label: string; icon: any }[]).map(({ id, label, icon: Icon }) => (
+             <button key={id} onClick={() => setActiveTab(id)}
+               className={cn('flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5',
+-                activeTab === id ? 'text-white' : 'text-[#7B7F93]')}
+-              style={activeTab === id ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' } : {}}>
++                activeTab === id ? 'text-white' : 'text-[var(--pill-text)]')}
++              style={pillStyle(activeTab === id)}>
+               <Icon size={13} /> {label}
+             </button>
+           ))}
+@@ -509,7 +514,7 @@ export default function DetailInfo() {
+
+             {/* Top items table */}
+             {revenueByProduct.length > 0 && (
+-              <div className="mp-card overflow-hidden">
++              <div className="mp-card mp-top-items overflow-hidden">
+                 <div className="px-3 py-2.5 border-b border-[#24273A] flex items-center justify-between">
+                   <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Top Items</p>
+                   <p className="text-xs text-[#7B7F93]">Revenue · Units</p>
+diff --git a/client/src/pages/Home.tsx b/client/src/pages/Home.tsx
+index 0b184dd..3b88731 100644
+--- a/client/src/pages/Home.tsx
++++ b/client/src/pages/Home.tsx
+@@ -1,25 +1,98 @@
+ import { Button } from "@/components/ui/button";
+-import { Loader2 } from "lucide-react";
+-import { Streamdown } from 'streamdown';
++import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
++import { useTheme } from "@/contexts/ThemeContext";
++import { DollarSign, Moon, Package, ShoppingCart, Sun, TrendingUp } from "lucide-react";
++
++function StatCard({
++  title,
++  value,
++  icon: Icon,
++}: {
++  title: string;
++  value: string | number;
++  icon: React.ElementType;
++}) {
++  return (
++    <Card>
++      <CardHeader className="flex flex-row items-center justify-between pb-2">
++        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
++        <Icon className="h-4 w-4 text-muted-foreground" />
++      </CardHeader>
++      <CardContent>
++        <p className="text-2xl font-bold">{value}</p>
++      </CardContent>
++    </Card>
++  );
++}
++
++function ThemeSwitcher() {
++  const { skin, mode, setSkin, toggleMode } = useTheme();
++
++  return (
++    <div className="fixed top-4 right-4 flex gap-2 z-50">
++      <Button
++        variant="outline"
++        size="sm"
++        onClick={() => setSkin(skin === "neon" ? "mono" : "neon")}
++        className="text-xs"
++      >
++        {skin === "neon" ? "→ Mono" : "→ Moshly"}
++      </Button>
++      <Button variant="outline" size="sm" onClick={toggleMode} className="text-xs">
++        {mode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
++      </Button>
++    </div>
++  );
++}
+
+-/**
+- * All content in this page are only for example, replace with your own feature implementation
+- * When building pages, remember your instructions in Frontend Best Practices, Design Guide and Common Pitfalls
+- */
+ export default function Home() {
+-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
+-  // const { theme, toggleTheme } = useTheme();
++  const { skin, mode } = useTheme();
+
+   return (
+-    <div className="min-h-screen flex flex-col">
+-      <main>
+-        {/* Example: lucide-react for icons */}
+-        <Loader2 className="animate-spin" />
+-        Example Page
+-        {/* Example: Streamdown for markdown rendering */}
+-        <Streamdown>Any **markdown** content</Streamdown>
+-        <Button variant="default">Example Button</Button>
+-      </main>
++    <div className="min-h-screen bg-background">
++      <ThemeSwitcher />
++      <div className="p-8 max-w-6xl mx-auto space-y-8">
++        <div className="space-y-2">
++          <h1 className="text-4xl font-bold">MerchPad Dashboard</h1>
++          <p className="text-muted-foreground">
++            Skin: <span className="font-mono font-semibold">{skin}</span> | Mode: <span className="font-mono font-semibold">{mode}</span>
++          </p>
++        </div>
++
++        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
++          <StatCard title="Total Revenue" value="$1,234.56" icon={DollarSign} />
++          <StatCard title="Total Sales" value="48" icon={ShoppingCart} />
++          <StatCard title="Stock Remaining" value="1,287" icon={Package} />
++          <StatCard title="Products" value="24" icon={TrendingUp} />
++        </div>
++
++        <Card>
++          <CardHeader>
++            <CardTitle>Theme System</CardTitle>
++          </CardHeader>
++          <CardContent className="space-y-4">
++            <div>
++              <h3 className="font-semibold mb-2">Available Skins:</h3>
++              <ul className="list-disc list-inside space-y-1 text-sm">
++                <li><span className="font-mono">neon</span> — Moshly electric dark/light theme with purple accents</li>
++                <li><span className="font-mono">mono</span> — 8-bit retro futuristic flat design (no rounded corners)</li>
++              </ul>
++            </div>
++            <div>
++              <h3 className="font-semibold mb-2">Typography:</h3>
++              <p className="text-sm">Standard Inter font for all skins. Sharp edges and minimal design in Mono mode.</p>
++            </div>
++            <div>
++              <h3 className="font-semibold mb-2">Colors:</h3>
++              <p className="text-sm">
++                <strong>Moshly light:</strong> Clean grays (#F9FAFB bg, purple accents) <br />
++                <strong>Moshly dark:</strong> Deep electric theme (default) <br />
++                <strong>Mono:</strong> Pure monochrome (light: #FAFAFA, dark: #0F0F0F)
++              </p>
++            </div>
++          </CardContent>
++        </Card>
++      </div>
+     </div>
+   );
+ }
+diff --git a/client/src/pages/MasterCatalogue.tsx b/client/src/pages/MasterCatalogue.tsx
+index 4bfe50f..3a3d081 100644
+--- a/client/src/pages/MasterCatalogue.tsx
++++ b/client/src/pages/MasterCatalogue.tsx
+@@ -300,7 +300,7 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
+   }
+
+   return (
+-    <div className="min-h-full animate-fade-in">
++    <div className="mp-master-catalogue min-h-full animate-fade-in">
+       {/* Header */}
+       <div className="px-4 pt-4 pb-3 flex items-center justify-between">
+         <div>
+diff --git a/client/src/pages/MerchOffice.tsx b/client/src/pages/MerchOffice.tsx
+index 844e7a2..f4fc919 100644
+--- a/client/src/pages/MerchOffice.tsx
++++ b/client/src/pages/MerchOffice.tsx
+@@ -7,10 +7,10 @@
+ import { useState, useEffect, useMemo } from 'react';
+ import { useLocation } from 'wouter';
+ import { v4 as uuidv4 } from 'uuid';
+-import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, BookOpen, Sparkles, AlertCircle, ArrowRightLeft, Warehouse, Truck } from 'lucide-react';
++import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, BookOpen, Sparkles, AlertCircle, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign } from 'lucide-react';
+ import { toast } from 'sonner';
+ import { useMerchPad } from '../contexts/MerchPadContext';
+-import { Product, ProductVariant, Show, getDB } from '../lib/db';
++import { Product, ProductVariant, Show, TeamMember, getDB } from '../lib/db';
+ import { cn } from '../lib/utils';
+ import { loadCatalogue, CatalogueTemplate } from '../lib/catalogue';
+ import StockTransferModal from '../components/StockTransferModal';
+@@ -159,14 +159,14 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
+         <div className="p-4 space-y-4">
+
+           {/* Catalogue template picker */}
+-          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(0,229,255,0.2)', background: 'rgba(0,229,255,0.04)' }}>
++          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--primary)', background: 'var(--primary)/5' }}>
+             <button onClick={() => setShowCatPicker(v => !v)}
+               className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+               <div className="flex items-center gap-2">
+-                <BookOpen size={14} style={{ color: '#00E5FF' }} />
+-                <span className="text-xs font-semibold" style={{ color: '#00E5FF' }}>Pick from Item Template Creator</span>
++                <BookOpen size={14} className="text-primary" />
++                <span className="text-xs font-semibold text-primary">Pick from Item Template Creator</span>
+               </div>
+-              <span className="text-[10px] text-[#7B7F93]">{showCatPicker ? 'Hide' : `${catalogue.length} templates`}</span>
++              <span className="text-[10px] text-muted-foreground">{showCatPicker ? 'Hide' : `${catalogue.length} templates`}</span>
+             </button>
+             {showCatPicker && (
+               <div className="px-3 pb-3 space-y-1 max-h-48 overflow-y-auto">
+@@ -190,30 +190,30 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
+           {/* Basic info */}
+           <div className="grid grid-cols-2 gap-3">
+             <div>
+-              <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Product Name</label>
++              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Product Name</label>
+               <input value={name} onChange={e => checkName(e.target.value)}
+                 placeholder="T-Shirt"
+                 list="catalogue-name-suggestions"
+                 className={cn(
+-                  'w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border focus:outline-none transition-colors',
+-                  nameWarning ? 'border-[#FBBF24] focus:border-[#FBBF24]' : 'border-[#2D3048] focus:border-[#6B5CFF]'
++                  'w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border focus:outline-none transition-colors',
++                  nameWarning ? 'border-orange-500 focus:border-orange-500' : 'border-border focus:border-primary'
+                 )} />
+               <datalist id="catalogue-name-suggestions">
+                 {catalogueNames.map(n => <option key={n} value={n} />)}
+               </datalist>
+               {nameWarning && (
+                 <div className="flex items-start gap-1.5 mt-1.5">
+-                  <AlertCircle size={11} className="text-[#FBBF24] flex-shrink-0 mt-0.5" />
+-                  <p className="text-[10px] text-[#FBBF24]">{nameWarning}</p>
++                  <AlertCircle size={11} className="text-orange-500 flex-shrink-0 mt-0.5" />
++                  <p className="text-[10px] text-orange-500">{nameWarning}</p>
+                 </div>
+               )}
+             </div>
+             <div>
+-              <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Category</label>
++              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Category</label>
+               <input value={category} onChange={e => setCategory(e.target.value)}
+                 placeholder="Apparel"
+                 list="catalogue-category-suggestions"
+-                className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none transition-colors" />
++                className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors" />
+               <datalist id="catalogue-category-suggestions">
+                 {catalogueCategories.map(c => <option key={c} value={c} />)}
+               </datalist>
+@@ -221,17 +221,17 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
+           </div>
+
+           {/* Bulk generator */}
+-          <div className="rounded-xl p-3 space-y-3" style={{ background: 'rgba(107,92,255,0.06)', border: '1px solid rgba(107,92,255,0.2)' }}>
+-            <p className="text-xs font-semibold text-[#7C6DFF] uppercase tracking-wider">⚡ Bulk Variant Generator</p>
++          <div className="rounded-xl p-3 space-y-3" style={{ background: 'var(--primary)/5', border: '1px solid var(--border)' }}>
++            <p className="text-xs font-semibold text-primary uppercase tracking-wider">⚡ Bulk Variant Generator</p>
+             <div className="grid grid-cols-2 gap-2">
+               <input value={bulkBase} onChange={e => setBulkBase(e.target.value)}
+                 placeholder="Base name (e.g. T-Shirt Black)"
+-                className="col-span-2 px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
++                className="col-span-2 px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+               <div className="relative">
+                 <input value={bulkAttr} onChange={e => setBulkAttr(e.target.value)}
+                   placeholder="Attribute (e.g. size)"
+                   list="bulk-attr-suggestions"
+-                  className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
++                  className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+                 <datalist id="bulk-attr-suggestions">
+                   {Array.from(new Set(catalogue.flatMap(t => t.variantAxes.map(a => a.key)))).map(k => (
+                     <option key={k} value={k} />
+@@ -241,7 +241,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
+               <div className="relative">
+                 <input value={bulkValues} onChange={e => setBulkValues(e.target.value)}
+                   placeholder="Values (e.g. M, L, XL)"
+-                  className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
++                  className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+                 {/* Show suggested values from catalogue when axis key matches */}
+                 {bulkAttr && (() => {
+                   const axisKey = bulkAttr.trim().toLowerCase();
+@@ -254,7 +254,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
+                         <button key={v} type="button"
+                           onClick={() => setBulkValues(prev => prev ? `${prev}, ${v}` : v)}
+                           className="px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors"
+-                          style={{ background: 'rgba(107,92,255,0.15)', color: '#7C6DFF', border: '1px solid rgba(107,92,255,0.3)' }}>
++                          style={{ background: 'var(--primary)/10', color: 'var(--primary)', border: '1px solid var(--primary)/20' }}>
+                           + {v}
+                         </button>
+                       ))}
+@@ -265,15 +265,15 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
+               <input value={bulkPrice} onChange={e => setBulkPrice(e.target.value)}
+                 placeholder="Price (€)"
+                 type="number" min="0" step="0.01"
+-                className="px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
++                className="px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+               <input value={bulkStock} onChange={e => setBulkStock(e.target.value)}
+                 placeholder="Initial stock"
+                 type="number" min="0"
+-                className="px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
++                className="px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+             </div>
+             <button onClick={bulkGenerate}
+-              className="w-full py-2 rounded-lg text-sm font-semibold text-[#7C6DFF] transition-colors hover:bg-[rgba(107,92,255,0.12)]"
+-              style={{ border: '1px solid rgba(107,92,255,0.3)' }}>
++              className="w-full py-2 rounded-lg text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
++              style={{ border: '1px solid var(--border)' }}>
+               Generate Variants
+             </button>
+           </div>
+@@ -281,22 +281,22 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
+           {/* Variants list */}
+           <div>
+             <div className="flex items-center justify-between mb-2">
+-              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Variants ({variants.length})</p>
+-              <button onClick={addVariant} className="flex items-center gap-1 text-xs text-[#7C6DFF] hover:text-[#6B5CFF]">
++              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Variants ({variants.length})</p>
++              <button onClick={addVariant} className="flex items-center gap-1 text-xs text-primary hover:text-primary/80">
+                 <Plus size={12} /> Add
+               </button>
+             </div>
+             <div className="space-y-2">
+               {variants.map(v => (
+-                <div key={v.id} className="flex items-center gap-2 p-2 rounded-lg" style={{ background: '#1B1E2E', border: '1px solid #24273A' }}>
++                <div key={v.id} className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+                   <input value={v.name} onChange={e => updateVariant(v.id, 'name', e.target.value)}
+-                    className="flex-1 min-w-0 px-2 py-1 rounded text-sm text-[#E6E7EB] bg-transparent focus:outline-none" />
++                    className="flex-1 min-w-0 px-2 py-1 rounded text-sm text-foreground bg-transparent focus:outline-none" />
+                   <input value={v.price} onChange={e => updateVariant(v.id, 'price', parseFloat(e.target.value) || 0)}
+                     type="number" min="0" step="0.01" placeholder="€"
+-                    className="w-16 px-2 py-1 rounded text-sm text-[#E6E7EB] bg-[#0E0F14] border border-[#24273A] focus:outline-none text-right" />
++                    className="w-16 px-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right" />
+                   <input value={v.currentStock} onChange={e => { const n = parseInt(e.target.value) || 0; updateVariant(v.id, 'currentStock', n); updateVariant(v.id, 'initialStock', n); }}
+                     type="number" min="0" placeholder="Stock"
+-                    className="w-16 px-2 py-1 rounded text-sm text-[#E6E7EB] bg-[#0E0F14] border border-[#24273A] focus:outline-none text-right" />
++                    className="w-16 px-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right" />
+                   <button onClick={() => removeVariant(v.id)} className="text-[#7B7F93] hover:text-[#F87171] p-1">
+                     <Trash2 size={13} />
+                   </button>
+@@ -309,9 +309,9 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
+           </div>
+         </div>
+
+-      <div className="flex gap-2 p-4 border-t border-[#24273A] flex-shrink-0">
+-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5] hover:text-[#E6E7EB] transition-colors"
+-          style={{ border: '1px solid #2D3048' }}>
++      <div className="flex gap-2 p-4 border-t border-border flex-shrink-0">
++        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
++          style={{ border: '1px solid var(--border)' }}>
+           Cancel
+         </button>
+         <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
+@@ -339,42 +339,42 @@ function ShowSelector({ shows, selectedShowId, onSelect, onNewShow }: ShowSelect
+     <div className="relative">
+       <button onClick={() => setOpen(!open)}
+         className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-left transition-colors"
+-        style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}>
++        style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+         <div className="flex items-center gap-3">
+-          <Calendar size={16} className="text-[#6B5CFF]" />
++          <Calendar size={16} className="text-primary" />
+           {selected ? (
+             <div>
+-              <p className="text-sm font-semibold text-[#E6E7EB]">{selected.name}</p>
+-              <p className="text-xs text-[#7B7F93]">{selected.venue} · {formatDate(selected.date)}</p>
++              <p className="text-sm font-semibold text-foreground">{selected.name}</p>
++              <p className="text-xs text-muted-foreground">{selected.venue} · {formatDate(selected.date)}</p>
+             </div>
+           ) : (
+-            <p className="text-sm text-[#7B7F93]">Select a show</p>
++            <p className="text-sm text-muted-foreground">Select a show</p>
+           )}
+         </div>
+-        {open ? <ChevronUp size={16} className="text-[#7B7F93]" /> : <ChevronDown size={16} className="text-[#7B7F93]" />}
++        {open ? <ChevronUp size={16} className="text-muted-foreground" /> : <ChevronDown size={16} className="text-muted-foreground" />}
+       </button>
+
+       {open && (
+         <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-10 shadow-2xl"
+-          style={{ background: '#141624', border: '1px solid #2D3048' }}>
++          style={{ background: 'var(--popover)', border: '1px solid var(--border)' }}>
+           {shows.map(s => (
+             <button key={s.id} onClick={() => { onSelect(s.id); setOpen(false); }}
+-              className={cn('w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#1B1E2E] transition-colors',
+-                s.id === selectedShowId && 'bg-[rgba(107,92,255,0.1)]')}>
++              className={cn('w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-accent/10 transition-colors',
++                s.id === selectedShowId && 'bg-primary/10')}>
+               <div className="flex-1 min-w-0">
+-                <p className="text-sm font-semibold text-[#E6E7EB] truncate">{s.name}</p>
+-                <p className="text-xs text-[#7B7F93]">{s.venue} · {formatDate(s.date)}</p>
++                <p className="text-sm font-semibold text-foreground truncate">{s.name}</p>
++                <p className="text-xs text-muted-foreground">{s.venue} · {formatDate(s.date)}</p>
+               </div>
+               <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
+-                s.status === 'upcoming' ? 'text-[#4ADE80] bg-[rgba(74,222,128,0.1)]' :
+-                s.status === 'active' ? 'text-[#7C6DFF] bg-[rgba(107,92,255,0.1)]' :
+-                'text-[#7B7F93] bg-[rgba(123,127,147,0.1)]')}>
++                s.status === 'upcoming' ? 'text-green-500 bg-green-500/10' :
++                s.status === 'active' ? 'text-primary bg-primary/10' :
++                'text-muted-foreground bg-muted')}>
+                 {s.status}
+               </span>
+             </button>
+           ))}
+           <button onClick={() => { onNewShow(); setOpen(false); }}
+-            className="w-full flex items-center gap-2 px-4 py-3 text-sm text-[#7C6DFF] hover:bg-[#1B1E2E] transition-colors border-t border-[#24273A]">
++            className="w-full flex items-center gap-2 px-4 py-3 text-sm text-primary hover:bg-accent/10 transition-colors border-t border-border">
+             <Plus size={14} /> New Show
+           </button>
+         </div>
+@@ -414,19 +414,19 @@ function NewShowModal({ onSave, onClose }: { onSave: (s: Show) => void; onClose:
+           { label: 'City', val: city, set: setCity, ph: 'Lisbon' },
+         ].map(({ label, val, set, ph }) => (
+           <div key={label}>
+-            <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">{label}</label>
++            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{label}</label>
+             <input value={val} onChange={e => set(e.target.value)} placeholder={ph}
+-              className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
++              className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+           </div>
+         ))}
+         <div>
+-          <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Date</label>
++          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Date</label>
+           <input type="date" value={date} onChange={e => setDate(e.target.value)}
+-            className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
++            className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+         </div>
+       </div>
+-      <div className="flex gap-2 p-4 border-t border-[#24273A] flex-shrink-0">
+-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]" style={{ border: '1px solid #2D3048' }}>Cancel</button>
++      <div className="flex gap-2 p-4 border-t border-border flex-shrink-0">
++        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground" style={{ border: '1px solid var(--border)' }}>Cancel</button>
+         <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">Save Show</button>
+       </div>
+     </RightDrawer>
+@@ -443,20 +443,20 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
+   return (
+     <RightDrawer open={true} onClose={onClose} title="Start Sale Session">
+       <div className="p-4 space-y-3">
+-        <p className="text-sm text-[#A4A7B5]">This will snapshot the current stock for your stand. Stock stroke colors will reflect this allocation.</p>
++        <p className="text-sm text-muted-foreground">This will snapshot the current stock for your stand. Stock stroke colors will reflect this allocation.</p>
+         <div>
+-          <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Your Name</label>
++          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Your Name</label>
+           <input value={repName} onChange={e => setRepName(e.target.value)} placeholder="João"
+-            className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
++            className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+         </div>
+         <div>
+-          <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Stand / Location (optional)</label>
++          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Stand / Location (optional)</label>
+           <input value={stand} onChange={e => setStand(e.target.value)} placeholder="Stand A"
+-            className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
++            className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+         </div>
+       </div>
+-      <div className="flex gap-2 p-4 border-t border-[#24273A] flex-shrink-0">
+-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]" style={{ border: '1px solid #2D3048' }}>Cancel</button>
++      <div className="flex gap-2 p-4 border-t border-border flex-shrink-0">
++        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground" style={{ border: '1px solid var(--border)' }}>Cancel</button>
+         <button onClick={() => { if (!repName.trim()) { toast.error('Name required'); return; } onStart(repName.trim(), stand.trim() || undefined); }}
+           className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary flex items-center justify-center gap-2">
+           <Zap size={14} /> Start Sale
+@@ -507,7 +507,7 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
+     <div>
+       <div className="flex items-center justify-between mb-2">
+         <button onClick={() => setSecPastShows(v => !v)} className="flex items-center gap-1.5 group">
+-          <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Past Shows</p>
++          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Past Shows</p>
+           <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secPastShows ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+         </button>
+         <span className="text-[10px] text-[#7B7F93]">{shows.length} show{shows.length !== 1 ? 's' : ''}</span>
+@@ -530,7 +530,7 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
+                   >
+                     <span className="text-[#7B7F93] flex-shrink-0">{isExpanded ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+                     <div className="min-w-0">
+-                      <p className="text-sm font-semibold text-[#E6E7EB] truncate">{show.name}</p>
++                      <p className="text-sm font-semibold text-foreground truncate">{show.name}</p>
+                       <p className="text-xs text-[#7B7F93] truncate">{show.venue}{show.city ? ` · ${show.city}` : ''} · {show.date}</p>
+                     </div>
+                     {!isExpanded && stats && (
+@@ -552,17 +552,17 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
+                 {isExpanded && (
+                   <div className="border-t border-[#24273A] p-3">
+                     <div className="grid grid-cols-3 gap-2">
+-                      <div className="rounded-lg p-2 text-center" style={{ background: 'rgba(14,15,20,0.5)' }}>
+-                        <p className="text-[10px] text-[#7B7F93] uppercase tracking-wider mb-0.5">Sessions</p>
+-                        <p className="text-base font-black mp-mono text-[#E6E7EB]">{stats?.sessions ?? '—'}</p>
++                      <div className="rounded-lg p-2 text-center" style={{ background: 'var(--muted)' }}>
++                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Sessions</p>
++                        <p className="text-base font-black mp-mono text-foreground">{stats?.sessions ?? '—'}</p>
+                       </div>
+-                      <div className="rounded-lg p-2 text-center" style={{ background: 'rgba(14,15,20,0.5)' }}>
+-                        <p className="text-[10px] text-[#7B7F93] uppercase tracking-wider mb-0.5">Items</p>
+-                        <p className="text-base font-black mp-mono text-[#E6E7EB]">{stats?.items ?? '—'}</p>
++                      <div className="rounded-lg p-2 text-center" style={{ background: 'var(--muted)' }}>
++                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Items</p>
++                        <p className="text-base font-black mp-mono text-foreground">{stats?.items ?? '—'}</p>
+                       </div>
+-                      <div className="rounded-lg p-2 text-center" style={{ background: 'rgba(14,15,20,0.5)' }}>
+-                        <p className="text-[10px] text-[#7B7F93] uppercase tracking-wider mb-0.5">Revenue</p>
+-                        <p className="text-base font-black mp-mono text-green-400">€{stats?.revenue.toFixed(0) ?? '—'}</p>
++                      <div className="rounded-lg p-2 text-center" style={{ background: 'var(--muted)' }}>
++                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Revenue</p>
++                        <p className="text-base font-black mp-mono text-green-500">€{stats?.revenue.toFixed(0) ?? '—'}</p>
+                       </div>
+                     </div>
+                     <p className="text-[10px] text-[#4A4D5E] mt-2 text-center">Trash icon permanently removes this show and all its data</p>
+@@ -579,7 +579,7 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
+
+ export default function MerchOffice() {
+   const [, navigate] = useLocation();
+-  const { state, saveProduct, deleteProduct, saveShow, deleteShow, startSession, startOneOffSession, adjustStock } = useMerchPad();
++  const { state, saveProduct, deleteProduct, saveShow, deleteShow, startSession, startOneOffSession, adjustStock, saveTeamMember, getTeamMemberStats } = useMerchPad();
+   const { products, shows, activeSession, isLoading } = state;
+
+   const [selectedShowId, setSelectedShowId] = useState(shows.find(s => s.status === 'upcoming')?.id ?? shows[0]?.id ?? '');
+@@ -598,6 +598,10 @@ export default function MerchOffice() {
+   const [expandedPastShow, setExpandedPastShow] = useState<string | null>(null);
+   const [pastShowStats, setPastShowStats] = useState<Record<string, { sessions: number; items: number; revenue: number }>>({});
+   const [secTeam, setSecTeam] = useState(true);
++  // Team member drawer
++  const [editingMember, setEditingMember] = useState<TeamMember | 'new' | null>(null);
++  const [memberForm, setMemberForm] = useState({ name: '', phone: '', email: '', active: true });
++  const [memberStats, setMemberStats] = useState<{ shifts: number; hoursWorked: number; totalItems: number; totalRevenue: number } | null>(null);
+   // Stock adjustment
+   const [adjustingVariant, setAdjustingVariant] = useState<{
+     variantId: string; productId: string; variantName: string; currentStock: number;
+@@ -618,8 +622,8 @@ export default function MerchOffice() {
+     return (
+       <div className="flex items-center justify-center h-64">
+         <div className="text-center space-y-3">
+-          <div className="w-8 h-8 rounded-full border-2 border-[#6B5CFF] border-t-transparent animate-spin mx-auto" />
+-          <p className="text-sm text-[#7B7F93]">Loading MerchPad…</p>
++          <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
++          <p className="text-sm text-muted-foreground">Loading MerchPad…</p>
+         </div>
+       </div>
+     );
+@@ -630,12 +634,12 @@ export default function MerchOffice() {
+       {/* Hero header */}
+       <div className="relative overflow-hidden px-4 pt-4 pb-3"
+         style={{
+-          background: `linear-gradient(to bottom, rgba(14,15,20,0) 0%, #0E0F14 100%), url(https://d2xsxph8kpxj0f.cloudfront.net/310519663361417877/U3ZSLTmW8mQsvZ2KUYsYhR/merchpad-hero-bg-QTNZkgshAugSQaW8YVe4nh.webp) center/cover no-repeat`,
+-          minHeight: 100,
++          background: `linear-gradient(to bottom, transparent 0%, var(--background) 100%), url(https://d2xsxph8kpxj0f.cloudfront.net/310519663361417877/U3ZSLTmW8mQsvZ2KUYsYhR/merchpad-hero-bg-QTNZkgshAugSQaW8YVe4nh.webp) center/cover no-repeat`,
++          minHeight: 120,
+         }}>
+         <div className="relative z-10">
+-          <p className="text-xs font-semibold text-[#7C6DFF] uppercase tracking-widest mb-1">Merch Office</p>
+-          <h1 className="text-2xl font-black text-[#E6E7EB] leading-tight" style={{ letterSpacing: '-0.03em' }}>
++          <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1 opacity-80">Merch Office</p>
++          <h1 className="text-2xl font-black text-foreground leading-tight" style={{ letterSpacing: '-0.03em' }}>
+             Pre-Show Prep
+           </h1>
+         </div>
+@@ -650,9 +654,9 @@ export default function MerchOffice() {
+             { label: 'Stock Value', value: formatCurrency(totalStockValue), sub: 'at retail' },
+           ].map(({ label, value, sub }) => (
+             <div key={label} className="mp-card p-3 text-center">
+-              <p className="text-xs text-[#7B7F93] uppercase tracking-wider mb-1">{label}</p>
+-              <p className="text-xl font-black text-[#E6E7EB] leading-none mp-mono">{value}</p>
+-              <p className="text-xs text-[#7B7F93] mt-1">{sub}</p>
++              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
++              <p className="text-xl font-black text-foreground leading-none mp-mono">{value}</p>
++              <p className="text-xs text-muted-foreground mt-1">{sub}</p>
+             </div>
+           ))}
+         </div>
+@@ -660,7 +664,7 @@ export default function MerchOffice() {
+         {/* Show selector */}
+         <div>
+           <button onClick={() => setSecShow(v => !v)} className="flex items-center justify-between w-full mb-2 group">
+-            <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Show</p>
++            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Show</p>
+             <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secShow ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+           </button>
+           {secShow && <ShowSelector
+@@ -708,7 +712,7 @@ export default function MerchOffice() {
+         <div>
+           <div className="flex items-center justify-between mb-3">
+             <button onClick={() => setSecProducts(v => !v)} className="flex items-center gap-1.5 group">
+-              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Products</p>
++              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Products</p>
+               <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secProducts ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+             </button>
+             <button onClick={() => setEditingProduct('new')}
+@@ -724,12 +728,12 @@ export default function MerchOffice() {
+                   onClick={() => setExpandedProduct(expandedProduct === product.id ? null : product.id)}
+                   className="w-full flex items-center justify-between p-3">
+                   <div className="flex items-center gap-3">
+-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+-                      style={{ background: 'rgba(107,92,255,0.12)' }}>
+-                      <Package size={14} className="text-[#7C6DFF]" />
++            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
++                      style={{ background: 'var(--primary)/10' }}>
++                      <Package size={14} className="text-primary" />
+                     </div>
+                     <div className="text-left">
+-                      <p className="text-sm font-semibold text-[#E6E7EB]">{product.name}</p>
++                      <p className="text-sm font-semibold text-foreground">{product.name}</p>
+                       <p className="text-xs text-[#7B7F93]">{product.variants.length} variants · {product.category ?? 'Uncategorised'}</p>
+                     </div>
+                   </div>
+@@ -749,22 +753,22 @@ export default function MerchOffice() {
+                         <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Variant</span>
+                         <div className="flex items-center gap-3">
+                           <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider w-12 text-right">Price</span>
+-                          <span className="text-[10px] font-semibold text-purple-400 uppercase tracking-wider w-8 text-right">WH</span>
+-                          <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider w-8 text-right">Road</span>
++                          <span className="text-[10px] font-semibold text-primary uppercase tracking-wider w-8 text-right">WH</span>
++                          <span className="text-[10px] font-semibold text-green-500 uppercase tracking-wider w-8 text-right">Road</span>
+                         </div>
+                       </div>
+                       {product.variants.map(v => (
+                         <div key={v.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
+-                          style={{ background: 'rgba(14,15,20,0.4)' }}>
+-                          <span className="text-sm text-[#A4A7B5]">{v.name}</span>
++                          style={{ background: 'var(--background)', border: '2px solid var(--border)' }}>
++                          <span className="text-sm text-muted-foreground">{v.name}</span>
+                           <div className="flex items-center gap-3">
+-                            <span className="text-xs text-[#7B7F93] mp-mono w-12 text-right">{formatCurrency(v.price)}</span>
+-                            <span className="text-sm font-bold mp-mono text-purple-300 w-8 text-right">{v.warehouseStock ?? 0}</span>
++                            <span className="text-xs text-muted-foreground mp-mono w-12 text-right">{formatCurrency(v.price)}</span>
++                            <span className="text-sm font-bold mp-mono text-primary w-8 text-right">{v.warehouseStock ?? 0}</span>
+                             <span className={cn('text-sm font-bold mp-mono w-8 text-right',
+-                              (v.roadStock ?? v.currentStock) <= 0 ? 'text-[#F87171]' :
+-                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-[#F87171]' :
+-                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-[#FBBF24]' :
+-                              'text-[#4ADE80]')}>
++                              (v.roadStock ?? v.currentStock) <= 0 ? 'text-destructive' :
++                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-destructive' :
++                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-orange-500' :
++                              'text-green-500')}>
+                               {v.roadStock ?? v.currentStock}
+                             </span>
+                           </div>
+@@ -773,31 +777,31 @@ export default function MerchOffice() {
+                     </div>
+                     {/* Two-tier stock summary */}
+                     <div className="mx-3 mb-2 p-2 rounded-lg flex items-center justify-between text-xs"
+-                      style={{ background: 'rgba(14,15,20,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
+-                      <div className="flex items-center gap-1.5 text-purple-300">
++                      style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
++                      <div className="flex items-center gap-1.5 text-primary">
+                         <Warehouse size={11} />
+                         <span>WH: {product.variants.reduce((s, v) => s + (v.warehouseStock ?? 0), 0)}</span>
+                       </div>
+-                      <ArrowRightLeft size={10} className="text-white/20" />
+-                      <div className="flex items-center gap-1.5 text-green-300">
++                      <ArrowRightLeft size={10} className="text-muted-foreground/30" />
++                      <div className="flex items-center gap-1.5 text-green-500">
+                         <Truck size={11} />
+                         <span>Road: {product.variants.reduce((s, v) => s + (v.roadStock ?? v.currentStock), 0)}</span>
+                       </div>
+                     </div>
+                     <div className="flex gap-2 p-3 pt-0">
+                       <button onClick={() => setEditingProduct(product)}
+-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-[#A4A7B5] hover:text-[#E6E7EB] transition-colors"
+-                        style={{ border: '1px solid #2D3048' }}>
++                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
++                        style={{ border: '1px solid var(--border)' }}>
+                         <Edit2 size={12} /> Edit
+                       </button>
+                       <button onClick={() => { setTransferProduct(product); }}
+-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors"
+-                        style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
++                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
++                        style={{ border: '1px solid var(--border)' }}>
+                         <ArrowRightLeft size={12} /> Transfer
+                       </button>
+                       <button onClick={() => { if (confirm(`Delete ${product.name}?`)) deleteProduct(product.id); }}
+-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-[#F87171] hover:bg-[rgba(248,113,113,0.1)] transition-colors"
+-                        style={{ border: '1px solid rgba(248,113,113,0.2)' }}>
++                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-destructive hover:bg-destructive/10 transition-colors"
++                        style={{ border: '1px solid var(--border)' }}>
+                         <Trash2 size={12} /> Delete
+                       </button>
+                     </div>
+@@ -816,21 +820,40 @@ export default function MerchOffice() {
+           </div>}
+         </div>
+         {/* Team */}
+-        {state.teamMembers.filter(m => m.active).length > 0 && (
+-          <div>
+-            <button onClick={() => setSecTeam(v => !v)} className="flex items-center gap-1.5 group mb-2">
+-              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Team</p>
+-              <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secTeam ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
++        <div>
++          <div className="flex items-center justify-between mb-2">
++            <button onClick={() => setSecTeam(v => !v)} className="flex items-center gap-1.5 group">
++              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Team</p>
++              <span className="text-xs text-[#7B7F93] ml-1">· {state.teamMembers.filter(m => m.active).length} active</span>
++              <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors ml-1">{secTeam ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
++            </button>
++            <button
++              onClick={() => { setEditingMember('new'); setMemberForm({ name: '', phone: '', email: '', active: true }); setMemberStats(null); }}
++              className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80 transition-colors">
++              <Plus size={13} /> Add Member
+             </button>
+-            {secTeam && <TeamSection />}
+           </div>
+-        )}
++          {secTeam && (
++            state.teamMembers.filter(m => m.active).length > 0
++              ? <TeamSection onEditMember={(m) => {
++                  setEditingMember(m);
++                  setMemberForm({ name: m.name, phone: m.phone ?? '', email: m.email ?? '', active: m.active });
++                  setMemberStats(null);
++                  getTeamMemberStats(m.id).then(setMemberStats).catch(() => {});
++                }} />
++              : <div className="mp-card p-6 text-center">
++                  <ShoppingBag size={24} className="text-muted-foreground mx-auto mb-2" />
++                  <p className="text-sm font-semibold text-muted-foreground">No active members</p>
++                  <p className="text-xs text-muted-foreground/60 mt-1">Add members to track personal sales stats</p>
++                </div>
++          )}
++        </div>
+
+         {/* Stock Management */}
+         <div>
+           <div className="flex items-center justify-between mb-3">
+             <button onClick={() => setSecStock(v => !v)} className="flex items-center gap-1.5 group">
+-              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Stock Management</p>
++              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Stock Management</p>
+               <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secStock ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+             </button>
+           </div>
+@@ -859,20 +882,20 @@ export default function MerchOffice() {
+                           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                         </span>
+                         <div className="min-w-0">
+-                          <p className="text-sm font-semibold text-[#E6E7EB] truncate">{product.name}</p>
++                          <p className="text-sm font-semibold text-foreground truncate">{product.name}</p>
+                           <p className="text-xs text-[#7B7F93]">{product.variants.length} variants</p>
+                         </div>
+-                        {!isExpanded && (
+-                          <div className="flex items-center gap-2 ml-2">
+-                            <span className="text-xs font-bold mp-mono text-purple-300">{totalWH} WH</span>
+-                            <span className="text-xs font-bold mp-mono text-green-400">{totalRoad} Road</span>
+-                          </div>
+-                        )}
++                    {!isExpanded && (
++                      <div className="flex items-center gap-2 ml-2">
++                        <span className="text-xs font-bold mp-mono text-primary">{totalWH} WH</span>
++                        <span className="text-xs font-bold mp-mono text-green-500">{totalRoad} Road</span>
++                      </div>
++                    )}
+                       </div>
+                       <button
+                         onClick={() => setTransferProduct(product)}
+-                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors flex-shrink-0 ml-2"
+-                        style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
++                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-primary hover:text-primary/80 transition-colors flex-shrink-0 ml-2"
++                        style={{ border: '1px solid var(--border)' }}>
+                         <ArrowRightLeft size={11} /> Transfer
+                       </button>
+                     </div>
+@@ -881,32 +904,32 @@ export default function MerchOffice() {
+                         <div className="flex items-center justify-between px-2 pb-1">
+                           <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Variant</span>
+                           <div className="flex items-center gap-3">
+-                            <span className="text-[10px] font-semibold text-purple-400 uppercase tracking-wider w-8 text-right">WH</span>
+-                            <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider w-8 text-right">Road</span>
+-                            <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider w-8 text-right">Adj</span>
++                          <span className="text-[10px] font-semibold text-primary uppercase tracking-wider w-8 text-right">WH</span>
++                          <span className="text-[10px] font-semibold text-green-500 uppercase tracking-wider w-8 text-right">Road</span>
++                          <span className="text-[10px] font-semibold text-primary uppercase tracking-wider text-right">Adjust</span>
+                           </div>
+                         </div>
+                         {product.variants.map(v => (
+-                          <div key={v.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
+-                            style={{ background: 'rgba(14,15,20,0.4)' }}>
+-                            <span className="text-sm text-[#A4A7B5]">{v.name}</span>
+-                            <div className="flex items-center gap-3">
+-                              <span className="text-sm font-bold mp-mono text-purple-300 w-8 text-right">{v.warehouseStock ?? 0}</span>
+-                              <span className={`text-sm font-bold mp-mono w-8 text-right ${
+-                                (v.roadStock ?? v.currentStock) <= 0 ? 'text-[#F87171]' :
+-                                (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-[#F87171]' :
+-                                (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-[#FBBF24]' :
+-                                'text-[#4ADE80]'}`}>
+-                                {v.roadStock ?? v.currentStock}
+-                              </span>
+-                              <button
+-                                onClick={() => setAdjustingVariant({ variantId: v.id, productId: product.id, variantName: v.name, currentStock: v.currentStock })}
+-                                className="w-8 h-7 flex items-center justify-center rounded-lg text-xs font-bold text-[#7C6DFF] hover:text-white hover:bg-[rgba(124,109,255,0.15)] transition-colors"
+-                                style={{ border: '1px solid rgba(124,109,255,0.25)' }}>
+-                                <Edit2 size={11} />
+-                              </button>
+-                            </div>
++                        <div key={v.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
++                          style={{ background: 'var(--background)', border: '2px solid var(--border)' }}>
++                          <span className="text-sm text-muted-foreground">{v.name}</span>
++                          <div className="flex items-center gap-3">
++                            <span className="text-sm font-bold mp-mono text-primary w-8 text-right">{v.warehouseStock ?? 0}</span>
++                            <span className={`text-sm font-bold mp-mono w-8 text-right ${
++                              (v.roadStock ?? v.currentStock) <= 0 ? 'text-destructive' :
++                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-destructive' :
++                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-orange-500' :
++                              'text-green-500'}`}>
++                              {v.roadStock ?? v.currentStock}
++                            </span>
++                            <button
++                              onClick={() => setAdjustingVariant({ variantId: v.id, productId: product.id, variantName: v.name, currentStock: v.currentStock })}
++                              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
++                              style={{ background: 'rgba(107,92,255,0.1)', border: '1px solid rgba(107,92,255,0.2)' }}>
++                              <Sliders size={11} /> Adjust
++                            </button>
+                           </div>
++                        </div>
+                         ))}
+                       </div>
+                     )}
+@@ -941,6 +964,119 @@ export default function MerchOffice() {
+         <div className="h-4" />
+       </div>
+
++      {/* Member Drawer */}
++      {editingMember !== null && (
++        <RightDrawer
++          open={true}
++          onClose={() => setEditingMember(null)}
++          title={editingMember === 'new' ? 'New Team Member' : 'Edit Member'}
++          subtitle={editingMember !== 'new' ? editingMember.name : 'Fill in the details below'}
++        >
++          <div className="flex-1 overflow-y-auto">
++            {/* Stats summary — only when editing existing member */}
++            {editingMember !== 'new' && (
++              <div className="px-4 pt-4 pb-2">
++                {memberStats ? (
++                  <div className="grid grid-cols-4 gap-2 mb-1">
++                    {[
++                      { label: 'Shifts', value: String(memberStats.shifts), icon: <ShoppingBag size={11}/>, color: '#7C6DFF' },
++                      { label: 'Hours', value: memberStats.hoursWorked > 0 ? memberStats.hoursWorked.toFixed(1) : '—', icon: <Clock size={11}/>, color: '#00E5FF' },
++                      { label: 'Items', value: memberStats.totalItems > 0 ? String(memberStats.totalItems) : '—', icon: <TrendingUp size={11}/>, color: '#4ADE80' },
++                      { label: 'Revenue', value: memberStats.totalRevenue > 0 ? `€${Math.round(memberStats.totalRevenue)}` : '—', icon: <DollarSign size={11}/>, color: '#FBBF24' },
++                    ].map(s => (
++                      <div key={s.label} className="flex flex-col items-center justify-center py-2 rounded-lg gap-0.5"
++                        style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
++                        <span style={{ color: s.color }}>{s.icon}</span>
++                        <span className="text-sm font-black mp-mono" style={{ color: s.color }}>{s.value}</span>
++                        <span className="text-[9px] text-muted-foreground uppercase tracking-wider">{s.label}</span>
++                      </div>
++                    ))}
++                  </div>
++                ) : (
++                  <div className="grid grid-cols-4 gap-2 mb-1">
++                    {[0,1,2,3].map(i => <div key={i} className="h-14 rounded-lg animate-pulse" style={{ background: 'var(--muted)' }} />)}
++                  </div>
++                )}
++                {/* Outstanding debt row */}
++                {(editingMember as TeamMember).totalDebt && (editingMember as TeamMember).totalDebt! > 0 ? (
++                  <div className="flex items-center justify-between px-3 py-2 rounded-lg mt-1"
++                    style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
++                    <span className="text-xs font-semibold text-[#F87171]">Outstanding Debt</span>
++                    <span className="text-sm font-black mp-mono text-[#F87171]">
++                      −€{(editingMember as TeamMember).totalDebt!.toFixed(2)}
++                    </span>
++                  </div>
++                ) : null}
++              </div>
++            )}
++
++            <div className="p-4 space-y-4">
++              <div>
++                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Name *</label>
++                <input value={memberForm.name} onChange={e => setMemberForm(f => ({ ...f, name: e.target.value }))}
++                  placeholder="Full name" autoFocus
++                  className="w-full px-3 py-2.5 rounded-xl text-sm text-foreground placeholder:text-muted-foreground border focus:outline-none focus:ring-1 focus:ring-primary"
++                  style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
++              </div>
++              <div>
++                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
++                  <Phone size={10} className="inline mr-1" />Phone
++                </label>
++                <input value={memberForm.phone} onChange={e => setMemberForm(f => ({ ...f, phone: e.target.value }))}
++                  placeholder="+1 555 000 0000" type="tel"
++                  className="w-full px-3 py-2.5 rounded-xl text-sm text-foreground placeholder:text-muted-foreground border focus:outline-none focus:ring-1 focus:ring-primary"
++                  style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
++              </div>
++              <div>
++                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
++                  <Mail size={10} className="inline mr-1" />Email
++                </label>
++                <input value={memberForm.email} onChange={e => setMemberForm(f => ({ ...f, email: e.target.value }))}
++                  placeholder="name@example.com" type="email"
++                  className="w-full px-3 py-2.5 rounded-xl text-sm text-foreground placeholder:text-muted-foreground border focus:outline-none focus:ring-1 focus:ring-primary"
++                  style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
++              </div>
++              <div className="flex items-center justify-between py-2 px-3 rounded-xl"
++                style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
++                <div className="flex items-center gap-2">
++                  {memberForm.active ? <UserCheck size={14} className="text-green-500" /> : <UserX size={14} className="text-muted-foreground" />}
++                  <span className="text-sm text-foreground">Active</span>
++                  <span className="text-xs text-muted-foreground">{memberForm.active ? 'On roster' : 'Hidden'}</span>
++                </div>
++                <button
++                  onClick={() => setMemberForm(f => ({ ...f, active: !f.active }))}
++                  className={cn('w-10 h-6 rounded-full transition-colors relative', memberForm.active ? 'bg-green-500' : 'bg-muted-foreground/30')}
++                >
++                  <span className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform shadow-sm', memberForm.active ? 'translate-x-4' : 'translate-x-0.5')} />
++                </button>
++              </div>
++            </div>
++          </div>
++
++          <div className="flex gap-2 p-4 flex-shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
++            <button onClick={() => setEditingMember(null)}
++              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground"
++              style={{ border: '1px solid var(--border)' }}>
++              Cancel
++            </button>
++            <button
++              onClick={async () => {
++                if (!memberForm.name.trim()) { toast.error('Name is required'); return; }
++                const now = new Date().toISOString();
++                const member: TeamMember = editingMember === 'new'
++                  ? { id: uuidv4(), name: memberForm.name.trim(), phone: memberForm.phone || undefined, email: memberForm.email || undefined, active: memberForm.active, createdAt: now, updatedAt: now }
++                  : { ...editingMember, name: memberForm.name.trim(), phone: memberForm.phone || undefined, email: memberForm.email || undefined, active: memberForm.active, updatedAt: now };
++                await saveTeamMember(member);
++                toast.success(editingMember === 'new' ? `${member.name} added` : `${member.name} updated`);
++                setEditingMember(null);
++              }}
++              className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
++              {editingMember === 'new' ? 'Add Member' : 'Save Changes'}
++            </button>
++          </div>
++        </RightDrawer>
++      )}
++
+       {/* Modals */}
+       {adjustingVariant && (
+         <AdjustmentModal
+diff --git a/client/src/pages/TallyCounter.tsx b/client/src/pages/TallyCounter.tsx
+index c391028..fea33d4 100644
+--- a/client/src/pages/TallyCounter.tsx
++++ b/client/src/pages/TallyCounter.tsx
+@@ -21,8 +21,7 @@ import {
+ } from 'lucide-react';
+ import { toast } from 'sonner';
+ import { useMerchPad } from '../contexts/MerchPadContext';
+-import { setSetting, getSetting } from '../lib/db';
+-import { ProductVariant } from '../lib/db';
++import { setSetting, getSetting, ProductVariant, TeamMember } from '../lib/db';
+ import { cn } from '../lib/utils';
+
+ // ── Euro denominations for quick-amount buttons ────────────────────────────
+@@ -106,10 +105,10 @@ function TallyCard({
+       {/* Header */}
+       <div className="flex items-start justify-between mb-2">
+         <div className="flex-1 min-w-0">
+-          <p className="text-xs font-black text-[#E6E7EB] uppercase tracking-wide leading-tight truncate">
++          <p className="text-xs font-black text-foreground uppercase tracking-wide leading-tight truncate">
+             {variant.name.split(' ').slice(0, -1).join(' ') || variant.name}
+           </p>
+-          <p className="text-xs text-[#A4A7B5] truncate">
++          <p className="text-xs text-muted-foreground truncate">
+             {Object.values(variant.attributes).join(' · ')}
+           </p>
+         </div>
+@@ -127,7 +126,7 @@ function TallyCard({
+             <Info size={11} />
+           </button>
+           {showInfo && (
+-            <div className="absolute top-6 right-0 z-50 w-44 rounded-xl p-3 shadow-2xl animate-fade-in"
++            <div className="mp-variant-info-popup absolute top-6 right-0 z-50 w-44 rounded-xl p-3 shadow-2xl animate-fade-in"
+               style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}>
+               <p className="text-[10px] font-bold text-[#7C6DFF] uppercase tracking-wider mb-2">Variant Info</p>
+               <div className="space-y-1.5">
+@@ -163,7 +162,7 @@ function TallyCard({
+       <div className="flex-1 flex items-center justify-center py-2">
+         <span
+           className={cn('mp-tally-number', bumping && 'animate-counter-bump')}
+-          style={{ color: displayQty > 0 ? '#E6E7EB' : '#2D3048' }}>
++          style={{ color: displayQty > 0 ? 'var(--foreground)' : 'var(--border)' }}>
+           {displayQty}
+         </span>
+       </div>
+@@ -216,9 +215,9 @@ function TallyCard({
+       )}
+       {/* Price / running total */}
+       <div className="flex items-center justify-between">
+-        <span className="text-xs text-[#7B7F93] mp-mono">€{variant.price.toFixed(2)}</span>
++        <span className="text-xs text-muted-foreground mp-mono">€{variant.price.toFixed(2)}</span>
+         {!tallyMode && basketQty > 0 ? (
+-          <span className="text-xs font-bold mp-mono text-[#E6E7EB]">
++          <span className="text-xs font-bold mp-mono text-foreground">
+             €{(basketQty * variant.price).toFixed(2)}
+           </span>
+         ) : tallyMode ? (
+@@ -307,6 +306,221 @@ function BasketPreview({ items, totalRevenue, onClose, onAdjust }: BasketPreview
+   );
+ }
+
++// ── Shortfall Modal ────────────────────────────────────────────────────────
++
++interface ShortfallModalProps {
++  shortfall: number;
++  totalRevenue: number;
++  requireDiscountReason: boolean;
++  allowSellerDebt: boolean;
++  requireDebtReason: boolean;
++  activeMembers: TeamMember[];
++  onDiscount: (reason?: string) => void;
++  onSellerDebt: (memberId: string, memberName: string, reason?: string) => void;
++  onGoBack: () => void;
++  onCancel: () => void;
++}
++
++type ShortfallStep = 'main' | 'discount-reason' | 'debt-pick-member' | 'debt-reason';
++
++function ShortfallModal({
++  shortfall, totalRevenue, requireDiscountReason, allowSellerDebt, requireDebtReason,
++  activeMembers, onDiscount, onSellerDebt, onGoBack, onCancel,
++}: ShortfallModalProps) {
++  const [step, setStep] = useState<ShortfallStep>('main');
++  const [reason, setReason] = useState('');
++  const [pickedMember, setPickedMember] = useState<TeamMember | null>(null);
++
++  function handleDiscountClick() {
++    if (requireDiscountReason) { setStep('discount-reason'); }
++    else { onDiscount(); }
++  }
++
++  function handleDebtClick() {
++    if (activeMembers.length === 1) {
++      setPickedMember(activeMembers[0]);
++      if (requireDebtReason) { setStep('debt-reason'); }
++      else { onSellerDebt(activeMembers[0].id, activeMembers[0].name); }
++    } else {
++      setStep('debt-pick-member');
++    }
++  }
++
++  function handleMemberPick(m: TeamMember) {
++    setPickedMember(m);
++    if (requireDebtReason) { setStep('debt-reason'); }
++    else { onSellerDebt(m.id, m.name); }
++  }
++
++  function handleConfirmDiscount() { onDiscount(reason.trim() || undefined); }
++  function handleConfirmDebt() {
++    if (!pickedMember) return;
++    onSellerDebt(pickedMember.id, pickedMember.name, reason.trim() || undefined);
++  }
++
++  function goBack() {
++    if (step === 'discount-reason' || step === 'debt-pick-member') setStep('main');
++    else if (step === 'debt-reason') setStep(activeMembers.length === 1 ? 'main' : 'debt-pick-member');
++    else onGoBack();
++  }
++
++  const paidStr = shortfall < totalRevenue ? `€${(totalRevenue - shortfall).toFixed(2)} paid` : '';
++
++  return (
++    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
++      style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
++      <div className="mp-register-modal w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-hidden"
++        style={{ background: '#141624', border: '1px solid rgba(248,113,113,0.3)' }}>
++
++        {/* Header */}
++        <div className="flex items-center justify-between px-4 pt-4 pb-3">
++          <div>
++            <h2 className="text-base font-black text-[#F87171]">Cash is not enough!</h2>
++            <p className="text-xs text-[#7B7F93] mt-0.5">
++              <span className="font-bold text-[#F87171]">€{shortfall.toFixed(2)} short</span>
++              {paidStr && <span> · {paidStr}</span>}
++              {' · '}Total €{totalRevenue.toFixed(2)}
++            </p>
++          </div>
++        </div>
++
++        <div className="px-4 pb-4 space-y-2">
++          {/* ── MAIN STEP ── */}
++          {step === 'main' && (
++            <>
++              <button onClick={handleDiscountClick}
++                className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-between px-4 transition-all active:scale-[0.98]"
++                style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: '#FBBF24' }}>
++                <span>Confirm as Discount</span>
++                <span className="text-xs opacity-60">−€{shortfall.toFixed(2)}</span>
++              </button>
++
++              {allowSellerDebt && activeMembers.length > 0 && (
++                <button onClick={handleDebtClick}
++                  className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-between px-4 transition-all active:scale-[0.98]"
++                  style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: '#F87171' }}>
++                  <span>Confirm as Seller Debt</span>
++                  <span className="text-xs opacity-60">−€{shortfall.toFixed(2)}</span>
++                </button>
++              )}
++
++              <button onClick={onGoBack}
++                className="w-full py-3 rounded-xl text-sm font-semibold text-[#A4A7B5] transition-all active:scale-[0.98]"
++                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
++                Go Back to Cart
++              </button>
++
++              <button onClick={onCancel}
++                className="w-full py-2 text-sm font-semibold text-[#F87171] opacity-70 hover:opacity-100 transition-opacity">
++                Cancel Sale
++              </button>
++            </>
++          )}
++
++          {/* ── DISCOUNT REASON STEP ── */}
++          {step === 'discount-reason' && (
++            <>
++              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1">State the reason for this discount</p>
++              <textarea
++                value={reason}
++                onChange={e => setReason(e.target.value)}
++                placeholder="e.g. Friend of band, promotion..."
++                className="w-full rounded-xl px-3 py-2.5 text-sm text-[#E6E7EB] resize-none outline-none"
++                rows={3}
++                style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}
++                autoFocus
++              />
++              <button onClick={handleConfirmDiscount}
++                className="w-full py-3 rounded-xl text-sm font-black text-white transition-all active:scale-[0.98]"
++                style={{ background: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)' }}>
++                Confirm Discount
++              </button>
++              <div className="flex gap-2">
++                <button onClick={goBack}
++                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
++                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
++                  Go Back
++                </button>
++                <button onClick={onCancel}
++                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
++                  style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
++                  Cancel Sale
++                </button>
++              </div>
++            </>
++          )}
++
++          {/* ── DEBT MEMBER PICKER ── */}
++          {step === 'debt-pick-member' && (
++            <>
++              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1">Which seller is responsible?</p>
++              <div className="space-y-1.5 max-h-48 overflow-y-auto">
++                {activeMembers.map(m => (
++                  <button key={m.id} onClick={() => handleMemberPick(m)}
++                    className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold text-left transition-all active:scale-[0.98]"
++                    style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', color: '#E6E7EB' }}>
++                    {m.name}
++                    {m.totalDebt && m.totalDebt > 0 ? (
++                      <span className="ml-2 text-xs text-[#F87171]">−€{m.totalDebt.toFixed(0)} existing debt</span>
++                    ) : null}
++                  </button>
++                ))}
++              </div>
++              <div className="flex gap-2 pt-1">
++                <button onClick={goBack}
++                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
++                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
++                  Go Back
++                </button>
++                <button onClick={onCancel}
++                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
++                  style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
++                  Cancel Sale
++                </button>
++              </div>
++            </>
++          )}
++
++          {/* ── DEBT REASON STEP ── */}
++          {step === 'debt-reason' && pickedMember && (
++            <>
++              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-0.5">
++                Reason — debt assigned to <span className="text-[#F87171]">{pickedMember.name}</span>
++              </p>
++              <textarea
++                value={reason}
++                onChange={e => setReason(e.target.value)}
++                placeholder="e.g. Customer had no cash, promised to return..."
++                className="w-full rounded-xl px-3 py-2.5 text-sm text-[#E6E7EB] resize-none outline-none"
++                rows={3}
++                style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}
++                autoFocus
++              />
++              <button onClick={handleConfirmDebt}
++                className="w-full py-3 rounded-xl text-sm font-black text-white transition-all active:scale-[0.98]"
++                style={{ background: 'linear-gradient(135deg, #F87171 0%, #EF4444 100%)' }}>
++                Confirm Seller Debt
++              </button>
++              <div className="flex gap-2">
++                <button onClick={goBack}
++                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
++                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
++                  Go Back
++                </button>
++                <button onClick={onCancel}
++                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
++                  style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
++                  Cancel Sale
++                </button>
++              </div>
++            </>
++          )}
++        </div>
++      </div>
++    </div>
++  );
++}
++
+ // ── Register Modal (augmented Confirm Sale + cash drawer + iOS numpad) ─────
+ const NUMPAD_KEYS = ['7','8','9','4','5','6','1','2','3','00','0','\u232b'] as const;
+
+@@ -361,7 +575,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
+   return (
+     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+       style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
+-      <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-hidden"
++      <div className="mp-register-modal w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-hidden"
+         style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}>
+
+         {/* Header */}
+@@ -385,7 +599,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
+         {/* Items list with +/- tweaks */}
+         <div className="px-4 space-y-0.5 max-h-28 overflow-y-auto mb-1">
+           {items.map(item => (
+-            <div key={item.variantId} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
++            <div key={item.variantId} className="mp-basket-row flex items-center justify-between py-1.5 px-2 rounded-lg"
+               style={{ background: 'rgba(14,15,20,0.5)' }}>
+               <div className="flex items-center gap-2 flex-1 min-w-0">
+                 <span className="text-xs font-bold text-[#7C6DFF] mp-mono w-5 text-center">×{item.qty}</span>
+@@ -429,7 +643,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
+               </button>
+             )}
+           </div>
+-          <div className="flex items-center gap-1 px-3 py-2 rounded-2xl mb-1.5"
++          <div className="mp-money-input flex items-center gap-1 px-3 py-2 rounded-2xl mb-1.5"
+             style={{
+               background: '#0E0F14',
+               border: `1px solid ${validInput && sufficient ? 'rgba(74,222,128,0.4)' : validInput && !sufficient ? 'rgba(248,113,113,0.4)' : '#2D3048'}`,
+@@ -445,7 +659,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
+             {EURO_DENOMS.map(d => (
+               <button key={d}
+                 onClick={() => handleDenom(d)}
+-                className="px-2.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
++                className="mp-denom-btn px-2.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
+                 style={{
+                   background: '#1B1E2E',
+                   border: '1px solid #2D3048',
+@@ -502,8 +716,8 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
+                 key={key}
+                 onClick={() => handleNumpad(key)}
+                 className={cn(
+-                  'flex items-center justify-center h-11 rounded-2xl text-base font-bold transition-all active:scale-90',
+-                  key === '\u232b' ? 'text-[#F87171]' : 'text-[#E6E7EB]'
++                  'mp-numpad-key flex items-center justify-center h-11 rounded-2xl text-base font-bold transition-all active:scale-90',
++                  key === '\u232b' ? 'text-[#F87171] mp-numpad-key--delete' : 'text-[#E6E7EB]'
+                 )}
+                 style={{
+                   background: key === '\u232b' ? 'rgba(248,113,113,0.12)' : '#1B1E2E',
+@@ -523,12 +737,14 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
+ // ── Main Screen ────────────────────────────────────────────────────────────
+ export default function TallyCounter() {
+   const [, navigate] = useLocation();
+-  const { state, dispatch, confirmSale, getVariantStockStatus, getTallyTotal, transferStock } = useMerchPad();
+-  const { products, activeSession, tally, settings } = state;
++  const { state, dispatch, confirmSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock } = useMerchPad();
++  const { products, activeSession, tally, settings, teamMembers } = state;
+   const allowMidSaleRestock = settings.allowMidSaleRestock ?? false;
+   const stickyBarTally = settings.stickyBarTally ?? true;
+   const stickyBarRegister = settings.stickyBarRegister ?? true;
+   const [showRegisterModal, setShowRegisterModal] = useState(false);
++  const [showShortfallModal, setShowShortfallModal] = useState(false);
++  const [pendingMoneyIn, setPendingMoneyIn] = useState(0);
+   const [showBasketPreview, setShowBasketPreview] = useState(false);
+   const [filterCategory, setFilterCategory] = useState<string>('all');
+   // Restore persisted category filter on mount
+@@ -598,25 +814,28 @@ export default function TallyCounter() {
+     }
+   }, [dispatch]);
+
+-  // Register confirm (with cash amount)
+-  const handleRegisterConfirm = useCallback(async (moneyIn: number) => {
+-    // Snapshot basket before confirm clears it
++  const finishSale = useCallback(async (
++    moneyIn: number,
++    opts?: Parameters<typeof confirmSale>[0]
++  ) => {
+     const snapshot = Object.values(tally.items).filter(i => i.qty > 0);
+-    const batch = await confirmSale();
++    const batch = await confirmSale(opts);
+     if (batch) {
+-      // Accumulate into sessionSold
+       setSessionSold(prev => {
+         const next = { ...prev };
+-        snapshot.forEach(item => {
+-          next[item.variantId] = (next[item.variantId] ?? 0) + item.qty;
+-        });
++        snapshot.forEach(item => { next[item.variantId] = (next[item.variantId] ?? 0) + item.qty; });
+         return next;
+       });
+       const change = moneyIn > 0 ? moneyIn - batch.totalPrice : 0;
+       setShowRegisterModal(false);
++      setShowShortfallModal(false);
+       setJustConfirmed(true);
+       toast.success(
+-        moneyIn > 0
++        opts?.shortfallType === 'discount'
++          ? `Discount applied · €${batch.totalPrice.toFixed(2)}`
++          : opts?.shortfallType === 'seller_debt'
++          ? `Seller debt recorded · €${(opts.shortfallAmount ?? 0).toFixed(2)} owed`
++          : moneyIn > 0
+           ? `Sale complete! €${batch.totalPrice.toFixed(2)} · Change: €${change.toFixed(2)}`
+           : `Sale confirmed! ${batch.totalItems} items · €${batch.totalPrice.toFixed(2)}`,
+         { duration: 4000 }
+@@ -625,6 +844,28 @@ export default function TallyCounter() {
+     }
+   }, [confirmSale, tally.items]);
+
++  // Register confirm (with cash amount)
++  const handleRegisterConfirm = useCallback(async (moneyIn: number) => {
++    if (moneyIn < totalRevenue) {
++      setPendingMoneyIn(moneyIn);
++      setShowShortfallModal(true);
++      return;
++    }
++    await finishSale(moneyIn);
++  }, [finishSale, totalRevenue]);
++
++  const handleShortfallDiscount = useCallback(async (reason?: string) => {
++    const shortfall = totalRevenue - pendingMoneyIn;
++    await finishSale(pendingMoneyIn, { shortfallType: 'discount', shortfallAmount: shortfall, shortfallReason: reason });
++  }, [finishSale, totalRevenue, pendingMoneyIn]);
++
++  const handleShortfallDebt = useCallback(async (memberId: string, memberName: string, reason?: string) => {
++    const shortfall = totalRevenue - pendingMoneyIn;
++    await finishSale(pendingMoneyIn, { shortfallType: 'seller_debt', shortfallAmount: shortfall, shortfallReason: reason, shortfallMemberId: memberId });
++    await recordSellerDebt(memberId, shortfall);
++    toast(`${memberName} owes €${shortfall.toFixed(2)}`, { duration: 3000 });
++  }, [finishSale, recordSellerDebt, totalRevenue, pendingMoneyIn]);
++
+   // Instant sell (Tally mode — single variant, qty=1, immediate confirm)
+   const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number) => {
+     // Guard against oversell: use live currentStock from products state
+@@ -718,7 +959,7 @@ export default function TallyCounter() {
+       )}
+
+       {/* Session bar */}
+-      <div className="px-4 py-2.5 flex items-center justify-between gap-2"
++      <div className="mp-tally-session-bar px-4 py-2.5 flex items-center justify-between gap-2"
+         style={activeSession.sessionType === 'oneoff'
+           ? { background: 'rgba(217,119,6,0.08)', borderBottom: '1px solid rgba(217,119,6,0.2)' }
+           : { background: 'rgba(107,92,255,0.08)', borderBottom: '1px solid rgba(107,92,255,0.15)' }}>
+@@ -792,14 +1033,14 @@ export default function TallyCounter() {
+
+       {/* Mode indicator banner */}
+       {tallyMode ? (
+-        <div className="mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
++        <div className="mp-tally-mode-banner mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
+           style={{ background: 'rgba(107,92,255,0.06)', border: '1px solid rgba(107,92,255,0.15)' }}>
+           <Zap size={12} className="text-[#7C6DFF] flex-shrink-0" />
+           <span className="text-xs text-[#7C6DFF] font-semibold">Tally Mode</span>
+           <span className="text-xs text-[#7B7F93]">— tap + to instantly record each sale</span>
+         </div>
+       ) : (
+-        <div className="mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
++        <div className="mp-tally-mode-banner mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
+           style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)' }}>
+           <ShoppingBag size={12} className="text-[#4ADE80] flex-shrink-0" />
+           <span className="text-xs text-[#4ADE80] font-semibold">Register Mode</span>
+@@ -812,8 +1053,8 @@ export default function TallyCounter() {
+         <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-none">
+           {categories.map(cat => (
+             <button key={cat} onClick={() => { setFilterCategory(cat); setSetting('tallyFilterCategory', cat); }}
+-              className={cn('flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
+-                filterCategory === cat ? 'text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]'
++              className={cn('mp-tally-cat-pill flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
++                filterCategory === cat ? 'mp-tally-cat-pill--active text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]'
+               )}
+               style={filterCategory === cat
+                 ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }
+@@ -879,7 +1120,7 @@ export default function TallyCounter() {
+         return (
+         <div className={isSticky ? 'fixed left-0 right-0 bottom-16 z-30 px-4 pb-2' : 'px-4 pb-4 mt-4'}>
+         <div className={cn(
+-          'rounded-2xl p-3 shadow-2xl transition-all duration-300',
++          'mp-tally-action-bar rounded-2xl p-3 shadow-2xl transition-all duration-300',
+         )}
+           style={{ background: 'rgba(20,22,36,0.97)', backdropFilter: 'blur(20px)', border: '1px solid #2D3048' }}>
+           {/* Totals row */}
+@@ -920,7 +1161,7 @@ export default function TallyCounter() {
+
+           {/* Action button — context-aware */}
+           {tallyMode ? (
+-            <div className="w-full py-3.5 rounded-xl text-sm font-bold text-center select-none"
++            <div className="mp-tally-mode-hint w-full py-3.5 rounded-xl text-sm font-bold text-center select-none"
+               style={{ background: '#1B1E2E', color: '#3D4060', border: '1px solid #1E2030' }}>
+               Tally Mode — tap + to sell instantly
+             </div>
+@@ -968,6 +1209,22 @@ export default function TallyCounter() {
+           onAdjust={handleAdjust}
+         />
+       )}
++
++      {/* Shortfall modal — shown when cash is insufficient */}
++      {showShortfallModal && (
++        <ShortfallModal
++          shortfall={totalRevenue - pendingMoneyIn}
++          totalRevenue={totalRevenue}
++          requireDiscountReason={settings.requireDiscountReason ?? true}
++          allowSellerDebt={settings.allowSellerDebt ?? true}
++          requireDebtReason={settings.requireDebtReason ?? true}
++          activeMembers={teamMembers.filter(m => m.active)}
++          onDiscount={handleShortfallDiscount}
++          onSellerDebt={handleShortfallDebt}
++          onGoBack={() => setShowShortfallModal(false)}
++          onCancel={() => { setShowShortfallModal(false); setShowRegisterModal(false); }}
++        />
++      )}
+     </div>
+   );
+ }

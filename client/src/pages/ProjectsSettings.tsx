@@ -28,24 +28,34 @@ function ProjectEditor({ project, onSave, onClose }: ProjectEditorProps) {
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(14,15,20,0.9)', backdropFilter: 'blur(8px)' }}>
       <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up"
-        style={{ background: '#141624', border: '1px solid #2D3048' }}>
-        <div className="flex items-center justify-between p-4 border-b border-[#24273A]">
-          <h2 className="text-base font-bold text-[#E6E7EB]">{project ? 'Edit Project' : 'New Project'}</h2>
-          <button onClick={onClose} className="text-[#7B7F93] hover:text-[#E6E7EB] p-1"><X size={16} /></button>
+        style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center justify-between p-4 border-b"
+          style={{ borderColor: 'var(--border)' }}>
+          <h2 className="text-base font-bold" style={{ color: 'var(--card-foreground)' }}>
+            {project ? 'Edit Project' : 'New Project'}
+          </h2>
+          <button onClick={onClose} className="p-1" style={{ color: 'var(--muted-foreground)' }}>
+            <X size={16} />
+          </button>
         </div>
         <div className="p-4 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Project Name</label>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5"
+              style={{ color: 'var(--muted-foreground)' }}>Project Name</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Summer Tour 2026"
-              className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+              className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
+              style={{ background: 'var(--input)', color: 'var(--foreground)', borderColor: 'var(--border)' }} />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Description (optional)</label>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5"
+              style={{ color: 'var(--muted-foreground)' }}>Description (optional)</label>
             <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Main tour merch stand"
-              className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+              className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
+              style={{ background: 'var(--input)', color: 'var(--foreground)', borderColor: 'var(--border)' }} />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-2">Accent Colour</label>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-2"
+              style={{ color: 'var(--muted-foreground)' }}>Accent Colour</label>
             <div className="flex gap-2">
               {PROJECT_COLORS.map(c => (
                 <button key={c} onClick={() => setColor(c)}
@@ -57,9 +67,11 @@ function ProjectEditor({ project, onSave, onClose }: ProjectEditorProps) {
             </div>
           </div>
         </div>
-        <div className="flex gap-2 p-4 border-t border-[#24273A]">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]"
-            style={{ border: '1px solid #2D3048' }}>Cancel</button>
+        <div className="flex gap-2 p-4 border-t" style={{ borderColor: 'var(--border)' }}>
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+            style={{ border: '1px solid var(--border)', color: 'var(--muted-foreground)' }}>
+            Cancel
+          </button>
           <button onClick={() => { if (!name.trim()) { toast.error('Name required'); return; } onSave(name.trim(), description.trim(), color); }}
             className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
             Save
@@ -86,15 +98,17 @@ function SlotCard({ project, isActive, slotIndex, onActivate, onEdit, onDelete, 
   if (!project) {
     return (
       <button onClick={onCreate}
-        className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-dashed transition-all hover:border-[#6B5CFF] group"
-        style={{ borderColor: '#2D3048' }}>
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ background: '#1B1E2E' }}>
-          <Plus size={18} className="text-[#7B7F93] group-hover:text-[#7C6DFF]" />
+        className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-dashed transition-all group"
+        style={{ borderColor: 'var(--border)' }}>
+        <div className="mp-slot-add-icon w-10 h-10 rounded-xl flex items-center justify-center"
+          style={{ background: 'var(--input)' }}>
+          <Plus size={18} style={{ color: 'var(--muted-foreground)' }} />
         </div>
         <div className="text-left">
-          <p className="text-sm font-semibold text-[#7B7F93] group-hover:text-[#A4A7B5]">Slot {slotIndex + 1} — Empty</p>
-          <p className="text-xs text-[#7B7F93]">Tap to create a new project</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--muted-foreground)' }}>
+            Slot {slotIndex + 1} — Empty
+          </p>
+          <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Tap to create a new project</p>
         </div>
       </button>
     );
@@ -103,8 +117,8 @@ function SlotCard({ project, isActive, slotIndex, onActivate, onEdit, onDelete, 
   return (
     <div className={cn('rounded-xl p-4 transition-all', isActive ? 'ring-2' : '')}
       style={{
-        background: isActive ? `${project.color}12` : '#1B1E2E',
-        border: `1px solid ${isActive ? project.color + '50' : '#2D3048'}`,
+        background: isActive ? `${project.color}12` : 'var(--input)',
+        border: `1px solid ${isActive ? project.color + '50' : 'var(--border)'}`,
         ...(isActive ? { ringColor: project.color } : {}),
       }}>
       <div className="flex items-center gap-3">
@@ -124,7 +138,9 @@ function SlotCard({ project, isActive, slotIndex, onActivate, onEdit, onDelete, 
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-sm font-bold text-[#E6E7EB] truncate">{project.name}</p>
+            <p className="text-sm font-bold truncate" style={{ color: 'var(--card-foreground)' }}>
+              {project.name}
+            </p>
             {isActive && (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
                 style={{ background: `${project.color}20`, color: project.color }}>
@@ -133,9 +149,11 @@ function SlotCard({ project, isActive, slotIndex, onActivate, onEdit, onDelete, 
             )}
           </div>
           {project.description && (
-            <p className="text-xs text-[#7B7F93] truncate">{project.description}</p>
+            <p className="text-xs truncate" style={{ color: 'var(--muted-foreground)' }}>
+              {project.description}
+            </p>
           )}
-          <p className="text-xs text-[#7B7F93] mt-0.5">
+          <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
             Slot {slotIndex + 1} · Local
           </p>
         </div>
@@ -149,13 +167,13 @@ function SlotCard({ project, isActive, slotIndex, onActivate, onEdit, onDelete, 
             </button>
           )}
           <button onClick={onEdit}
-            className="p-1.5 rounded-lg text-[#7B7F93] hover:text-[#E6E7EB] transition-colors"
-            style={{ border: '1px solid #2D3048' }}>
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: 'var(--muted-foreground)', border: '1px solid var(--border)' }}>
             <Pencil size={12} />
           </button>
           <button onClick={onDelete}
-            className="p-1.5 rounded-lg text-[#7B7F93] hover:text-[#F87171] transition-colors"
-            style={{ border: '1px solid #2D3048' }}>
+            className="p-1.5 rounded-lg hover:text-[#F87171] transition-colors"
+            style={{ color: 'var(--muted-foreground)', border: '1px solid var(--border)' }}>
             <Trash2 size={12} />
           </button>
         </div>
@@ -169,27 +187,27 @@ function SlotCard({ project, isActive, slotIndex, onActivate, onEdit, onDelete, 
 function HubProjectCard() {
   return (
     <div className="rounded-xl p-4"
-      style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}>
+      style={{ background: 'var(--input)', border: '1px solid var(--border)' }}>
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center"
           style={{ background: 'rgba(123,127,147,0.1)' }}>
-          <Lock size={16} className="text-[#7B7F93]" />
+          <Lock size={16} style={{ color: 'var(--muted-foreground)' }} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-[#7B7F93]">Moshly Hub Projects</p>
-          <p className="text-xs text-[#7B7F93]">Requires Moshly account connection</p>
+          <p className="text-sm font-bold" style={{ color: 'var(--muted-foreground)' }}>Moshly Hub Projects</p>
+          <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Requires Moshly account connection</p>
         </div>
         <button
           onClick={() => toast.info('Hub integration coming soon — requires Moshly OAuth')}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#7B7F93] transition-colors"
-          style={{ border: '1px solid #2D3048' }}>
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+          style={{ border: '1px solid var(--border)', color: 'var(--muted-foreground)' }}>
           <ExternalLink size={11} /> Connect
         </button>
       </div>
       <div className="mt-3 px-3 py-2 rounded-lg"
         style={{ background: 'rgba(107,92,255,0.06)', border: '1px solid rgba(107,92,255,0.15)' }}>
         <p className="text-xs text-[#7C6DFF] font-semibold mb-0.5">Coming Soon</p>
-        <p className="text-xs text-[#7B7F93] leading-relaxed">
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--muted-foreground)' }}>
           Connect your Moshly Hub account to pull projects directly from your dashboard.
           Hub projects are read-only here and sync automatically.
         </p>

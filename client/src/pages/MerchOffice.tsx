@@ -7,10 +7,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, BookOpen, Sparkles, AlertCircle, ArrowRightLeft, Warehouse, Truck } from 'lucide-react';
+import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, BookOpen, Sparkles, AlertCircle, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { Product, ProductVariant, Show, getDB } from '../lib/db';
+import { Product, ProductVariant, Show, TeamMember, getDB } from '../lib/db';
 import { cn } from '../lib/utils';
 import { loadCatalogue, CatalogueTemplate } from '../lib/catalogue';
 import StockTransferModal from '../components/StockTransferModal';
@@ -159,14 +159,14 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
         <div className="p-4 space-y-4">
 
           {/* Catalogue template picker */}
-          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(0,229,255,0.2)', background: 'rgba(0,229,255,0.04)' }}>
+          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--primary)', background: 'var(--primary)/5' }}>
             <button onClick={() => setShowCatPicker(v => !v)}
               className="w-full flex items-center justify-between px-3 py-2.5 text-left">
               <div className="flex items-center gap-2">
-                <BookOpen size={14} style={{ color: '#00E5FF' }} />
-                <span className="text-xs font-semibold" style={{ color: '#00E5FF' }}>Pick from Item Template Creator</span>
+                <BookOpen size={14} className="text-primary" />
+                <span className="text-xs font-semibold text-primary">Pick from Item Template Creator</span>
               </div>
-              <span className="text-[10px] text-[#7B7F93]">{showCatPicker ? 'Hide' : `${catalogue.length} templates`}</span>
+              <span className="text-[10px] text-muted-foreground">{showCatPicker ? 'Hide' : `${catalogue.length} templates`}</span>
             </button>
             {showCatPicker && (
               <div className="px-3 pb-3 space-y-1 max-h-48 overflow-y-auto">
@@ -190,30 +190,30 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
           {/* Basic info */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Product Name</label>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Product Name</label>
               <input value={name} onChange={e => checkName(e.target.value)}
                 placeholder="T-Shirt"
                 list="catalogue-name-suggestions"
                 className={cn(
-                  'w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border focus:outline-none transition-colors',
-                  nameWarning ? 'border-[#FBBF24] focus:border-[#FBBF24]' : 'border-[#2D3048] focus:border-[#6B5CFF]'
+                  'w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border focus:outline-none transition-colors',
+                  nameWarning ? 'border-orange-500 focus:border-orange-500' : 'border-border focus:border-primary'
                 )} />
               <datalist id="catalogue-name-suggestions">
                 {catalogueNames.map(n => <option key={n} value={n} />)}
               </datalist>
               {nameWarning && (
                 <div className="flex items-start gap-1.5 mt-1.5">
-                  <AlertCircle size={11} className="text-[#FBBF24] flex-shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-[#FBBF24]">{nameWarning}</p>
+                  <AlertCircle size={11} className="text-orange-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-orange-500">{nameWarning}</p>
                 </div>
               )}
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Category</label>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Category</label>
               <input value={category} onChange={e => setCategory(e.target.value)}
                 placeholder="Apparel"
                 list="catalogue-category-suggestions"
-                className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none transition-colors" />
+                className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors" />
               <datalist id="catalogue-category-suggestions">
                 {catalogueCategories.map(c => <option key={c} value={c} />)}
               </datalist>
@@ -221,17 +221,17 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
           </div>
 
           {/* Bulk generator */}
-          <div className="rounded-xl p-3 space-y-3" style={{ background: 'rgba(107,92,255,0.06)', border: '1px solid rgba(107,92,255,0.2)' }}>
-            <p className="text-xs font-semibold text-[#7C6DFF] uppercase tracking-wider">⚡ Bulk Variant Generator</p>
+          <div className="rounded-xl p-3 space-y-3" style={{ background: 'var(--primary)/5', border: '1px solid var(--border)' }}>
+            <p className="text-xs font-semibold text-primary uppercase tracking-wider">⚡ Bulk Variant Generator</p>
             <div className="grid grid-cols-2 gap-2">
               <input value={bulkBase} onChange={e => setBulkBase(e.target.value)}
                 placeholder="Base name (e.g. T-Shirt Black)"
-                className="col-span-2 px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+                className="col-span-2 px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
               <div className="relative">
                 <input value={bulkAttr} onChange={e => setBulkAttr(e.target.value)}
                   placeholder="Attribute (e.g. size)"
                   list="bulk-attr-suggestions"
-                  className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+                  className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
                 <datalist id="bulk-attr-suggestions">
                   {Array.from(new Set(catalogue.flatMap(t => t.variantAxes.map(a => a.key)))).map(k => (
                     <option key={k} value={k} />
@@ -241,7 +241,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
               <div className="relative">
                 <input value={bulkValues} onChange={e => setBulkValues(e.target.value)}
                   placeholder="Values (e.g. M, L, XL)"
-                  className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+                  className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
                 {/* Show suggested values from catalogue when axis key matches */}
                 {bulkAttr && (() => {
                   const axisKey = bulkAttr.trim().toLowerCase();
@@ -254,7 +254,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
                         <button key={v} type="button"
                           onClick={() => setBulkValues(prev => prev ? `${prev}, ${v}` : v)}
                           className="px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors"
-                          style={{ background: 'rgba(107,92,255,0.15)', color: '#7C6DFF', border: '1px solid rgba(107,92,255,0.3)' }}>
+                          style={{ background: 'var(--primary)/10', color: 'var(--primary)', border: '1px solid var(--primary)/20' }}>
                           + {v}
                         </button>
                       ))}
@@ -265,15 +265,15 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
               <input value={bulkPrice} onChange={e => setBulkPrice(e.target.value)}
                 placeholder="Price (€)"
                 type="number" min="0" step="0.01"
-                className="px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+                className="px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
               <input value={bulkStock} onChange={e => setBulkStock(e.target.value)}
                 placeholder="Initial stock"
                 type="number" min="0"
-                className="px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+                className="px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
             </div>
             <button onClick={bulkGenerate}
-              className="w-full py-2 rounded-lg text-sm font-semibold text-[#7C6DFF] transition-colors hover:bg-[rgba(107,92,255,0.12)]"
-              style={{ border: '1px solid rgba(107,92,255,0.3)' }}>
+              className="w-full py-2 rounded-lg text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
+              style={{ border: '1px solid var(--border)' }}>
               Generate Variants
             </button>
           </div>
@@ -281,22 +281,22 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
           {/* Variants list */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Variants ({variants.length})</p>
-              <button onClick={addVariant} className="flex items-center gap-1 text-xs text-[#7C6DFF] hover:text-[#6B5CFF]">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Variants ({variants.length})</p>
+              <button onClick={addVariant} className="flex items-center gap-1 text-xs text-primary hover:text-primary/80">
                 <Plus size={12} /> Add
               </button>
             </div>
             <div className="space-y-2">
               {variants.map(v => (
-                <div key={v.id} className="flex items-center gap-2 p-2 rounded-lg" style={{ background: '#1B1E2E', border: '1px solid #24273A' }}>
+                <div key={v.id} className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
                   <input value={v.name} onChange={e => updateVariant(v.id, 'name', e.target.value)}
-                    className="flex-1 min-w-0 px-2 py-1 rounded text-sm text-[#E6E7EB] bg-transparent focus:outline-none" />
+                    className="flex-1 min-w-0 px-2 py-1 rounded text-sm text-foreground bg-transparent focus:outline-none" />
                   <input value={v.price} onChange={e => updateVariant(v.id, 'price', parseFloat(e.target.value) || 0)}
                     type="number" min="0" step="0.01" placeholder="€"
-                    className="w-16 px-2 py-1 rounded text-sm text-[#E6E7EB] bg-[#0E0F14] border border-[#24273A] focus:outline-none text-right" />
+                    className="w-16 px-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right" />
                   <input value={v.currentStock} onChange={e => { const n = parseInt(e.target.value) || 0; updateVariant(v.id, 'currentStock', n); updateVariant(v.id, 'initialStock', n); }}
                     type="number" min="0" placeholder="Stock"
-                    className="w-16 px-2 py-1 rounded text-sm text-[#E6E7EB] bg-[#0E0F14] border border-[#24273A] focus:outline-none text-right" />
+                    className="w-16 px-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right" />
                   <button onClick={() => removeVariant(v.id)} className="text-[#7B7F93] hover:text-[#F87171] p-1">
                     <Trash2 size={13} />
                   </button>
@@ -309,9 +309,9 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
           </div>
         </div>
 
-      <div className="flex gap-2 p-4 border-t border-[#24273A] flex-shrink-0">
-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5] hover:text-[#E6E7EB] transition-colors"
-          style={{ border: '1px solid #2D3048' }}>
+      <div className="flex gap-2 p-4 border-t border-border flex-shrink-0">
+        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          style={{ border: '1px solid var(--border)' }}>
           Cancel
         </button>
         <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
@@ -339,42 +339,42 @@ function ShowSelector({ shows, selectedShowId, onSelect, onNewShow }: ShowSelect
     <div className="relative">
       <button onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-left transition-colors"
-        style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}>
+        style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
         <div className="flex items-center gap-3">
-          <Calendar size={16} className="text-[#6B5CFF]" />
+          <Calendar size={16} className="text-primary" />
           {selected ? (
             <div>
-              <p className="text-sm font-semibold text-[#E6E7EB]">{selected.name}</p>
-              <p className="text-xs text-[#7B7F93]">{selected.venue} · {formatDate(selected.date)}</p>
+              <p className="text-sm font-semibold text-foreground">{selected.name}</p>
+              <p className="text-xs text-muted-foreground">{selected.venue} · {formatDate(selected.date)}</p>
             </div>
           ) : (
-            <p className="text-sm text-[#7B7F93]">Select a show</p>
+            <p className="text-sm text-muted-foreground">Select a show</p>
           )}
         </div>
-        {open ? <ChevronUp size={16} className="text-[#7B7F93]" /> : <ChevronDown size={16} className="text-[#7B7F93]" />}
+        {open ? <ChevronUp size={16} className="text-muted-foreground" /> : <ChevronDown size={16} className="text-muted-foreground" />}
       </button>
 
       {open && (
         <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-10 shadow-2xl"
-          style={{ background: '#141624', border: '1px solid #2D3048' }}>
+          style={{ background: 'var(--popover)', border: '1px solid var(--border)' }}>
           {shows.map(s => (
             <button key={s.id} onClick={() => { onSelect(s.id); setOpen(false); }}
-              className={cn('w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#1B1E2E] transition-colors',
-                s.id === selectedShowId && 'bg-[rgba(107,92,255,0.1)]')}>
+              className={cn('w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-accent/10 transition-colors',
+                s.id === selectedShowId && 'bg-primary/10')}>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-[#E6E7EB] truncate">{s.name}</p>
-                <p className="text-xs text-[#7B7F93]">{s.venue} · {formatDate(s.date)}</p>
+                <p className="text-sm font-semibold text-foreground truncate">{s.name}</p>
+                <p className="text-xs text-muted-foreground">{s.venue} · {formatDate(s.date)}</p>
               </div>
               <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
-                s.status === 'upcoming' ? 'text-[#4ADE80] bg-[rgba(74,222,128,0.1)]' :
-                s.status === 'active' ? 'text-[#7C6DFF] bg-[rgba(107,92,255,0.1)]' :
-                'text-[#7B7F93] bg-[rgba(123,127,147,0.1)]')}>
+                s.status === 'upcoming' ? 'text-green-500 bg-green-500/10' :
+                s.status === 'active' ? 'text-primary bg-primary/10' :
+                'text-muted-foreground bg-muted')}>
                 {s.status}
               </span>
             </button>
           ))}
           <button onClick={() => { onNewShow(); setOpen(false); }}
-            className="w-full flex items-center gap-2 px-4 py-3 text-sm text-[#7C6DFF] hover:bg-[#1B1E2E] transition-colors border-t border-[#24273A]">
+            className="w-full flex items-center gap-2 px-4 py-3 text-sm text-primary hover:bg-accent/10 transition-colors border-t border-border">
             <Plus size={14} /> New Show
           </button>
         </div>
@@ -414,19 +414,19 @@ function NewShowModal({ onSave, onClose }: { onSave: (s: Show) => void; onClose:
           { label: 'City', val: city, set: setCity, ph: 'Lisbon' },
         ].map(({ label, val, set, ph }) => (
           <div key={label}>
-            <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">{label}</label>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{label}</label>
             <input value={val} onChange={e => set(e.target.value)} placeholder={ph}
-              className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+              className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
           </div>
         ))}
         <div>
-          <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Date</label>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Date</label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+            className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
         </div>
       </div>
-      <div className="flex gap-2 p-4 border-t border-[#24273A] flex-shrink-0">
-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]" style={{ border: '1px solid #2D3048' }}>Cancel</button>
+      <div className="flex gap-2 p-4 border-t border-border flex-shrink-0">
+        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground" style={{ border: '1px solid var(--border)' }}>Cancel</button>
         <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">Save Show</button>
       </div>
     </RightDrawer>
@@ -443,20 +443,20 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
   return (
     <RightDrawer open={true} onClose={onClose} title="Start Sale Session">
       <div className="p-4 space-y-3">
-        <p className="text-sm text-[#A4A7B5]">This will snapshot the current stock for your stand. Stock stroke colors will reflect this allocation.</p>
+        <p className="text-sm text-muted-foreground">This will snapshot the current stock for your stand. Stock stroke colors will reflect this allocation.</p>
         <div>
-          <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Your Name</label>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Your Name</label>
           <input value={repName} onChange={e => setRepName(e.target.value)} placeholder="João"
-            className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+            className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Stand / Location (optional)</label>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Stand / Location (optional)</label>
           <input value={stand} onChange={e => setStand(e.target.value)} placeholder="Stand A"
-            className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#1B1E2E] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none" />
+            className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
         </div>
       </div>
-      <div className="flex gap-2 p-4 border-t border-[#24273A] flex-shrink-0">
-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]" style={{ border: '1px solid #2D3048' }}>Cancel</button>
+      <div className="flex gap-2 p-4 border-t border-border flex-shrink-0">
+        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground" style={{ border: '1px solid var(--border)' }}>Cancel</button>
         <button onClick={() => { if (!repName.trim()) { toast.error('Name required'); return; } onStart(repName.trim(), stand.trim() || undefined); }}
           className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary flex items-center justify-center gap-2">
           <Zap size={14} /> Start Sale
@@ -507,7 +507,7 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
     <div>
       <div className="flex items-center justify-between mb-2">
         <button onClick={() => setSecPastShows(v => !v)} className="flex items-center gap-1.5 group">
-          <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Past Shows</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Past Shows</p>
           <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secPastShows ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
         </button>
         <span className="text-[10px] text-[#7B7F93]">{shows.length} show{shows.length !== 1 ? 's' : ''}</span>
@@ -530,7 +530,7 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
                   >
                     <span className="text-[#7B7F93] flex-shrink-0">{isExpanded ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[#E6E7EB] truncate">{show.name}</p>
+                      <p className="text-sm font-semibold text-foreground truncate">{show.name}</p>
                       <p className="text-xs text-[#7B7F93] truncate">{show.venue}{show.city ? ` · ${show.city}` : ''} · {show.date}</p>
                     </div>
                     {!isExpanded && stats && (
@@ -552,17 +552,17 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
                 {isExpanded && (
                   <div className="border-t border-[#24273A] p-3">
                     <div className="grid grid-cols-3 gap-2">
-                      <div className="rounded-lg p-2 text-center" style={{ background: 'rgba(14,15,20,0.5)' }}>
-                        <p className="text-[10px] text-[#7B7F93] uppercase tracking-wider mb-0.5">Sessions</p>
-                        <p className="text-base font-black mp-mono text-[#E6E7EB]">{stats?.sessions ?? '—'}</p>
+                      <div className="rounded-lg p-2 text-center" style={{ background: 'var(--muted)' }}>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Sessions</p>
+                        <p className="text-base font-black mp-mono text-foreground">{stats?.sessions ?? '—'}</p>
                       </div>
-                      <div className="rounded-lg p-2 text-center" style={{ background: 'rgba(14,15,20,0.5)' }}>
-                        <p className="text-[10px] text-[#7B7F93] uppercase tracking-wider mb-0.5">Items</p>
-                        <p className="text-base font-black mp-mono text-[#E6E7EB]">{stats?.items ?? '—'}</p>
+                      <div className="rounded-lg p-2 text-center" style={{ background: 'var(--muted)' }}>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Items</p>
+                        <p className="text-base font-black mp-mono text-foreground">{stats?.items ?? '—'}</p>
                       </div>
-                      <div className="rounded-lg p-2 text-center" style={{ background: 'rgba(14,15,20,0.5)' }}>
-                        <p className="text-[10px] text-[#7B7F93] uppercase tracking-wider mb-0.5">Revenue</p>
-                        <p className="text-base font-black mp-mono text-green-400">€{stats?.revenue.toFixed(0) ?? '—'}</p>
+                      <div className="rounded-lg p-2 text-center" style={{ background: 'var(--muted)' }}>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Revenue</p>
+                        <p className="text-base font-black mp-mono text-green-500">€{stats?.revenue.toFixed(0) ?? '—'}</p>
                       </div>
                     </div>
                     <p className="text-[10px] text-[#4A4D5E] mt-2 text-center">Trash icon permanently removes this show and all its data</p>
@@ -579,7 +579,7 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
 
 export default function MerchOffice() {
   const [, navigate] = useLocation();
-  const { state, saveProduct, deleteProduct, saveShow, deleteShow, startSession, startOneOffSession, adjustStock } = useMerchPad();
+  const { state, saveProduct, deleteProduct, saveShow, deleteShow, startSession, startOneOffSession, adjustStock, saveTeamMember, getTeamMemberStats } = useMerchPad();
   const { products, shows, activeSession, isLoading } = state;
 
   const [selectedShowId, setSelectedShowId] = useState(shows.find(s => s.status === 'upcoming')?.id ?? shows[0]?.id ?? '');
@@ -598,6 +598,10 @@ export default function MerchOffice() {
   const [expandedPastShow, setExpandedPastShow] = useState<string | null>(null);
   const [pastShowStats, setPastShowStats] = useState<Record<string, { sessions: number; items: number; revenue: number }>>({});
   const [secTeam, setSecTeam] = useState(true);
+  // Team member drawer
+  const [editingMember, setEditingMember] = useState<TeamMember | 'new' | null>(null);
+  const [memberForm, setMemberForm] = useState({ name: '', phone: '', email: '', active: true });
+  const [memberStats, setMemberStats] = useState<{ shifts: number; hoursWorked: number; totalItems: number; totalRevenue: number } | null>(null);
   // Stock adjustment
   const [adjustingVariant, setAdjustingVariant] = useState<{
     variantId: string; productId: string; variantName: string; currentStock: number;
@@ -618,8 +622,8 @@ export default function MerchOffice() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center space-y-3">
-          <div className="w-8 h-8 rounded-full border-2 border-[#6B5CFF] border-t-transparent animate-spin mx-auto" />
-          <p className="text-sm text-[#7B7F93]">Loading MerchPad…</p>
+          <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
+          <p className="text-sm text-muted-foreground">Loading MerchPad…</p>
         </div>
       </div>
     );
@@ -630,12 +634,12 @@ export default function MerchOffice() {
       {/* Hero header */}
       <div className="relative overflow-hidden px-4 pt-4 pb-3"
         style={{
-          background: `linear-gradient(to bottom, rgba(14,15,20,0) 0%, #0E0F14 100%), url(https://d2xsxph8kpxj0f.cloudfront.net/310519663361417877/U3ZSLTmW8mQsvZ2KUYsYhR/merchpad-hero-bg-QTNZkgshAugSQaW8YVe4nh.webp) center/cover no-repeat`,
-          minHeight: 100,
+          background: `linear-gradient(to bottom, transparent 0%, var(--background) 100%), url(https://d2xsxph8kpxj0f.cloudfront.net/310519663361417877/U3ZSLTmW8mQsvZ2KUYsYhR/merchpad-hero-bg-QTNZkgshAugSQaW8YVe4nh.webp) center/cover no-repeat`,
+          minHeight: 120,
         }}>
         <div className="relative z-10">
-          <p className="text-xs font-semibold text-[#7C6DFF] uppercase tracking-widest mb-1">Merch Office</p>
-          <h1 className="text-2xl font-black text-[#E6E7EB] leading-tight" style={{ letterSpacing: '-0.03em' }}>
+          <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1 opacity-80">Merch Office</p>
+          <h1 className="text-2xl font-black text-foreground leading-tight" style={{ letterSpacing: '-0.03em' }}>
             Pre-Show Prep
           </h1>
         </div>
@@ -650,9 +654,9 @@ export default function MerchOffice() {
             { label: 'Stock Value', value: formatCurrency(totalStockValue), sub: 'at retail' },
           ].map(({ label, value, sub }) => (
             <div key={label} className="mp-card p-3 text-center">
-              <p className="text-xs text-[#7B7F93] uppercase tracking-wider mb-1">{label}</p>
-              <p className="text-xl font-black text-[#E6E7EB] leading-none mp-mono">{value}</p>
-              <p className="text-xs text-[#7B7F93] mt-1">{sub}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
+              <p className="text-xl font-black text-foreground leading-none mp-mono">{value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{sub}</p>
             </div>
           ))}
         </div>
@@ -660,7 +664,7 @@ export default function MerchOffice() {
         {/* Show selector */}
         <div>
           <button onClick={() => setSecShow(v => !v)} className="flex items-center justify-between w-full mb-2 group">
-            <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Show</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Show</p>
             <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secShow ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
           </button>
           {secShow && <ShowSelector
@@ -708,7 +712,7 @@ export default function MerchOffice() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <button onClick={() => setSecProducts(v => !v)} className="flex items-center gap-1.5 group">
-              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Products</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Products</p>
               <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secProducts ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
             </button>
             <button onClick={() => setEditingProduct('new')}
@@ -724,12 +728,12 @@ export default function MerchOffice() {
                   onClick={() => setExpandedProduct(expandedProduct === product.id ? null : product.id)}
                   className="w-full flex items-center justify-between p-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-                      style={{ background: 'rgba(107,92,255,0.12)' }}>
-                      <Package size={14} className="text-[#7C6DFF]" />
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                      style={{ background: 'var(--primary)/10' }}>
+                      <Package size={14} className="text-primary" />
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-semibold text-[#E6E7EB]">{product.name}</p>
+                      <p className="text-sm font-semibold text-foreground">{product.name}</p>
                       <p className="text-xs text-[#7B7F93]">{product.variants.length} variants · {product.category ?? 'Uncategorised'}</p>
                     </div>
                   </div>
@@ -749,22 +753,22 @@ export default function MerchOffice() {
                         <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Variant</span>
                         <div className="flex items-center gap-3">
                           <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider w-12 text-right">Price</span>
-                          <span className="text-[10px] font-semibold text-purple-400 uppercase tracking-wider w-8 text-right">WH</span>
-                          <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider w-8 text-right">Road</span>
+                          <span className="text-[10px] font-semibold text-primary uppercase tracking-wider w-8 text-right">WH</span>
+                          <span className="text-[10px] font-semibold text-green-500 uppercase tracking-wider w-8 text-right">Road</span>
                         </div>
                       </div>
                       {product.variants.map(v => (
                         <div key={v.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
-                          style={{ background: 'rgba(14,15,20,0.4)' }}>
-                          <span className="text-sm text-[#A4A7B5]">{v.name}</span>
+                          style={{ background: 'var(--background)', border: '2px solid var(--border)' }}>
+                          <span className="text-sm text-muted-foreground">{v.name}</span>
                           <div className="flex items-center gap-3">
-                            <span className="text-xs text-[#7B7F93] mp-mono w-12 text-right">{formatCurrency(v.price)}</span>
-                            <span className="text-sm font-bold mp-mono text-purple-300 w-8 text-right">{v.warehouseStock ?? 0}</span>
+                            <span className="text-xs text-muted-foreground mp-mono w-12 text-right">{formatCurrency(v.price)}</span>
+                            <span className="text-sm font-bold mp-mono text-primary w-8 text-right">{v.warehouseStock ?? 0}</span>
                             <span className={cn('text-sm font-bold mp-mono w-8 text-right',
-                              (v.roadStock ?? v.currentStock) <= 0 ? 'text-[#F87171]' :
-                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-[#F87171]' :
-                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-[#FBBF24]' :
-                              'text-[#4ADE80]')}>
+                              (v.roadStock ?? v.currentStock) <= 0 ? 'text-destructive' :
+                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-destructive' :
+                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-orange-500' :
+                              'text-green-500')}>
                               {v.roadStock ?? v.currentStock}
                             </span>
                           </div>
@@ -773,31 +777,31 @@ export default function MerchOffice() {
                     </div>
                     {/* Two-tier stock summary */}
                     <div className="mx-3 mb-2 p-2 rounded-lg flex items-center justify-between text-xs"
-                      style={{ background: 'rgba(14,15,20,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                      <div className="flex items-center gap-1.5 text-purple-300">
+                      style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                      <div className="flex items-center gap-1.5 text-primary">
                         <Warehouse size={11} />
                         <span>WH: {product.variants.reduce((s, v) => s + (v.warehouseStock ?? 0), 0)}</span>
                       </div>
-                      <ArrowRightLeft size={10} className="text-white/20" />
-                      <div className="flex items-center gap-1.5 text-green-300">
+                      <ArrowRightLeft size={10} className="text-muted-foreground/30" />
+                      <div className="flex items-center gap-1.5 text-green-500">
                         <Truck size={11} />
                         <span>Road: {product.variants.reduce((s, v) => s + (v.roadStock ?? v.currentStock), 0)}</span>
                       </div>
                     </div>
                     <div className="flex gap-2 p-3 pt-0">
                       <button onClick={() => setEditingProduct(product)}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-[#A4A7B5] hover:text-[#E6E7EB] transition-colors"
-                        style={{ border: '1px solid #2D3048' }}>
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                        style={{ border: '1px solid var(--border)' }}>
                         <Edit2 size={12} /> Edit
                       </button>
                       <button onClick={() => { setTransferProduct(product); }}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors"
-                        style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+                        style={{ border: '1px solid var(--border)' }}>
                         <ArrowRightLeft size={12} /> Transfer
                       </button>
                       <button onClick={() => { if (confirm(`Delete ${product.name}?`)) deleteProduct(product.id); }}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-[#F87171] hover:bg-[rgba(248,113,113,0.1)] transition-colors"
-                        style={{ border: '1px solid rgba(248,113,113,0.2)' }}>
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-destructive hover:bg-destructive/10 transition-colors"
+                        style={{ border: '1px solid var(--border)' }}>
                         <Trash2 size={12} /> Delete
                       </button>
                     </div>
@@ -816,21 +820,40 @@ export default function MerchOffice() {
           </div>}
         </div>
         {/* Team */}
-        {state.teamMembers.filter(m => m.active).length > 0 && (
-          <div>
-            <button onClick={() => setSecTeam(v => !v)} className="flex items-center gap-1.5 group mb-2">
-              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Team</p>
-              <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secTeam ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => setSecTeam(v => !v)} className="flex items-center gap-1.5 group">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Team</p>
+              <span className="text-xs text-[#7B7F93] ml-1">· {state.teamMembers.filter(m => m.active).length} active</span>
+              <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors ml-1">{secTeam ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
             </button>
-            {secTeam && <TeamSection />}
+            <button
+              onClick={() => { setEditingMember('new'); setMemberForm({ name: '', phone: '', email: '', active: true }); setMemberStats(null); }}
+              className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80 transition-colors">
+              <Plus size={13} /> Add Member
+            </button>
           </div>
-        )}
+          {secTeam && (
+            state.teamMembers.filter(m => m.active).length > 0
+              ? <TeamSection onEditMember={(m) => {
+                  setEditingMember(m);
+                  setMemberForm({ name: m.name, phone: m.phone ?? '', email: m.email ?? '', active: m.active });
+                  setMemberStats(null);
+                  getTeamMemberStats(m.id).then(setMemberStats).catch(() => {});
+                }} />
+              : <div className="mp-card p-6 text-center">
+                  <ShoppingBag size={24} className="text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-muted-foreground">No active members</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">Add members to track personal sales stats</p>
+                </div>
+          )}
+        </div>
 
         {/* Stock Management */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <button onClick={() => setSecStock(v => !v)} className="flex items-center gap-1.5 group">
-              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Stock Management</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Stock Management</p>
               <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secStock ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
             </button>
           </div>
@@ -859,20 +882,20 @@ export default function MerchOffice() {
                           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </span>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-[#E6E7EB] truncate">{product.name}</p>
+                          <p className="text-sm font-semibold text-foreground truncate">{product.name}</p>
                           <p className="text-xs text-[#7B7F93]">{product.variants.length} variants</p>
                         </div>
-                        {!isExpanded && (
-                          <div className="flex items-center gap-2 ml-2">
-                            <span className="text-xs font-bold mp-mono text-purple-300">{totalWH} WH</span>
-                            <span className="text-xs font-bold mp-mono text-green-400">{totalRoad} Road</span>
-                          </div>
-                        )}
+                    {!isExpanded && (
+                      <div className="flex items-center gap-2 ml-2">
+                        <span className="text-xs font-bold mp-mono text-primary">{totalWH} WH</span>
+                        <span className="text-xs font-bold mp-mono text-green-500">{totalRoad} Road</span>
+                      </div>
+                    )}
                       </div>
                       <button
                         onClick={() => setTransferProduct(product)}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-purple-300 hover:text-purple-200 transition-colors flex-shrink-0 ml-2"
-                        style={{ border: '1px solid rgba(124,109,255,0.3)' }}>
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-primary hover:text-primary/80 transition-colors flex-shrink-0 ml-2"
+                        style={{ border: '1px solid var(--border)' }}>
                         <ArrowRightLeft size={11} /> Transfer
                       </button>
                     </div>
@@ -881,32 +904,32 @@ export default function MerchOffice() {
                         <div className="flex items-center justify-between px-2 pb-1">
                           <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Variant</span>
                           <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-semibold text-purple-400 uppercase tracking-wider w-8 text-right">WH</span>
-                            <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider w-8 text-right">Road</span>
-                            <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider w-8 text-right">Adj</span>
+                          <span className="text-[10px] font-semibold text-primary uppercase tracking-wider w-8 text-right">WH</span>
+                          <span className="text-[10px] font-semibold text-green-500 uppercase tracking-wider w-8 text-right">Road</span>
+                          <span className="text-[10px] font-semibold text-primary uppercase tracking-wider text-right">Adjust</span>
                           </div>
                         </div>
                         {product.variants.map(v => (
-                          <div key={v.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
-                            style={{ background: 'rgba(14,15,20,0.4)' }}>
-                            <span className="text-sm text-[#A4A7B5]">{v.name}</span>
-                            <div className="flex items-center gap-3">
-                              <span className="text-sm font-bold mp-mono text-purple-300 w-8 text-right">{v.warehouseStock ?? 0}</span>
-                              <span className={`text-sm font-bold mp-mono w-8 text-right ${
-                                (v.roadStock ?? v.currentStock) <= 0 ? 'text-[#F87171]' :
-                                (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-[#F87171]' :
-                                (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-[#FBBF24]' :
-                                'text-[#4ADE80]'}`}>
-                                {v.roadStock ?? v.currentStock}
-                              </span>
-                              <button
-                                onClick={() => setAdjustingVariant({ variantId: v.id, productId: product.id, variantName: v.name, currentStock: v.currentStock })}
-                                className="w-8 h-7 flex items-center justify-center rounded-lg text-xs font-bold text-[#7C6DFF] hover:text-white hover:bg-[rgba(124,109,255,0.15)] transition-colors"
-                                style={{ border: '1px solid rgba(124,109,255,0.25)' }}>
-                                <Edit2 size={11} />
-                              </button>
-                            </div>
+                        <div key={v.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
+                          style={{ background: 'var(--background)', border: '2px solid var(--border)' }}>
+                          <span className="text-sm text-muted-foreground">{v.name}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-bold mp-mono text-primary w-8 text-right">{v.warehouseStock ?? 0}</span>
+                            <span className={`text-sm font-bold mp-mono w-8 text-right ${
+                              (v.roadStock ?? v.currentStock) <= 0 ? 'text-destructive' :
+                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-destructive' :
+                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-orange-500' :
+                              'text-green-500'}`}>
+                              {v.roadStock ?? v.currentStock}
+                            </span>
+                            <button
+                              onClick={() => setAdjustingVariant({ variantId: v.id, productId: product.id, variantName: v.name, currentStock: v.currentStock })}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
+                              style={{ background: 'rgba(107,92,255,0.1)', border: '1px solid rgba(107,92,255,0.2)' }}>
+                              <Sliders size={11} /> Adjust
+                            </button>
                           </div>
+                        </div>
                         ))}
                       </div>
                     )}
@@ -940,6 +963,119 @@ export default function MerchOffice() {
 
         <div className="h-4" />
       </div>
+
+      {/* Member Drawer */}
+      {editingMember !== null && (
+        <RightDrawer
+          open={true}
+          onClose={() => setEditingMember(null)}
+          title={editingMember === 'new' ? 'New Team Member' : 'Edit Member'}
+          subtitle={editingMember !== 'new' ? editingMember.name : 'Fill in the details below'}
+        >
+          <div className="flex-1 overflow-y-auto">
+            {/* Stats summary — only when editing existing member */}
+            {editingMember !== 'new' && (
+              <div className="px-4 pt-4 pb-2">
+                {memberStats ? (
+                  <div className="grid grid-cols-4 gap-2 mb-1">
+                    {[
+                      { label: 'Shifts', value: String(memberStats.shifts), icon: <ShoppingBag size={11}/>, color: '#7C6DFF' },
+                      { label: 'Hours', value: memberStats.hoursWorked > 0 ? memberStats.hoursWorked.toFixed(1) : '—', icon: <Clock size={11}/>, color: '#00E5FF' },
+                      { label: 'Items', value: memberStats.totalItems > 0 ? String(memberStats.totalItems) : '—', icon: <TrendingUp size={11}/>, color: '#4ADE80' },
+                      { label: 'Revenue', value: memberStats.totalRevenue > 0 ? `€${Math.round(memberStats.totalRevenue)}` : '—', icon: <DollarSign size={11}/>, color: '#FBBF24' },
+                    ].map(s => (
+                      <div key={s.label} className="flex flex-col items-center justify-center py-2 rounded-lg gap-0.5"
+                        style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                        <span style={{ color: s.color }}>{s.icon}</span>
+                        <span className="text-sm font-black mp-mono" style={{ color: s.color }}>{s.value}</span>
+                        <span className="text-[9px] text-muted-foreground uppercase tracking-wider">{s.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-4 gap-2 mb-1">
+                    {[0,1,2,3].map(i => <div key={i} className="h-14 rounded-lg animate-pulse" style={{ background: 'var(--muted)' }} />)}
+                  </div>
+                )}
+                {/* Outstanding debt row */}
+                {(editingMember as TeamMember).totalDebt && (editingMember as TeamMember).totalDebt! > 0 ? (
+                  <div className="flex items-center justify-between px-3 py-2 rounded-lg mt-1"
+                    style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
+                    <span className="text-xs font-semibold text-[#F87171]">Outstanding Debt</span>
+                    <span className="text-sm font-black mp-mono text-[#F87171]">
+                      −€{(editingMember as TeamMember).totalDebt!.toFixed(2)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Name *</label>
+                <input value={memberForm.name} onChange={e => setMemberForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Full name" autoFocus
+                  className="w-full px-3 py-2.5 rounded-xl text-sm text-foreground placeholder:text-muted-foreground border focus:outline-none focus:ring-1 focus:ring-primary"
+                  style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <Phone size={10} className="inline mr-1" />Phone
+                </label>
+                <input value={memberForm.phone} onChange={e => setMemberForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="+1 555 000 0000" type="tel"
+                  className="w-full px-3 py-2.5 rounded-xl text-sm text-foreground placeholder:text-muted-foreground border focus:outline-none focus:ring-1 focus:ring-primary"
+                  style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <Mail size={10} className="inline mr-1" />Email
+                </label>
+                <input value={memberForm.email} onChange={e => setMemberForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="name@example.com" type="email"
+                  className="w-full px-3 py-2.5 rounded-xl text-sm text-foreground placeholder:text-muted-foreground border focus:outline-none focus:ring-1 focus:ring-primary"
+                  style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
+              </div>
+              <div className="flex items-center justify-between py-2 px-3 rounded-xl"
+                style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                <div className="flex items-center gap-2">
+                  {memberForm.active ? <UserCheck size={14} className="text-green-500" /> : <UserX size={14} className="text-muted-foreground" />}
+                  <span className="text-sm text-foreground">Active</span>
+                  <span className="text-xs text-muted-foreground">{memberForm.active ? 'On roster' : 'Hidden'}</span>
+                </div>
+                <button
+                  onClick={() => setMemberForm(f => ({ ...f, active: !f.active }))}
+                  className={cn('w-10 h-6 rounded-full transition-colors relative', memberForm.active ? 'bg-green-500' : 'bg-muted-foreground/30')}
+                >
+                  <span className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform shadow-sm', memberForm.active ? 'translate-x-4' : 'translate-x-0.5')} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2 p-4 flex-shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+            <button onClick={() => setEditingMember(null)}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground"
+              style={{ border: '1px solid var(--border)' }}>
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (!memberForm.name.trim()) { toast.error('Name is required'); return; }
+                const now = new Date().toISOString();
+                const member: TeamMember = editingMember === 'new'
+                  ? { id: uuidv4(), name: memberForm.name.trim(), phone: memberForm.phone || undefined, email: memberForm.email || undefined, active: memberForm.active, createdAt: now, updatedAt: now }
+                  : { ...editingMember, name: memberForm.name.trim(), phone: memberForm.phone || undefined, email: memberForm.email || undefined, active: memberForm.active, updatedAt: now };
+                await saveTeamMember(member);
+                toast.success(editingMember === 'new' ? `${member.name} added` : `${member.name} updated`);
+                setEditingMember(null);
+              }}
+              className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
+              {editingMember === 'new' ? 'Add Member' : 'Save Changes'}
+            </button>
+          </div>
+        </RightDrawer>
+      )}
 
       {/* Modals */}
       {adjustingVariant && (

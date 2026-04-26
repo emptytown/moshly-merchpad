@@ -300,7 +300,7 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="min-h-full animate-fade-in">
+    <div className="mp-master-catalogue min-h-full animate-fade-in">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-center justify-between">
         <div>

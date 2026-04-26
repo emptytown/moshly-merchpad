@@ -4,7 +4,8 @@
  * Options: Last Sale CSV | All Sales CSV | Date Range CSV | Export PDF (placeholder)
  */
 
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Download, FileText, Clock, CalendarRange, FileSpreadsheet, X, ExternalLink, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { AuditEntry } from '../lib/db';
@@ -65,32 +66,39 @@ function DateRangePicker({ onExport, onBack }: DateRangePickerProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-1">
-        <button onClick={onBack} className="text-[#7B7F93] hover:text-[#A4A7B5] transition-colors text-xs">
+        <button onClick={onBack} className="transition-colors text-xs"
+          style={{ color: 'var(--muted-foreground)' }}>
           ← Back
         </button>
-        <span className="text-sm font-bold text-[#E6E7EB]">Select Date Range</span>
+        <span className="text-sm font-bold" style={{ color: 'var(--card-foreground)' }}>
+          Select Date Range
+        </span>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">From</label>
+          <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5"
+            style={{ color: 'var(--muted-foreground)' }}>From</label>
           <input
             type="date"
             value={from}
             max={to}
             onChange={e => setFrom(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#0E0F14] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none"
+            className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
+            style={{ background: 'var(--input)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">To</label>
+          <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5"
+            style={{ color: 'var(--muted-foreground)' }}>To</label>
           <input
             type="date"
             value={to}
             min={from}
             max={today}
             onChange={e => setTo(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#0E0F14] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none"
+            className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
+            style={{ background: 'var(--input)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
           />
         </div>
       </div>
@@ -118,6 +126,12 @@ export function ExportButton({ auditEntries }: ExportSheetProps) {
   const [view, setView] = useState<View>('menu');
 
   function close() { setOpen(false); setTimeout(() => setView('menu'), 300); }
+
+  useEffect(() => {
+    if (open) { document.body.style.overflow = 'hidden'; }
+    else { document.body.style.overflow = ''; }
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
 
   // ── Export actions ───────────────────────────────────────────────────────
 
@@ -190,92 +204,94 @@ export function ExportButton({ auditEntries }: ExportSheetProps) {
 
   return (
     <>
-      {/* Trigger button — unchanged appearance */}
+      {/* Trigger button */}
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#7B7F93] hover:text-[#E6E7EB] transition-colors"
-        style={{ border: '1px solid #2D3048' }}>
+        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors"
+        style={{ color: 'var(--muted-foreground)', border: '1px solid var(--border)' }}>
         <Download size={13} /> Export
       </button>
 
-      {/* Backdrop */}
-      {open && (
+      {/* Backdrop + centered dialog — rendered via portal to escape overflow contexts */}
+      {open && createPortal(
         <div
-          className="fixed inset-0 z-40"
-          style={{ background: 'rgba(14,15,20,0.7)', backdropFilter: 'blur(6px)' }}
-          onClick={close}
-        />
-      )}
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: 'rgba(14,15,20,0.75)', backdropFilter: 'blur(6px)' }}
+          onClick={close}>
+          <div
+            className={cn(
+              'w-full transition-all duration-200 ease-out',
+              open ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+            )}
+            style={{ maxWidth: 420 }}
+            onClick={e => e.stopPropagation()}>
+            <div className="rounded-2xl overflow-hidden"
+              style={{ background: 'var(--card)', border: '1px solid var(--border)', boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}>
 
-      {/* Sheet */}
-      <div
-        className={cn(
-          'fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-out',
-          open ? 'translate-y-0' : 'translate-y-full'
-        )}
-        style={{ maxWidth: 480, margin: '0 auto' }}>
-        <div className="rounded-t-2xl overflow-hidden" style={{ background: '#141624', border: '1px solid #2D3048' }}>
-
-          {/* Handle + header */}
-          <div className="flex items-center justify-between px-4 pt-3 pb-3 border-b border-[#24273A]">
-            <div className="flex items-center gap-2">
-              <Download size={15} className="text-[#7C6DFF]" />
-              <span className="text-sm font-bold text-[#E6E7EB]">Export</span>
-            </div>
-            <button onClick={close} className="text-[#7B7F93] hover:text-[#E6E7EB] p-1">
-              <X size={15} />
-            </button>
-          </div>
-
-          <div className="p-4">
-            {view === 'menu' && (
-              <div className="space-y-1">
-                {MENU_ITEMS.map(item => (
-                  <button
-                    key={item.id}
-                    onClick={item.action}
-                    disabled={item.disabled}
-                    className={cn(
-                      'w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all',
-                      item.disabled
-                        ? 'opacity-50 cursor-not-allowed'
-                        : 'hover:bg-[#1B1E2E] active:scale-[0.98]'
-                    )}>
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: `${item.color}15` }}>
-                      <item.icon size={16} style={{ color: item.color }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-[#E6E7EB]">{item.label}</p>
-                        {item.badge && (
-                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold"
-                            style={{ background: 'rgba(251,191,36,0.15)', color: '#FBBF24', border: '1px solid rgba(251,191,36,0.25)' }}>
-                            {item.badge}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-[#7B7F93]">{item.sub}</p>
-                    </div>
-                    {item.chevron && <ChevronRight size={14} className="text-[#7B7F93] flex-shrink-0" />}
-                    {item.disabled && <ExternalLink size={12} className="text-[#7B7F93] flex-shrink-0" />}
-                  </button>
-                ))}
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b"
+                style={{ borderColor: 'var(--border)' }}>
+                <div className="flex items-center gap-2">
+                  <Download size={15} className="text-[#7C6DFF]" />
+                  <span className="text-sm font-bold" style={{ color: 'var(--card-foreground)' }}>Export</span>
+                </div>
+                <button onClick={close} className="p-1" style={{ color: 'var(--muted-foreground)' }}>
+                  <X size={15} />
+                </button>
               </div>
-            )}
 
-            {view === 'daterange' && (
-              <DateRangePicker
-                onExport={exportDateRange}
-                onBack={() => setView('menu')}
-              />
-            )}
+              <div className="p-4">
+                {view === 'menu' && (
+                  <div className="space-y-1">
+                    {MENU_ITEMS.map(item => (
+                      <button
+                        key={item.id}
+                        onClick={item.action}
+                        disabled={item.disabled}
+                        className={cn(
+                          'w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all',
+                          item.disabled ? 'opacity-50 cursor-not-allowed' : 'active:scale-[0.98]'
+                        )}
+                        style={item.disabled ? undefined : { ['--hover-bg' as string]: 'var(--input)' }}
+                        onMouseEnter={e => { if (!item.disabled) (e.currentTarget as HTMLElement).style.background = 'var(--input)'; }}
+                        onMouseLeave={e => { if (!item.disabled) (e.currentTarget as HTMLElement).style.background = ''; }}>
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ background: `${item.color}15` }}>
+                          <item.icon size={16} style={{ color: item.color }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold" style={{ color: 'var(--card-foreground)' }}>
+                              {item.label}
+                            </p>
+                            {item.badge && (
+                              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold"
+                                style={{ background: 'rgba(251,191,36,0.15)', color: '#FBBF24', border: '1px solid rgba(251,191,36,0.25)' }}>
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{item.sub}</p>
+                        </div>
+                        {item.chevron && <ChevronRight size={14} style={{ color: 'var(--muted-foreground)' }} className="flex-shrink-0" />}
+                        {item.disabled && <ExternalLink size={12} style={{ color: 'var(--muted-foreground)' }} className="flex-shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {view === 'daterange' && (
+                  <DateRangePicker
+                    onExport={exportDateRange}
+                    onBack={() => setView('menu')}
+                  />
+                )}
+              </div>
+            </div>
           </div>
-
-          {/* Bottom safe area — clears the 64px bottom nav bar */}
-          <div className="pb-20" />
-        </div>
-      </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }

@@ -21,8 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { setSetting, getSetting } from '../lib/db';
-import { ProductVariant } from '../lib/db';
+import { setSetting, getSetting, ProductVariant, TeamMember } from '../lib/db';
 import { cn } from '../lib/utils';
 
 // ── Euro denominations for quick-amount buttons ────────────────────────────
@@ -106,10 +105,10 @@ function TallyCard({
       {/* Header */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-black text-[#E6E7EB] uppercase tracking-wide leading-tight truncate">
+          <p className="text-xs font-black text-foreground uppercase tracking-wide leading-tight truncate">
             {variant.name.split(' ').slice(0, -1).join(' ') || variant.name}
           </p>
-          <p className="text-xs text-[#A4A7B5] truncate">
+          <p className="text-xs text-muted-foreground truncate">
             {Object.values(variant.attributes).join(' · ')}
           </p>
         </div>
@@ -127,7 +126,7 @@ function TallyCard({
             <Info size={11} />
           </button>
           {showInfo && (
-            <div className="absolute top-6 right-0 z-50 w-44 rounded-xl p-3 shadow-2xl animate-fade-in"
+            <div className="mp-variant-info-popup absolute top-6 right-0 z-50 w-44 rounded-xl p-3 shadow-2xl animate-fade-in"
               style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}>
               <p className="text-[10px] font-bold text-[#7C6DFF] uppercase tracking-wider mb-2">Variant Info</p>
               <div className="space-y-1.5">
@@ -163,7 +162,7 @@ function TallyCard({
       <div className="flex-1 flex items-center justify-center py-2">
         <span
           className={cn('mp-tally-number', bumping && 'animate-counter-bump')}
-          style={{ color: displayQty > 0 ? '#E6E7EB' : '#2D3048' }}>
+          style={{ color: displayQty > 0 ? 'var(--foreground)' : 'var(--border)' }}>
           {displayQty}
         </span>
       </div>
@@ -216,9 +215,9 @@ function TallyCard({
       )}
       {/* Price / running total */}
       <div className="flex items-center justify-between">
-        <span className="text-xs text-[#7B7F93] mp-mono">€{variant.price.toFixed(2)}</span>
+        <span className="text-xs text-muted-foreground mp-mono">€{variant.price.toFixed(2)}</span>
         {!tallyMode && basketQty > 0 ? (
-          <span className="text-xs font-bold mp-mono text-[#E6E7EB]">
+          <span className="text-xs font-bold mp-mono text-foreground">
             €{(basketQty * variant.price).toFixed(2)}
           </span>
         ) : tallyMode ? (
@@ -307,6 +306,221 @@ function BasketPreview({ items, totalRevenue, onClose, onAdjust }: BasketPreview
   );
 }
 
+// ── Shortfall Modal ────────────────────────────────────────────────────────
+
+interface ShortfallModalProps {
+  shortfall: number;
+  totalRevenue: number;
+  requireDiscountReason: boolean;
+  allowSellerDebt: boolean;
+  requireDebtReason: boolean;
+  activeMembers: TeamMember[];
+  onDiscount: (reason?: string) => void;
+  onSellerDebt: (memberId: string, memberName: string, reason?: string) => void;
+  onGoBack: () => void;
+  onCancel: () => void;
+}
+
+type ShortfallStep = 'main' | 'discount-reason' | 'debt-pick-member' | 'debt-reason';
+
+function ShortfallModal({
+  shortfall, totalRevenue, requireDiscountReason, allowSellerDebt, requireDebtReason,
+  activeMembers, onDiscount, onSellerDebt, onGoBack, onCancel,
+}: ShortfallModalProps) {
+  const [step, setStep] = useState<ShortfallStep>('main');
+  const [reason, setReason] = useState('');
+  const [pickedMember, setPickedMember] = useState<TeamMember | null>(null);
+
+  function handleDiscountClick() {
+    if (requireDiscountReason) { setStep('discount-reason'); }
+    else { onDiscount(); }
+  }
+
+  function handleDebtClick() {
+    if (activeMembers.length === 1) {
+      setPickedMember(activeMembers[0]);
+      if (requireDebtReason) { setStep('debt-reason'); }
+      else { onSellerDebt(activeMembers[0].id, activeMembers[0].name); }
+    } else {
+      setStep('debt-pick-member');
+    }
+  }
+
+  function handleMemberPick(m: TeamMember) {
+    setPickedMember(m);
+    if (requireDebtReason) { setStep('debt-reason'); }
+    else { onSellerDebt(m.id, m.name); }
+  }
+
+  function handleConfirmDiscount() { onDiscount(reason.trim() || undefined); }
+  function handleConfirmDebt() {
+    if (!pickedMember) return;
+    onSellerDebt(pickedMember.id, pickedMember.name, reason.trim() || undefined);
+  }
+
+  function goBack() {
+    if (step === 'discount-reason' || step === 'debt-pick-member') setStep('main');
+    else if (step === 'debt-reason') setStep(activeMembers.length === 1 ? 'main' : 'debt-pick-member');
+    else onGoBack();
+  }
+
+  const paidStr = shortfall < totalRevenue ? `€${(totalRevenue - shortfall).toFixed(2)} paid` : '';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
+      <div className="mp-register-modal w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-hidden"
+        style={{ background: '#141624', border: '1px solid rgba(248,113,113,0.3)' }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-3">
+          <div>
+            <h2 className="text-base font-black text-[#F87171]">Cash is not enough!</h2>
+            <p className="text-xs text-[#7B7F93] mt-0.5">
+              <span className="font-bold text-[#F87171]">€{shortfall.toFixed(2)} short</span>
+              {paidStr && <span> · {paidStr}</span>}
+              {' · '}Total €{totalRevenue.toFixed(2)}
+            </p>
+          </div>
+        </div>
+
+        <div className="px-4 pb-4 space-y-2">
+          {/* ── MAIN STEP ── */}
+          {step === 'main' && (
+            <>
+              <button onClick={handleDiscountClick}
+                className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-between px-4 transition-all active:scale-[0.98]"
+                style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: '#FBBF24' }}>
+                <span>Confirm as Discount</span>
+                <span className="text-xs opacity-60">−€{shortfall.toFixed(2)}</span>
+              </button>
+
+              {allowSellerDebt && activeMembers.length > 0 && (
+                <button onClick={handleDebtClick}
+                  className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-between px-4 transition-all active:scale-[0.98]"
+                  style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: '#F87171' }}>
+                  <span>Confirm as Seller Debt</span>
+                  <span className="text-xs opacity-60">−€{shortfall.toFixed(2)}</span>
+                </button>
+              )}
+
+              <button onClick={onGoBack}
+                className="w-full py-3 rounded-xl text-sm font-semibold text-[#A4A7B5] transition-all active:scale-[0.98]"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                Go Back to Cart
+              </button>
+
+              <button onClick={onCancel}
+                className="w-full py-2 text-sm font-semibold text-[#F87171] opacity-70 hover:opacity-100 transition-opacity">
+                Cancel Sale
+              </button>
+            </>
+          )}
+
+          {/* ── DISCOUNT REASON STEP ── */}
+          {step === 'discount-reason' && (
+            <>
+              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1">State the reason for this discount</p>
+              <textarea
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                placeholder="e.g. Friend of band, promotion..."
+                className="w-full rounded-xl px-3 py-2.5 text-sm text-[#E6E7EB] resize-none outline-none"
+                rows={3}
+                style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}
+                autoFocus
+              />
+              <button onClick={handleConfirmDiscount}
+                className="w-full py-3 rounded-xl text-sm font-black text-white transition-all active:scale-[0.98]"
+                style={{ background: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)' }}>
+                Confirm Discount
+              </button>
+              <div className="flex gap-2">
+                <button onClick={goBack}
+                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  Go Back
+                </button>
+                <button onClick={onCancel}
+                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
+                  style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
+                  Cancel Sale
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── DEBT MEMBER PICKER ── */}
+          {step === 'debt-pick-member' && (
+            <>
+              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1">Which seller is responsible?</p>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {activeMembers.map(m => (
+                  <button key={m.id} onClick={() => handleMemberPick(m)}
+                    className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold text-left transition-all active:scale-[0.98]"
+                    style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', color: '#E6E7EB' }}>
+                    {m.name}
+                    {m.totalDebt && m.totalDebt > 0 ? (
+                      <span className="ml-2 text-xs text-[#F87171]">−€{m.totalDebt.toFixed(0)} existing debt</span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={goBack}
+                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  Go Back
+                </button>
+                <button onClick={onCancel}
+                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
+                  style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
+                  Cancel Sale
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── DEBT REASON STEP ── */}
+          {step === 'debt-reason' && pickedMember && (
+            <>
+              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-0.5">
+                Reason — debt assigned to <span className="text-[#F87171]">{pickedMember.name}</span>
+              </p>
+              <textarea
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                placeholder="e.g. Customer had no cash, promised to return..."
+                className="w-full rounded-xl px-3 py-2.5 text-sm text-[#E6E7EB] resize-none outline-none"
+                rows={3}
+                style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}
+                autoFocus
+              />
+              <button onClick={handleConfirmDebt}
+                className="w-full py-3 rounded-xl text-sm font-black text-white transition-all active:scale-[0.98]"
+                style={{ background: 'linear-gradient(135deg, #F87171 0%, #EF4444 100%)' }}>
+                Confirm Seller Debt
+              </button>
+              <div className="flex gap-2">
+                <button onClick={goBack}
+                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  Go Back
+                </button>
+                <button onClick={onCancel}
+                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
+                  style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
+                  Cancel Sale
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Register Modal (augmented Confirm Sale + cash drawer + iOS numpad) ─────
 const NUMPAD_KEYS = ['7','8','9','4','5','6','1','2','3','00','0','\u232b'] as const;
 
@@ -361,7 +575,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
-      <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-hidden"
+      <div className="mp-register-modal w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-hidden"
         style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}>
 
         {/* Header */}
@@ -385,7 +599,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
         {/* Items list with +/- tweaks */}
         <div className="px-4 space-y-0.5 max-h-28 overflow-y-auto mb-1">
           {items.map(item => (
-            <div key={item.variantId} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
+            <div key={item.variantId} className="mp-basket-row flex items-center justify-between py-1.5 px-2 rounded-lg"
               style={{ background: 'rgba(14,15,20,0.5)' }}>
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="text-xs font-bold text-[#7C6DFF] mp-mono w-5 text-center">×{item.qty}</span>
@@ -429,7 +643,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
               </button>
             )}
           </div>
-          <div className="flex items-center gap-1 px-3 py-2 rounded-2xl mb-1.5"
+          <div className="mp-money-input flex items-center gap-1 px-3 py-2 rounded-2xl mb-1.5"
             style={{
               background: '#0E0F14',
               border: `1px solid ${validInput && sufficient ? 'rgba(74,222,128,0.4)' : validInput && !sufficient ? 'rgba(248,113,113,0.4)' : '#2D3048'}`,
@@ -445,7 +659,7 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
             {EURO_DENOMS.map(d => (
               <button key={d}
                 onClick={() => handleDenom(d)}
-                className="px-2.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
+                className="mp-denom-btn px-2.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
                 style={{
                   background: '#1B1E2E',
                   border: '1px solid #2D3048',
@@ -502,8 +716,8 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
                 key={key}
                 onClick={() => handleNumpad(key)}
                 className={cn(
-                  'flex items-center justify-center h-11 rounded-2xl text-base font-bold transition-all active:scale-90',
-                  key === '\u232b' ? 'text-[#F87171]' : 'text-[#E6E7EB]'
+                  'mp-numpad-key flex items-center justify-center h-11 rounded-2xl text-base font-bold transition-all active:scale-90',
+                  key === '\u232b' ? 'text-[#F87171] mp-numpad-key--delete' : 'text-[#E6E7EB]'
                 )}
                 style={{
                   background: key === '\u232b' ? 'rgba(248,113,113,0.12)' : '#1B1E2E',
@@ -523,12 +737,14 @@ function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCa
 // ── Main Screen ────────────────────────────────────────────────────────────
 export default function TallyCounter() {
   const [, navigate] = useLocation();
-  const { state, dispatch, confirmSale, getVariantStockStatus, getTallyTotal, transferStock } = useMerchPad();
-  const { products, activeSession, tally, settings } = state;
+  const { state, dispatch, confirmSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock } = useMerchPad();
+  const { products, activeSession, tally, settings, teamMembers } = state;
   const allowMidSaleRestock = settings.allowMidSaleRestock ?? false;
   const stickyBarTally = settings.stickyBarTally ?? true;
   const stickyBarRegister = settings.stickyBarRegister ?? true;
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [showShortfallModal, setShowShortfallModal] = useState(false);
+  const [pendingMoneyIn, setPendingMoneyIn] = useState(0);
   const [showBasketPreview, setShowBasketPreview] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
   // Restore persisted category filter on mount
@@ -598,25 +814,28 @@ export default function TallyCounter() {
     }
   }, [dispatch]);
 
-  // Register confirm (with cash amount)
-  const handleRegisterConfirm = useCallback(async (moneyIn: number) => {
-    // Snapshot basket before confirm clears it
+  const finishSale = useCallback(async (
+    moneyIn: number,
+    opts?: Parameters<typeof confirmSale>[0]
+  ) => {
     const snapshot = Object.values(tally.items).filter(i => i.qty > 0);
-    const batch = await confirmSale();
+    const batch = await confirmSale(opts);
     if (batch) {
-      // Accumulate into sessionSold
       setSessionSold(prev => {
         const next = { ...prev };
-        snapshot.forEach(item => {
-          next[item.variantId] = (next[item.variantId] ?? 0) + item.qty;
-        });
+        snapshot.forEach(item => { next[item.variantId] = (next[item.variantId] ?? 0) + item.qty; });
         return next;
       });
       const change = moneyIn > 0 ? moneyIn - batch.totalPrice : 0;
       setShowRegisterModal(false);
+      setShowShortfallModal(false);
       setJustConfirmed(true);
       toast.success(
-        moneyIn > 0
+        opts?.shortfallType === 'discount'
+          ? `Discount applied · €${batch.totalPrice.toFixed(2)}`
+          : opts?.shortfallType === 'seller_debt'
+          ? `Seller debt recorded · €${(opts.shortfallAmount ?? 0).toFixed(2)} owed`
+          : moneyIn > 0
           ? `Sale complete! €${batch.totalPrice.toFixed(2)} · Change: €${change.toFixed(2)}`
           : `Sale confirmed! ${batch.totalItems} items · €${batch.totalPrice.toFixed(2)}`,
         { duration: 4000 }
@@ -624,6 +843,28 @@ export default function TallyCounter() {
       setTimeout(() => setJustConfirmed(false), 2000);
     }
   }, [confirmSale, tally.items]);
+
+  // Register confirm (with cash amount)
+  const handleRegisterConfirm = useCallback(async (moneyIn: number) => {
+    if (moneyIn < totalRevenue) {
+      setPendingMoneyIn(moneyIn);
+      setShowShortfallModal(true);
+      return;
+    }
+    await finishSale(moneyIn);
+  }, [finishSale, totalRevenue]);
+
+  const handleShortfallDiscount = useCallback(async (reason?: string) => {
+    const shortfall = totalRevenue - pendingMoneyIn;
+    await finishSale(pendingMoneyIn, { shortfallType: 'discount', shortfallAmount: shortfall, shortfallReason: reason });
+  }, [finishSale, totalRevenue, pendingMoneyIn]);
+
+  const handleShortfallDebt = useCallback(async (memberId: string, memberName: string, reason?: string) => {
+    const shortfall = totalRevenue - pendingMoneyIn;
+    await finishSale(pendingMoneyIn, { shortfallType: 'seller_debt', shortfallAmount: shortfall, shortfallReason: reason, shortfallMemberId: memberId });
+    await recordSellerDebt(memberId, shortfall);
+    toast(`${memberName} owes €${shortfall.toFixed(2)}`, { duration: 3000 });
+  }, [finishSale, recordSellerDebt, totalRevenue, pendingMoneyIn]);
 
   // Instant sell (Tally mode — single variant, qty=1, immediate confirm)
   const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number) => {
@@ -718,7 +959,7 @@ export default function TallyCounter() {
       )}
 
       {/* Session bar */}
-      <div className="px-4 py-2.5 flex items-center justify-between gap-2"
+      <div className="mp-tally-session-bar px-4 py-2.5 flex items-center justify-between gap-2"
         style={activeSession.sessionType === 'oneoff'
           ? { background: 'rgba(217,119,6,0.08)', borderBottom: '1px solid rgba(217,119,6,0.2)' }
           : { background: 'rgba(107,92,255,0.08)', borderBottom: '1px solid rgba(107,92,255,0.15)' }}>
@@ -792,14 +1033,14 @@ export default function TallyCounter() {
 
       {/* Mode indicator banner */}
       {tallyMode ? (
-        <div className="mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
+        <div className="mp-tally-mode-banner mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
           style={{ background: 'rgba(107,92,255,0.06)', border: '1px solid rgba(107,92,255,0.15)' }}>
           <Zap size={12} className="text-[#7C6DFF] flex-shrink-0" />
           <span className="text-xs text-[#7C6DFF] font-semibold">Tally Mode</span>
           <span className="text-xs text-[#7B7F93]">— tap + to instantly record each sale</span>
         </div>
       ) : (
-        <div className="mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
+        <div className="mp-tally-mode-banner mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
           style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)' }}>
           <ShoppingBag size={12} className="text-[#4ADE80] flex-shrink-0" />
           <span className="text-xs text-[#4ADE80] font-semibold">Register Mode</span>
@@ -812,8 +1053,8 @@ export default function TallyCounter() {
         <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-none">
           {categories.map(cat => (
             <button key={cat} onClick={() => { setFilterCategory(cat); setSetting('tallyFilterCategory', cat); }}
-              className={cn('flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
-                filterCategory === cat ? 'text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]'
+              className={cn('mp-tally-cat-pill flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
+                filterCategory === cat ? 'mp-tally-cat-pill--active text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]'
               )}
               style={filterCategory === cat
                 ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }
@@ -879,7 +1120,7 @@ export default function TallyCounter() {
         return (
         <div className={isSticky ? 'fixed left-0 right-0 bottom-16 z-30 px-4 pb-2' : 'px-4 pb-4 mt-4'}>
         <div className={cn(
-          'rounded-2xl p-3 shadow-2xl transition-all duration-300',
+          'mp-tally-action-bar rounded-2xl p-3 shadow-2xl transition-all duration-300',
         )}
           style={{ background: 'rgba(20,22,36,0.97)', backdropFilter: 'blur(20px)', border: '1px solid #2D3048' }}>
           {/* Totals row */}
@@ -920,7 +1161,7 @@ export default function TallyCounter() {
 
           {/* Action button — context-aware */}
           {tallyMode ? (
-            <div className="w-full py-3.5 rounded-xl text-sm font-bold text-center select-none"
+            <div className="mp-tally-mode-hint w-full py-3.5 rounded-xl text-sm font-bold text-center select-none"
               style={{ background: '#1B1E2E', color: '#3D4060', border: '1px solid #1E2030' }}>
               Tally Mode — tap + to sell instantly
             </div>
@@ -966,6 +1207,22 @@ export default function TallyCounter() {
           onConfirm={handleRegisterConfirm}
           onCancel={() => setShowRegisterModal(false)}
           onAdjust={handleAdjust}
+        />
+      )}
+
+      {/* Shortfall modal — shown when cash is insufficient */}
+      {showShortfallModal && (
+        <ShortfallModal
+          shortfall={totalRevenue - pendingMoneyIn}
+          totalRevenue={totalRevenue}
+          requireDiscountReason={settings.requireDiscountReason ?? true}
+          allowSellerDebt={settings.allowSellerDebt ?? true}
+          requireDebtReason={settings.requireDebtReason ?? true}
+          activeMembers={teamMembers.filter(m => m.active)}
+          onDiscount={handleShortfallDiscount}
+          onSellerDebt={handleShortfallDebt}
+          onGoBack={() => setShowShortfallModal(false)}
+          onCancel={() => { setShowShortfallModal(false); setShowRegisterModal(false); }}
         />
       )}
     </div>

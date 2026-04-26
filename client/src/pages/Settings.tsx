@@ -59,7 +59,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-full animate-fade-in">
+    <div className="mp-settings min-h-full animate-fade-in">
       {/* Header */}
       <div className="px-4 pt-4 pb-4">
         <p className="text-xs font-semibold text-[#7C6DFF] uppercase tracking-widest mb-1">Settings</p>
@@ -193,6 +193,60 @@ export default function Settings() {
                 onCheckedChange={async (val) => {
                   await setSetting('stickyBarRegister', val);
                   dispatch({ type: 'SET_SETTINGS', payload: { stickyBarRegister: val } });
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Register & Cash */}
+        <div className="mp-card p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(248,113,113,0.12)' }}>
+              <span className="text-[10px] font-black text-[#F87171]">RC</span>
+            </div>
+            <p className="text-sm font-bold text-[#E6E7EB]">Register &amp; Cash</p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-[#A4A7B5]">Require reason for discounts</p>
+                <p className="text-xs text-[#7B7F93]">Ask seller to state why a discount was applied</p>
+              </div>
+              <Switch
+                checked={settings.requireDiscountReason ?? true}
+                onCheckedChange={async (val) => {
+                  await setSetting('requireDiscountReason', val);
+                  dispatch({ type: 'SET_SETTINGS', payload: { requireDiscountReason: val } });
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between border-t border-[#24273A] pt-3">
+              <div>
+                <p className="text-sm text-[#A4A7B5]">Allow seller debt resolution</p>
+                <p className="text-xs text-[#7B7F93]">Offer "Seller Debt" option when cash is insufficient</p>
+              </div>
+              <Switch
+                checked={settings.allowSellerDebt ?? true}
+                onCheckedChange={async (val) => {
+                  await setSetting('allowSellerDebt', val);
+                  dispatch({ type: 'SET_SETTINGS', payload: { allowSellerDebt: val } });
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between border-t border-[#24273A] pt-3">
+              <div>
+                <p className="text-sm text-[#A4A7B5]">Require reason for seller debt</p>
+                <p className="text-xs text-[#7B7F93]">Ask seller to explain why they accepted the shortfall</p>
+              </div>
+              <Switch
+                checked={settings.requireDebtReason ?? true}
+                onCheckedChange={async (val) => {
+                  await setSetting('requireDebtReason', val);
+                  dispatch({ type: 'SET_SETTINGS', payload: { requireDebtReason: val } });
                 }}
               />
             </div>
