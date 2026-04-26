@@ -24,13 +24,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { syncStatus, pendingSyncCount, activeSession } = state;
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#0E0F14]">
+    <div className="flex flex-col min-h-screen bg-background text-foreground">
       {/* Top status bar */}
       <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3"
-        style={{ background: 'rgba(14, 15, 20, 0.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid #24273A' }}>
+        style={{ background: 'var(--popover)', opacity: 0.95, backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center gap-2.5 min-w-0">
           {/* Logo */}
-          <span className="font-bold text-base tracking-tight text-[#E6E7EB] flex-shrink-0" style={{ fontFamily: 'Inter, sans-serif' }}>
+          <span className="font-bold text-base tracking-tight text-foreground flex-shrink-0" style={{ fontFamily: 'Inter, sans-serif' }}>
             <span className="mp-gradient-text">Merch</span>Pad
           </span>
 
