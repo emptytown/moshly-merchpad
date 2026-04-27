@@ -7,9 +7,11 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, ChevronRight, X, Tag, Layers, BookOpen } from 'lucide-react';
+import { useMerchPad } from '../contexts/MerchPadContext';
 import {
   CatalogueTemplate, VariantAxis,
   loadCatalogue, addTemplate, updateTemplate, deleteTemplate,
+  getAllCategories,
 } from '../lib/catalogue';
 import { cn } from '../lib/utils';
 
@@ -37,7 +39,7 @@ function AxisValueInput({ axisKey, initialValues, onCommit }: { axisKey: string;
       onBlur={commit}
       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
       placeholder="e.g. S, M, L, XL"
-      className="w-full px-2 py-1.5 rounded-lg text-xs text-[#E6E7EB] bg-[#141624] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none"
+      className="w-full px-2 py-1.5 rounded-lg text-xs bg-muted border border-border focus:border-primary focus:outline-none"
     />
   );
 }
@@ -63,18 +65,18 @@ function AxisEditor({ axes, onChange }: AxisEditorProps) {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs font-bold text-[#7B7F93] uppercase tracking-wider">Variant Axes</p>
+      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Variant Axes</p>
 
       {axes.map(axis => (
-        <div key={axis.key} className="rounded-xl p-3" style={{ background: '#0E0F14', border: '1px solid #2D3048' }}>
+        <div key={axis.key} className="rounded-xl p-3 bg-muted/50 border border-border">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-[#7C6DFF] capitalize">{axis.key}</span>
-            <button onClick={() => removeAxis(axis.key)} className="text-[#7B7F93] hover:text-[#F87171] transition-colors">
+            <span className="text-xs font-bold text-primary capitalize">{axis.key}</span>
+            <button onClick={() => removeAxis(axis.key)} className="text-muted-foreground hover:text-destructive transition-colors">
               <X size={12} />
             </button>
           </div>
           <AxisValueInput axisKey={axis.key} initialValues={axis.values} onCommit={vals => updateAxisValues(axis.key, vals)} />
-          <p className="text-[10px] text-[#7B7F93] mt-1">Type values separated by commas (e.g. S, M, L, XL) — press Enter or click away to confirm</p>
+          <p className="text-[10px] text-muted-foreground mt-1">Type values separated by commas (e.g. S, M, L, XL) — press Enter or click away to confirm</p>
         </div>
       ))}
 
@@ -87,7 +89,7 @@ function AxisEditor({ axes, onChange }: AxisEditorProps) {
             onKeyDown={e => e.key === 'Enter' && addAxis()}
             placeholder="New axis key (e.g. size)"
             list="axis-key-suggestions"
-            className="w-full px-3 py-2 rounded-lg text-xs text-[#E6E7EB] bg-[#0E0F14] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none"
+            className="w-full px-3 py-2 rounded-lg text-xs bg-muted border border-border focus:border-primary focus:outline-none"
           />
           <datalist id="axis-key-suggestions">
             {COMMON_AXIS_KEYS.filter(k => !axes.find(a => a.key === k)).map(k => (
@@ -96,8 +98,7 @@ function AxisEditor({ axes, onChange }: AxisEditorProps) {
           </datalist>
         </div>
         <button onClick={addAxis}
-          className="px-3 py-2 rounded-lg text-xs font-bold text-white flex items-center gap-1"
-          style={{ background: 'rgba(107,92,255,0.2)', border: '1px solid rgba(107,92,255,0.4)', color: '#7C6DFF' }}>
+          className="px-3 py-2 rounded-lg text-xs font-bold text-primary flex items-center gap-1 bg-primary/10 border border-primary/20">
           <Plus size={12} /> Add
         </button>
       </div>
@@ -109,14 +110,11 @@ function AxisEditor({ axes, onChange }: AxisEditorProps) {
 
 interface TemplateEditorProps {
   initial?: CatalogueTemplate;
-  existingCategories: string[];
   onSave: (t: Omit<CatalogueTemplate, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onCancel: () => void;
 }
 
-const COMMON_CATEGORIES = ['Apparel', 'Accessories', 'Print', 'Music', 'Digital', 'Other'];
-
-function TemplateEditor({ initial, existingCategories, onSave, onCancel }: TemplateEditorProps) {
+function TemplateEditor({ initial, onSave, onCancel }: TemplateEditorProps) {
   const { state } = useMerchPad();
   const { settings } = state;
   const currency = settings.currency ?? 'EUR';
@@ -127,7 +125,11 @@ function TemplateEditor({ initial, existingCategories, onSave, onCancel }: Templ
   const [axes, setAxes] = useState<VariantAxis[]>(initial?.variantAxes ?? []);
   const [notes, setNotes] = useState(initial?.notes ?? '');
 
-  const allCategories = Array.from(new Set([...COMMON_CATEGORIES, ...existingCategories])).sort();
+  const [templates, setTemplates] = useState<CatalogueTemplate[]>([]);
+  useEffect(() => { setTemplates(loadCatalogue()); }, []);
+
+  const allCategories = getAllCategories(templates);
+  const [showCatSuggestions, setShowCatSuggestions] = useState(false);
 
   function handleSave() {
     const trimmedName = name.trim();
@@ -143,34 +145,53 @@ function TemplateEditor({ initial, existingCategories, onSave, onCancel }: Templ
     <div className="space-y-4">
       {/* Name */}
       <div>
-        <label className="block text-xs font-bold text-[#7B7F93] uppercase tracking-wider mb-1.5">Product Name</label>
+        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Product Name</label>
         <input
           value={name}
           onChange={e => setName(e.target.value)}
           placeholder="e.g. T-Shirt"
-          className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#0E0F14] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none"
+          className="w-full px-3 py-2 rounded-lg text-sm bg-muted border border-border focus:border-primary focus:outline-none"
         />
       </div>
 
       {/* Category */}
-      <div>
-        <label className="block text-xs font-bold text-[#7B7F93] uppercase tracking-wider mb-1.5">Category</label>
-        <input
-          value={category}
-          onChange={e => setCategory(e.target.value)}
-          placeholder="e.g. Apparel"
-          list="cat-suggestions"
-          className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#0E0F14] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none"
-        />
-        <datalist id="cat-suggestions">
-          {allCategories.map(c => <option key={c} value={c} />)}
-        </datalist>
-        <p className="text-[10px] text-[#7B7F93] mt-1">Type or pick from suggestions</p>
+      <div className="relative">
+        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Category</label>
+        <div className="relative">
+          <input
+            value={category}
+            onChange={e => { setCategory(e.target.value); setShowCatSuggestions(true); }}
+            onFocus={() => setShowCatSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowCatSuggestions(false), 200)}
+            placeholder="e.g. Apparel"
+            className="w-full px-3 py-2 rounded-lg text-sm bg-muted border border-border focus:border-primary focus:outline-none"
+          />
+          {showCatSuggestions && (
+            <div className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-popover border border-border rounded-xl shadow-xl animate-in fade-in slide-in-from-top-1">
+              {allCategories
+                .filter(c => c.toLowerCase().includes(category.toLowerCase()))
+                .map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => { setCategory(c); setShowCatSuggestions(false); }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors first:rounded-t-xl last:rounded-b-xl"
+                  >
+                    {c}
+                  </button>
+                ))}
+              {allCategories.filter(c => c.toLowerCase().includes(category.toLowerCase())).length === 0 && (
+                <div className="px-3 py-2 text-xs text-muted-foreground italic">New category will be created</div>
+              )}
+            </div>
+          )}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1">Type or pick from suggestions</p>
       </div>
 
       {/* Default price */}
       <div>
-        <label className="block text-xs font-bold text-[#7B7F93] uppercase tracking-wider mb-1.5">Default Price ({symbol})</label>
+        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Default Price ({symbol})</label>
         <input
           type="number"
           min="0"
@@ -178,7 +199,7 @@ function TemplateEditor({ initial, existingCategories, onSave, onCancel }: Templ
           value={price}
           onChange={e => setPrice(e.target.value)}
           placeholder="0.00"
-          className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#0E0F14] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none"
+          className="w-full px-3 py-2 rounded-lg text-sm bg-muted border border-border focus:border-primary focus:outline-none"
         />
       </div>
 
@@ -187,26 +208,24 @@ function TemplateEditor({ initial, existingCategories, onSave, onCancel }: Templ
 
       {/* Notes */}
       <div>
-        <label className="block text-xs font-bold text-[#7B7F93] uppercase tracking-wider mb-1.5">Notes (optional)</label>
+        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Notes (optional)</label>
         <textarea
           value={notes}
           onChange={e => setNotes(e.target.value)}
           rows={2}
           placeholder="Any notes about this template..."
-          className="w-full px-3 py-2 rounded-lg text-sm text-[#E6E7EB] bg-[#0E0F14] border border-[#2D3048] focus:border-[#6B5CFF] focus:outline-none resize-none"
+          className="w-full px-3 py-2 rounded-lg text-sm bg-muted border border-border focus:border-primary focus:outline-none resize-none"
         />
       </div>
 
       {/* Actions */}
       <div className="flex gap-2 pt-1">
         <button onClick={onCancel}
-          className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#A4A7B5]"
-          style={{ border: '1px solid #2D3048' }}>
+          className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground border border-border">
           Cancel
         </button>
         <button onClick={handleSave}
-          className="flex-[2] py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2"
-          style={{ background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }}>
+          className="flex-[2] py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-gradient-to-br from-primary to-magenta shadow-lg shadow-primary/20">
           Save Template
         </button>
       </div>
@@ -228,39 +247,42 @@ function TemplateCard({ template, onEdit, onDelete }: TemplateCardProps) {
   const currency = settings.currency ?? 'EUR';
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
   return (
-    <div className="mp-card p-3">
-      <div className="flex items-start justify-between gap-2">
+    <div className="mp-card p-3.5 border-border/50 hover:border-primary/30 transition-all duration-300">
+      <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
-            <p className="text-sm font-bold text-[#E6E7EB] truncate">{template.name}</p>
-            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold flex-shrink-0"
-              style={{ background: 'rgba(107,92,255,0.15)', color: '#7C6DFF', border: '1px solid rgba(107,92,255,0.25)' }}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <p className="text-sm font-bold text-foreground truncate">{template.name}</p>
+            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 uppercase tracking-tighter">
               {template.category}
             </span>
           </div>
-          <div className="flex flex-wrap gap-1 mt-1.5">
+          <div className="flex flex-wrap gap-1.5">
             {template.variantAxes.map(axis => (
-              <span key={axis.key} className="px-1.5 py-0.5 rounded-md text-[10px] text-[#7B7F93]"
-                style={{ background: '#0E0F14', border: '1px solid #2D3048' }}>
-                {axis.key}: {axis.values.slice(0, 3).join(', ')}{axis.values.length > 3 ? '…' : ''}
+              <span key={axis.key} className="px-1.5 py-0.5 rounded-md text-[10px] text-muted-foreground bg-muted border border-border">
+                <span className="font-bold text-primary/80">{axis.key}:</span> {axis.values.slice(0, 3).join(', ')}{axis.values.length > 3 ? '…' : ''}
               </span>
             ))}
             {template.variantAxes.length === 0 && (
-              <span className="text-[10px] text-[#7B7F93] italic">No axes defined</span>
+              <span className="text-[10px] text-muted-foreground/60 italic">No axes defined</span>
             )}
           </div>
-          <p className="text-xs text-[#7B7F93] mt-1.5">Default: {symbol}{template.defaultPrice.toFixed(2)}</p>
+          <div className="flex items-center gap-2 mt-2">
+            <p className="text-xs font-bold text-primary">
+              {symbol}{template.defaultPrice.toFixed(2)}
+            </p>
+            {template.notes && (
+              <p className="text-[10px] text-muted-foreground truncate italic">• {template.notes}</p>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button onClick={onEdit}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#7B7F93] hover:text-[#7C6DFF] transition-colors"
-            style={{ background: 'rgba(107,92,255,0.08)' }}>
-            <Pencil size={12} />
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors border border-transparent hover:border-primary/20">
+            <Pencil size={14} />
           </button>
           <button onClick={onDelete}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#7B7F93] hover:text-[#F87171] transition-colors"
-            style={{ background: 'rgba(248,113,113,0.08)' }}>
-            <Trash2 size={12} />
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors border border-transparent hover:border-destructive/20">
+            <Trash2 size={14} />
           </button>
         </div>
       </div>
@@ -280,10 +302,9 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
 
   useEffect(() => { setTemplates(loadCatalogue()); }, []);
 
-  const categories = ['all', ...Array.from(new Set(templates.map(t => t.category))).sort()];
+  const categories = ['all', ...getAllCategories(templates)];
   const filtered = filterCat === 'all' ? templates : templates.filter(t => t.category === filterCat);
   const editingTemplate = editingId ? templates.find(t => t.id === editingId) : undefined;
-  const existingCategories = Array.from(new Set(templates.map(t => t.category)));
 
   function handleCreate(data: Omit<CatalogueTemplate, 'id' | 'createdAt' | 'updatedAt'>) {
     addTemplate(data);
@@ -312,20 +333,19 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-center justify-between">
         <div>
-          <button onClick={onBack} className="flex items-center gap-1 text-xs font-semibold text-[#7C6DFF] hover:text-[#9B8FFF] mb-4 transition-colors">
+          <button onClick={onBack} className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-foreground/80 mb-4 transition-colors">
             ← Back to Settings
           </button>
           <div className="flex items-center gap-2">
-            <BookOpen size={16} className="text-[#7C6DFF]" />
-            <h1 className="text-xl font-black text-[#E6E7EB]" style={{ letterSpacing: '-0.03em' }}>Item Template Creator</h1>
+            <BookOpen size={16} className="text-primary" />
+            <h1 className="text-xl font-black text-foreground" style={{ letterSpacing: '-0.03em' }}>Item Template Creator</h1>
           </div>
-          <p className="text-xs text-[#7B7F93] mt-0.5">Define reusable item templates with variant axes</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Define reusable item templates with variant axes</p>
         </div>
         {view === 'list' && (
           <button onClick={() => setView('create')}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }}>
-            <Plus size={13} /> New
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white flex-shrink-0 bg-gradient-to-br from-primary to-magenta shadow-lg shadow-primary/20">
+            <Plus size={14} /> New Template
           </button>
         )}
       </div>
@@ -340,10 +360,10 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
                 { label: 'Categories', value: categories.length - 1, icon: Tag },
                 { label: 'Axes', value: Array.from(new Set(templates.flatMap(t => t.variantAxes.map(a => a.key)))).length, icon: ChevronRight },
               ].map(({ label, value, icon: Icon }) => (
-                <div key={label} className="mp-card p-3 text-center">
-                  <Icon size={14} className="text-[#7C6DFF] mx-auto mb-1" />
-                  <p className="text-lg font-black text-[#E6E7EB]">{value}</p>
-                  <p className="text-[10px] text-[#7B7F93]">{label}</p>
+                <div key={label} className="mp-card p-3 text-center border-border/40">
+                  <Icon size={14} className="text-primary mx-auto mb-1" />
+                  <p className="text-lg font-black text-foreground">{value}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{label}</p>
                 </div>
               ))}
             </div>
@@ -353,12 +373,11 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
               <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
                 {categories.map(cat => (
                   <button key={cat} onClick={() => setFilterCat(cat)}
-                    className={cn('flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
-                      filterCat === cat ? 'text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]'
-                    )}
-                    style={filterCat === cat
-                      ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }
-                      : { background: '#1B1E2E', border: '1px solid #2D3048' }}>
+                    className={cn('flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all border',
+                      filterCat === cat
+                        ? 'text-white bg-gradient-to-r from-primary to-magenta border-transparent shadow-md shadow-primary/20'
+                        : 'text-muted-foreground bg-muted border-border hover:border-primary/50'
+                    )}>
                     {cat === 'all' ? 'All' : cat}
                   </button>
                 ))}
@@ -376,12 +395,11 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
                 />
               ))}
               {filtered.length === 0 && (
-                <div className="text-center py-10">
-                  <BookOpen size={28} className="text-[#2D3048] mx-auto mb-3" />
-                  <p className="text-sm text-[#7B7F93]">No templates yet</p>
-                  <button onClick={() => setView('create')}
-                    className="mt-3 px-4 py-2 rounded-xl text-xs font-bold text-white"
-                    style={{ background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }}>
+                <div className="text-center py-12 bg-muted/30 rounded-3xl border border-dashed border-border/60">
+                  <BookOpen size={32} className="text-muted/60 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">No templates found in this category</p>
+                  <button onClick={() => { setFilterCat('all'); setView('create'); }}
+                    className="mt-4 px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-br from-primary to-magenta shadow-lg shadow-primary/20">
                     Create First Template
                   </button>
                 </div>
@@ -391,10 +409,12 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
         )}
 
         {view === 'create' && (
-          <div className="mp-card p-4">
-            <p className="text-sm font-bold text-[#E6E7EB] mb-4">New Template</p>
+          <div className="mp-card p-4 border-primary/20">
+            <div className="flex items-center gap-2 mb-4">
+              <Plus size={16} className="text-primary" />
+              <p className="text-sm font-black text-foreground uppercase tracking-tight">New Template</p>
+            </div>
             <TemplateEditor
-              existingCategories={existingCategories}
               onSave={handleCreate}
               onCancel={() => setView('list')}
             />
@@ -402,11 +422,13 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
         )}
 
         {view === 'edit' && editingTemplate && (
-          <div className="mp-card p-4">
-            <p className="text-sm font-bold text-[#E6E7EB] mb-4">Edit Template</p>
+          <div className="mp-card p-4 border-primary/20">
+            <div className="flex items-center gap-2 mb-4">
+              <Pencil size={16} className="text-primary" />
+              <p className="text-sm font-black text-foreground uppercase tracking-tight">Edit Template</p>
+            </div>
             <TemplateEditor
               initial={editingTemplate}
-              existingCategories={existingCategories}
               onSave={handleUpdate}
               onCancel={() => { setView('list'); setEditingId(null); }}
             />

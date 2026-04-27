@@ -22,6 +22,32 @@ export interface CatalogueTemplate {
 }
 
 const STORAGE_KEY = 'moshly_master_catalogue';
+const CATEGORIES_STORAGE_KEY = 'moshly_catalogue_categories';
+
+export function loadCustomCategories(): string[] {
+  try {
+    const raw = localStorage.getItem(CATEGORIES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) as string[] : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomCategories(categories: string[]): void {
+  localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
+}
+
+export function addCustomCategory(category: string): void {
+  const cats = loadCustomCategories();
+  const trimmed = category.trim();
+  if (trimmed && !cats.includes(trimmed)) {
+    saveCustomCategories([...cats, trimmed].sort());
+  }
+}
+
+export function deleteCustomCategory(category: string): void {
+  saveCustomCategories(loadCustomCategories().filter(c => c !== category));
+}
 
 export function loadCatalogue(): CatalogueTemplate[] {
   try {
@@ -60,9 +86,13 @@ export function deleteTemplate(id: string): void {
   saveCatalogue(loadCatalogue().filter(t => t.id !== id));
 }
 
-/** All unique categories across the catalogue */
-export function getCatalogueCategories(templates: CatalogueTemplate[]): string[] {
-  return Array.from(new Set(templates.map(t => t.category).filter(Boolean))).sort();
+const COMMON_CATEGORIES = ['Apparel', 'Accessories', 'Print', 'Music', 'Digital', 'Other'];
+
+/** All unique categories across the catalogue + custom + common */
+export function getAllCategories(templates: CatalogueTemplate[]): string[] {
+  const custom = loadCustomCategories();
+  const fromTemplates = templates.map(t => t.category).filter(Boolean);
+  return Array.from(new Set([...COMMON_CATEGORIES, ...fromTemplates, ...custom])).sort();
 }
 
 /** All unique axis keys across the catalogue */

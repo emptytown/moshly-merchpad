@@ -44,14 +44,18 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
   const currency = settings.currency ?? 'EUR';
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
   const [name, setName] = useState(product?.name ?? '');
+  const [description, setDescription] = useState(product?.description ?? '');
   const [category, setCategory] = useState(product?.category ?? '');
   const [variants, setVariants] = useState<ProductVariant[]>(product?.variants ?? []);
+  const [quickPrice, setQuickPrice] = useState(product?.variants.length === 1 && !Object.keys(product.variants[0].attributes).length ? String(product.variants[0].price) : '');
+  const [quickStock, setQuickStock] = useState(product?.variants.length === 1 && !Object.keys(product.variants[0].attributes).length ? String(product.variants[0].currentStock) : '');
   const [bulkBase, setBulkBase] = useState('');
   const [bulkAttr, setBulkAttr] = useState('');
   const [bulkValues, setBulkValues] = useState('');
   const [bulkPrice, setBulkPrice] = useState('');
   const [bulkStock, setBulkStock] = useState('');
   const [showCatPicker, setShowCatPicker] = useState(false);
+  const [showSuspensionConfirm, setShowSuspensionConfirm] = useState(false);
   const [nameWarning, setNameWarning] = useState<string | null>(null);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [showBulkNote, setShowBulkNote] = useState(() => {
@@ -124,6 +128,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
     if (isNaN(price) || price < 0) { toast.error('Enter a valid price'); return; }
     const stock = parseInt(bulkStock);
     if (isNaN(stock) || stock < 0) { toast.error('Enter a valid stock quantity'); return; }
+    const isWarehouse = settings.defaultStockLocation === 'warehouse';
     const newVariants: ProductVariant[] = vals.map(val => ({
       id: uuidv4(),
       productId: product?.id ?? '',
@@ -131,9 +136,9 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
       attributes: { [bulkAttr.trim().toLowerCase()]: val },
       price,
       initialStock: stock,
-      currentStock: stock,
-      warehouseStock: 0,
-      roadStock: stock,
+      currentStock: isWarehouse ? 0 : stock,
+      warehouseStock: isWarehouse ? stock : 0,
+      roadStock: isWarehouse ? 0 : stock,
     }));
     setVariants(prev => [...prev, ...newVariants]);
     setBulkBase(''); setBulkAttr(''); setBulkValues(''); setBulkPrice(''); setBulkStock('');
@@ -150,15 +155,49 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
 
   function handleSave() {
     if (!name.trim()) { toast.error('Product name required'); return; }
+    
+    // If it's a suspended product and we haven't shown the confirm yet, show it
+    if (product?.status === 'suspended' && !showSuspensionConfirm) {
+      setShowSuspensionConfirm(true);
+      return;
+    }
+
+    performSave(product?.status);
+  }
+
+  function performSave(forcedStatus?: 'active' | 'suspended') {
     const pid = product?.id ?? uuidv4();
+    let finalVariants = [...variants];
+
+    // If no variants but quick price/stock provided, create a default variant
+    if (finalVariants.length === 0 && (quickPrice || quickStock)) {
+      const price = parseFloat(quickPrice) || 0;
+      const stock = parseInt(quickStock) || 0;
+      const isWarehouse = settings.defaultStockLocation === 'warehouse';
+      finalVariants = [{
+        id: uuidv4(),
+        productId: pid,
+        name: name.trim(),
+        attributes: {},
+        price,
+        initialStock: stock,
+        currentStock: isWarehouse ? 0 : stock,
+        warehouseStock: isWarehouse ? stock : 0,
+        roadStock: isWarehouse ? 0 : stock,
+      }];
+    }
+
     const now = new Date().toISOString();
     const p: Product = {
       id: pid,
+      projectId: product?.projectId ?? state.projectId,
       name: name.trim(),
+      description: description.trim() || undefined,
       category: category.trim() || undefined,
-      variants: variants.map(v => ({ ...v, productId: pid })),
+      variants: finalVariants.map(v => ({ ...v, productId: pid })),
       createdAt: product?.createdAt ?? now,
       updatedAt: now,
+      status: forcedStatus ?? product?.status ?? 'active',
     };
     onSave(p);
   }
@@ -198,36 +237,63 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
           </div>
 
           {/* Basic info */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Product Name</label>
+                <input value={name} onFocus={e => e.target.value = ''} onChange={e => checkName(e.target.value)}
+                  placeholder="T-Shirt"
+                  list="catalogue-name-suggestions"
+                  className={cn(
+                    'w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border focus:outline-none transition-colors',
+                    nameWarning ? 'border-orange-500 focus:border-orange-500' : 'border-border focus:border-primary'
+                  )} />
+                <datalist id="catalogue-name-suggestions">
+                  {catalogueNames.map(n => <option key={n} value={n} />)}
+                </datalist>
+                {nameWarning && (
+                  <div className="flex items-start gap-1.5 mt-1.5">
+                    <AlertCircle size={11} className="text-orange-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-orange-500">{nameWarning}</p>
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Category</label>
+                <input value={category} onFocus={e => e.target.value = ''} onChange={e => setCategory(e.target.value)}
+                  placeholder="Apparel"
+                  list="catalogue-category-suggestions"
+                  className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors" />
+                <datalist id="catalogue-category-suggestions">
+                  {catalogueCategories.map(c => <option key={c} value={c} />)}
+                </datalist>
+              </div>
+            </div>
+
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Product Name</label>
-              <input value={name} onFocus={e => e.target.value = ''} onChange={e => checkName(e.target.value)}
-                placeholder="T-Shirt"
-                list="catalogue-name-suggestions"
-                className={cn(
-                  'w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border focus:outline-none transition-colors',
-                  nameWarning ? 'border-orange-500 focus:border-orange-500' : 'border-border focus:border-primary'
-                )} />
-              <datalist id="catalogue-name-suggestions">
-                {catalogueNames.map(n => <option key={n} value={n} />)}
-              </datalist>
-              {nameWarning && (
-                <div className="flex items-start gap-1.5 mt-1.5">
-                  <AlertCircle size={11} className="text-orange-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-orange-500">{nameWarning}</p>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Description</label>
+              <textarea value={description} onChange={e => setDescription(e.target.value)}
+                placeholder="Product details..."
+                rows={2}
+                className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors resize-none" />
+            </div>
+
+            {variants.length === 0 && (
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Price ({symbol})</label>
+                  <input value={quickPrice} onChange={e => setQuickPrice(e.target.value)}
+                    placeholder="0.00" type="number" step="0.01"
+                    className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors" />
                 </div>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Category</label>
-              <input value={category} onFocus={e => e.target.value = ''} onChange={e => setCategory(e.target.value)}
-                placeholder="Apparel"
-                list="catalogue-category-suggestions"
-                className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors" />
-              <datalist id="catalogue-category-suggestions">
-                {catalogueCategories.map(c => <option key={c} value={c} />)}
-              </datalist>
-            </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Initial Stock ({settings.defaultStockLocation === 'warehouse' ? 'WH' : 'Road'})</label>
+                  <input value={quickStock} onChange={e => setQuickStock(e.target.value)}
+                    placeholder="0" type="number"
+                    className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors" />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Bulk generator */}
@@ -320,7 +386,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
                       className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
                   </div>
                   <div className="space-y-1">
-                    <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-tighter">Initial stock</label>
+                    <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-tighter">Initial stock ({settings.defaultStockLocation === 'warehouse' ? 'WH' : 'Road'})</label>
                     <input value={bulkStock} onChange={e => setBulkStock(e.target.value)}
                       placeholder="Initial stock"
                       type="number" min="0"
@@ -378,14 +444,37 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
           </div>
         </div>
 
-      <div className="flex gap-2 p-4 border-t border-border flex-shrink-0">
-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
-          style={{ border: '1px solid var(--border)' }}>
-          Cancel
-        </button>
-        <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
-          Save Product
-        </button>
+      <div className="flex flex-col gap-2 p-4 border-t border-border flex-shrink-0">
+        {showSuspensionConfirm && (
+          <div className="mb-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/30">
+            <p className="text-xs font-semibold text-orange-500 mb-2 text-center">
+              This product is currently suspended
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => performSave('active')}
+                className="flex-1 py-1.5 rounded-lg text-[10px] font-bold bg-orange-500 text-white hover:bg-orange-600 transition-colors">
+                Activate
+              </button>
+              <button onClick={() => performSave('suspended')}
+                className="flex-1 py-1.5 rounded-lg text-[10px] font-bold border border-orange-500/50 text-orange-500 hover:bg-orange-500/10 transition-colors">
+                Keep Suspended
+              </button>
+              <button onClick={onClose}
+                className="flex-1 py-1.5 rounded-lg text-[10px] font-bold border border-border text-muted-foreground hover:text-foreground transition-colors">
+                Cancel Edit
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            style={{ border: '1px solid var(--border)' }}>
+            Cancel
+          </button>
+          <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
+            Save Product
+          </button>
+        </div>
       </div>
     </RightDrawer>
   );
@@ -798,14 +887,21 @@ export default function MerchOffice() {
               <div key={product.id} className="mp-card overflow-hidden">
                 <button
                   onClick={() => setExpandedProduct(expandedProduct === product.id ? null : product.id)}
-                  className="w-full flex items-center justify-between p-3">
+                  className={cn("w-full flex items-center justify-between p-3", product.status === 'suspended' && "opacity-50 grayscale-[0.5]")}>
                   <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center"
                       style={{ background: 'var(--primary)/10' }}>
                       <Package size={14} className="text-primary" />
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-semibold text-foreground">{product.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">{product.name}</p>
+                        {product.status === 'suspended' && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-500/10 text-orange-500 border border-orange-500/20 uppercase tracking-tight">
+                            <UserX size={8} /> Suspended - Hidden from Sales
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-[#7B7F93]">{product.variants.length} variants · {product.category ?? 'Uncategorised'}</p>
                     </div>
                   </div>
@@ -819,7 +915,7 @@ export default function MerchOffice() {
 
                 {expandedProduct === product.id && (
                   <div className="border-t border-[#24273A]">
-                    <div className="p-3 space-y-1.5">
+                    <div className={cn("p-3 space-y-1.5", product.status === 'suspended' && "opacity-50 grayscale-[0.5]")}>
                       {/* Column headers */}
                       <div className="flex items-center justify-between px-2 pb-1">
                         <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Variant</span>
@@ -848,7 +944,7 @@ export default function MerchOffice() {
                       ))}
                     </div>
                     {/* Two-tier stock summary */}
-                    <div className="mx-3 mb-2 p-2 rounded-lg flex items-center justify-between text-xs"
+                    <div className={cn("mx-3 mb-2 p-2 rounded-lg flex items-center justify-between text-xs", product.status === 'suspended' && "opacity-50 grayscale-[0.5]")}
                       style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
                       <div className="flex items-center gap-1.5 text-primary">
                         <Warehouse size={11} />
@@ -866,11 +962,29 @@ export default function MerchOffice() {
                         style={{ border: '1px solid var(--border)' }}>
                         <Edit2 size={12} /> Edit
                       </button>
-                      <button onClick={() => { setTransferProduct(product); }}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
-                        style={{ border: '1px solid var(--border)' }}>
-                        <ArrowRightLeft size={12} /> Transfer
-                      </button>
+                      {product.status === 'suspended' ? (
+                        <button onClick={async () => {
+                          const updated = { ...product, status: 'active' as const, updatedAt: new Date().toISOString() };
+                          await saveProduct(updated);
+                          toast.success(`${product.name} activated`);
+                        }}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-green-500 hover:bg-green-500/10 transition-colors"
+                          style={{ border: '1px solid var(--border)' }}>
+                          <Check size={12} /> Activate
+                        </button>
+                      ) : (
+                        <button onClick={async () => {
+                          if (confirm(`Suspend product, are you sure?`)) {
+                            const updated = { ...product, status: 'suspended' as const, updatedAt: new Date().toISOString() };
+                            await saveProduct(updated);
+                            toast.success(`${product.name} suspended`);
+                          }
+                        }}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-orange-500 hover:bg-orange-500/10 transition-colors"
+                          style={{ border: '1px solid var(--border)' }}>
+                          <UserX size={12} /> Suspend
+                        </button>
+                      )}
                       <button onClick={() => { if (confirm(`Delete ${product.name}?`)) deleteProduct(product.id); }}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-destructive hover:bg-destructive/10 transition-colors"
                         style={{ border: '1px solid var(--border)' }}>
@@ -890,33 +1004,6 @@ export default function MerchOffice() {
               </div>
             )}
           </div>}
-        </div>
-        {/* Team */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <button onClick={() => setSecTeam(v => !v)} className="flex items-center gap-1.5 group">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Team</p>
-              <span className="text-xs text-[#7B7F93] ml-1">· {state.teamMembers.filter(m => m.active).length} active</span>
-              <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors ml-1">{secTeam ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
-            </button>
-            <button
-              onClick={() => { setEditingMember('new'); setMemberForm({ name: '', phone: '', email: '', active: true }); setMemberStats(null); }}
-              className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80 transition-colors">
-              <Plus size={13} /> Add Member
-            </button>
-          </div>
-          {secTeam && (
-            <div className="space-y-4">
-              {state.teamMembers.filter(m => m.active).length > 0
-                ? <TeamSection />
-                : <div className="mp-card p-6 text-center">
-                    <ShoppingBag size={24} className="text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-muted-foreground">No active members</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">Add members to track personal sales stats</p>
-                  </div>
-              }
-            </div>
-          )}
         </div>
 
         {/* Stock Management */}
@@ -946,13 +1033,20 @@ export default function MerchOffice() {
                           return next;
                         })}
                         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedStockProduct(prev => { const next = new Set(prev); if (next.has(product.id)) next.delete(product.id); else next.add(product.id); return next; }); } }}
-                        className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                        className={cn("flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer", product.status === 'suspended' && "opacity-50 grayscale-[0.5]")}
                       >
                         <span className="text-[#7B7F93] flex-shrink-0">
                           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </span>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-foreground truncate">{product.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-foreground truncate">{product.name}</p>
+                            {product.status === 'suspended' && (
+                              <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-500/10 text-orange-500 border border-orange-500/20 uppercase tracking-tight whitespace-nowrap">
+                                <UserX size={8} /> Suspended
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-[#7B7F93]">{product.variants.length} variants</p>
                         </div>
                     {!isExpanded && (
@@ -970,7 +1064,7 @@ export default function MerchOffice() {
                       </button>
                     </div>
                     {isExpanded && (
-                      <div className="border-t border-[#24273A] p-3 space-y-1.5">
+                      <div className={cn("border-t border-[#24273A] p-3 space-y-1.5", product.status === 'suspended' && "opacity-50 grayscale-[0.5]")}>
                         <div className="flex items-center justify-between px-2 pb-1">
                           <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Variant</span>
                           <div className="flex items-center gap-3">
@@ -1011,6 +1105,33 @@ export default function MerchOffice() {
                   <p className="text-sm text-[#7B7F93]">No products to manage</p>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+        {/* Team */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => setSecTeam(v => !v)} className="flex items-center gap-1.5 group">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Team</p>
+              <span className="text-xs text-[#7B7F93] ml-1">· {state.teamMembers.filter(m => m.active).length} active</span>
+              <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors ml-1">{secTeam ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
+            </button>
+            <button
+              onClick={() => { setEditingMember('new'); setMemberForm({ name: '', phone: '', email: '', active: true }); setMemberStats(null); }}
+              className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80 transition-colors">
+              <Plus size={13} /> Add Member
+            </button>
+          </div>
+          {secTeam && (
+            <div className="space-y-4">
+              {state.teamMembers.filter(m => m.active).length > 0
+                ? <TeamSection />
+                : <div className="mp-card p-6 text-center">
+                    <ShoppingBag size={24} className="text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-muted-foreground">No active members</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">Add members to track personal sales stats</p>
+                  </div>
+              }
             </div>
           )}
         </div>

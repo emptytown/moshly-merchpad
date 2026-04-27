@@ -188,10 +188,12 @@ export default function DetailInfo() {
   const [filterProduct, setFilterProduct] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
 
+  const activeProducts = useMemo(() => products.filter(p => p.status !== 'suspended'), [products]);
+
   const categories = useMemo(() => {
-    const cats = new Set(products.map(p => p.category).filter(Boolean));
+    const cats = new Set(activeProducts.map(p => p.category).filter(Boolean));
     return Array.from(cats) as string[];
-  }, [products]);
+  }, [activeProducts]);
 
   useEffect(() => {
     async function load() {
@@ -268,7 +270,7 @@ export default function DetailInfo() {
 
   const stockHealth = useMemo(() => {
     let high = 0, medium = 0, low = 0, empty = 0;
-    for (const p of products) {
+    for (const p of activeProducts) {
       for (const v of p.variants) {
         const s = getVariantStockStatus(v);
         if (s === 'high') high++;
@@ -283,12 +285,12 @@ export default function DetailInfo() {
       { name: 'Low', value: low, color: '#F87171' },
       { name: 'Empty', value: empty, color: '#7B7F93' },
     ].filter(d => d.value > 0);
-  }, [products, getVariantStockStatus]);
+  }, [activeProducts, getVariantStockStatus]);
 
-  const lowStockVariants = useMemo(() => products.flatMap(p =>
+  const lowStockVariants = useMemo(() => activeProducts.flatMap(p =>
     p.variants.filter(v => { const s = getVariantStockStatus(v); return s === 'low' || s === 'empty'; })
       .map(v => ({ variant: v, productName: p.name, productId: p.id }))
-  ), [products, getVariantStockStatus]);
+  ), [activeProducts, getVariantStockStatus]);
 
   const handleAdjust = useCallback(async (
     delta: number, reason: 'damaged' | 'theft' | 'counting_error' | 'restock' | 'other', notes: string
@@ -366,7 +368,7 @@ export default function DetailInfo() {
           <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)}
             className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-[var(--pill-text)] bg-[var(--pill-bg)] border border-[var(--pill-border)] focus:outline-none appearance-none cursor-pointer">
             <option value="all">All Products</option>
-            {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {activeProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
 
           {activeFiltersCount > 0 && (
@@ -589,7 +591,7 @@ export default function DetailInfo() {
               </div>
             )}
 
-            {products.map(product => (
+            {activeProducts.map(product => (
               <div key={product.id} className="mp-card overflow-hidden">
                 <button onClick={() => setExpandedProduct(expandedProduct === product.id ? null : product.id)}
                   className="w-full flex items-center justify-between p-3">

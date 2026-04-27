@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight, BookOpen, Package, Palette, Sun, Moon, DollarSign } from 'lucide-react';
+import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight, BookOpen, Package, Palette, Sun, Moon, DollarSign, Tag } from 'lucide-react';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { setSetting } from '../lib/db';
@@ -14,11 +14,12 @@ import { Switch } from '../components/ui/switch';
 import { Slider } from '../components/ui/slider';
 import ProjectsSettings from './ProjectsSettings';
 import MasterCatalogue from './MasterCatalogue';
+import CategoryManager from './CategoryManager';
 import DangerZone from '../components/DangerZone';
 import TeamEditor from '../components/TeamEditor';
 import { useTheme, type Skin, type Mode } from '../contexts/ThemeContext';
 
-type SettingsView = 'main' | 'projects' | 'catalogue';
+type SettingsView = 'main' | 'projects' | 'catalogue' | 'categories';
 
 export default function Settings() {
   const { skin, mode, setSkin, setMode } = useTheme();
@@ -40,6 +41,12 @@ export default function Settings() {
     dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled: val } });
   }
 
+  async function toggleRequireTransferNote(val: boolean) {
+    if (!activeProject) return;
+    await setSetting(activeProject.id, 'requireTransferNote', val);
+    dispatch({ type: 'SET_SETTINGS', payload: { requireTransferNote: val } });
+  }
+
   if (view === 'projects') {
     return (
       <div className="min-h-full animate-fade-in">
@@ -58,6 +65,10 @@ export default function Settings() {
     return <MasterCatalogue onBack={() => setView('main')} />;
   }
 
+  if (view === 'categories') {
+    return <CategoryManager onBack={() => setView('main')} />;
+  }
+
   return (
     <div className="mp-settings min-h-full animate-fade-in">
       {/* Header */}
@@ -69,20 +80,6 @@ export default function Settings() {
       </div>
 
       <div className="px-4 space-y-4 pb-8">
-
-        {/* Item Template Creator entry point */}
-        <button onClick={() => setView('catalogue')}
-          className="w-full mp-card p-4 flex items-center gap-3 text-left hover:border-[#6B5CFF] transition-colors">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'rgba(0,229,255,0.1)' }}>
-            <BookOpen size={18} style={{ color: '#00E5FF' }} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-[#E6E7EB]">Item Template Creator</p>
-            <p className="text-xs text-[#7B7F93]">Global product templates for all projects</p>
-          </div>
-          <ChevronRight size={16} className="text-[#7B7F93] flex-shrink-0" />
-        </button>
 
         {/* Projects — prominent entry point */}
         <button onClick={() => setView('projects')}
@@ -98,6 +95,34 @@ export default function Settings() {
                 ? <><span style={{ color: activeProject.color }}>{activeProject.name}</span> · {localProjects.length}/3 slots used</>
                 : 'No project selected'}
             </p>
+          </div>
+          <ChevronRight size={16} className="text-[#7B7F93] flex-shrink-0" />
+        </button>
+
+        {/* Categories entry point */}
+        <button onClick={() => setView('categories')}
+          className="w-full mp-card p-4 flex items-center gap-3 text-left hover:border-[#6B5CFF] transition-colors">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'rgba(124,109,255,0.1)' }}>
+            <Tag size={18} className="text-[#7C6DFF]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-[#E6E7EB]">Categories</p>
+            <p className="text-xs text-[#7B7F93]">Manage product categories</p>
+          </div>
+          <ChevronRight size={16} className="text-[#7B7F93] flex-shrink-0" />
+        </button>
+
+        {/* Item Template Creator entry point */}
+        <button onClick={() => setView('catalogue')}
+          className="w-full mp-card p-4 flex items-center gap-3 text-left hover:border-[#6B5CFF] transition-colors">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'rgba(0,229,255,0.1)' }}>
+            <BookOpen size={18} style={{ color: '#00E5FF' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-[#E6E7EB]">Item Template Creator</p>
+            <p className="text-xs text-[#7B7F93]">Global product templates for all projects</p>
           </div>
           <ChevronRight size={16} className="text-[#7B7F93] flex-shrink-0" />
         </button>
@@ -138,7 +163,7 @@ export default function Settings() {
               value={settings.currency || 'EUR'}
               onChange={async (e) => {
                 const val = e.target.value;
-                await setSetting('currency', val);
+                await setSetting(activeProject!.id, 'currency', val);
                 dispatch({ type: 'SET_SETTINGS', payload: { currency: val } });
                 toast.success(`Currency set to ${val}`);
               }}
@@ -148,6 +173,37 @@ export default function Settings() {
               <option value="USD">Dollar ($)</option>
               <option value="GBP">Pound (£)</option>
             </select>
+          </div>
+
+          <div className="border-t border-[#24273A] pt-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-[#A4A7B5]">Default Stock Location</p>
+              <p className="text-xs text-[#7B7F93]">Where new product stock is added</p>
+            </div>
+            <select
+              value={settings.defaultStockLocation || 'road'}
+              onChange={async (e) => {
+                const val = e.target.value as 'road' | 'warehouse';
+                await setSetting(activeProject!.id, 'defaultStockLocation', val);
+                dispatch({ type: 'SET_SETTINGS', payload: { defaultStockLocation: val } });
+                toast.success(`Default stock set to ${val.charAt(0).toUpperCase() + val.slice(1)}`);
+              }}
+              className="bg-[#0E0F14] text-[#E6E7EB] text-sm font-bold rounded-lg border border-[#2D3048] px-2 py-1 focus:border-[#6B5CFF] focus:outline-none"
+            >
+              <option value="road">Road Stock</option>
+              <option value="warehouse">Warehouse</option>
+            </select>
+          </div>
+
+          <div className="border-t border-[#24273A] pt-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-[#A4A7B5]">Require Transfer Note</p>
+              <p className="text-xs text-[#7B7F93]">Make notes mandatory for stock transfers</p>
+            </div>
+            <Switch
+              checked={settings.requireTransferNote}
+              onCheckedChange={toggleRequireTransferNote}
+            />
           </div>
         </div>
 

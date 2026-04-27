@@ -36,10 +36,12 @@ export interface Product {
   id: string;
   projectId: string; // SCOPED
   name: string;
+  description?: string;
   category?: string;
   variants: ProductVariant[];
   createdAt: string;
   updatedAt: string;
+  status?: 'active' | 'suspended';
 }
 
 export interface Show {

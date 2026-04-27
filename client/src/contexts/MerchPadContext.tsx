@@ -53,6 +53,8 @@ export interface AppState {
     allowSellerDebt: boolean;
     requireDebtReason: boolean;
     currency: string;
+    defaultStockLocation: 'road' | 'warehouse';
+    requireTransferNote: boolean;
   };
 }
 
@@ -266,7 +268,7 @@ interface MerchPadContextValue {
   getSessionSoldQty: (variantId: string) => number;
   getTallyTotal: () => { units: number; revenue: number };
   getAuditLog: (sessionId?: string) => Promise<AuditEntry[]>;
-  transferStock: (variantId: string, productId: string, variantName: string, direction: 'to_road' | 'to_warehouse', qty: number) => Promise<void>;
+  transferStock: (variantId: string, productId: string, variantName: string, direction: 'to_road' | 'to_warehouse', qty: number, note?: string) => Promise<void>;
   startOneOffSession: (repName: string) => Promise<SaleSession>;
   saveTeamMember: (member: TeamMember) => Promise<void>;
   deleteTeamMember: (memberId: string) => Promise<void>;
@@ -306,6 +308,8 @@ const initialState: AppState = {
     allowSellerDebt: true,
     requireDebtReason: true,
     currency: 'EUR',
+    defaultStockLocation: 'road',
+    requireTransferNote: false,
   },
 };
 
@@ -324,7 +328,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       const db = await getDB();
       const projectId = activeProject.id;
 
-      const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason, currency] = await Promise.all([
+      const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason, currency, defaultStockLocation, requireTransferNote] = await Promise.all([
         db.getAllFromIndex('products', 'by-project', projectId),
         db.getAllFromIndex('shows', 'by-project', projectId),
         getSetting<string>(projectId, 'repName', ''),
@@ -339,6 +343,8 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
         getSetting<boolean>(projectId, 'allowSellerDebt', true),
         getSetting<boolean>(projectId, 'requireDebtReason', true),
         getSetting<string>(projectId, 'currency', 'EUR'),
+        getSetting<'road' | 'warehouse'>(projectId, 'defaultStockLocation', 'road'),
+        getSetting<boolean>(projectId, 'requireTransferNote', false),
       ]);
 
       const teamMembers = await db.getAllFromIndex('teamMembers', 'by-project', projectId);
@@ -349,7 +355,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_SETTINGS', payload: {
         undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed,
         stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason,
-        currency
+        currency, defaultStockLocation, requireTransferNote
       } });
       // Restore active session if anyy
       const activeSessions = await db.getAllFromIndex('sessions', 'by-status', 'active');
@@ -753,7 +759,8 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     productId: string,
     variantName: string,
     direction: 'to_road' | 'to_warehouse',
-    qty: number
+    qty: number,
+    note?: string
   ) => {
     if (!activeProject) return;
     const db = await getDB();
@@ -805,10 +812,11 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       action: 'stock_transferred',
       entityType: 'product_variant',
       entityId: variantId,
-      description: `Stock transfer: ${variantName} — ${direction === 'to_road' ? `WH→Road +${qty}` : `Road→WH +${qty}`}`,
+      description: `Stock transfer: ${variantName} — ${direction === 'to_road' ? `WH→Road +${qty}` : `Road→WH +${qty}`}${note ? ` | Note: ${note}` : ''}`,
       actorName: repName || 'Unknown',
       oldValue: { warehouseStock, roadStock },
       newValue: { warehouseStock: newWarehouse, roadStock: newRoad },
+      reason: note,
       timestamp: now,
     });
   }, [activeProject]);

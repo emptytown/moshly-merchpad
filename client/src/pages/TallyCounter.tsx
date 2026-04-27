@@ -781,10 +781,12 @@ export default function TallyCounter() {
     }
   }, [activeSession?.id]);
 
-  const allVariants: Array<{ variant: ProductVariant; productName: string }> = products.flatMap(p =>
-    p.variants.map(v => ({ variant: v, productName: p.name }))
-  );
-  const categories = ['all', ...Array.from(new Set(products.map(p => p.category ?? 'Other').filter(Boolean)))];
+  const allVariants: Array<{ variant: ProductVariant; productName: string }> = products
+    .filter(p => p.status !== 'suspended')
+    .flatMap(p =>
+      p.variants.map(v => ({ variant: v, productName: p.name }))
+    );
+  const categories = ['all', ...Array.from(new Set(products.filter(p => p.status !== 'suspended').map(p => p.category ?? 'Other').filter(Boolean)))];
   const filteredVariants = filterCategory === 'all'
     ? allVariants
     : allVariants.filter(({ variant }) => {
@@ -798,7 +800,8 @@ export default function TallyCounter() {
   // Session cumulative totals (Tally mode) — sum across all confirmed sales this session
   const sessionTotalUnits = Object.values(sessionSold).reduce((s, n) => s + n, 0);
   const sessionTotalRevenue = Object.entries(sessionSold).reduce((sum, [vid, qty]) => {
-    const v = products.flatMap(p => p.variants).find(vv => vv.id === vid);
+    // Search in state.products directly to ensure we find even suspended products that were sold
+    const v = state.products.flatMap(p => p.variants).find(vv => vv.id === vid);
     return sum + (v ? v.price * qty : 0);
   }, 0);
 
@@ -870,8 +873,8 @@ export default function TallyCounter() {
 
   // Instant sell (Tally mode — single variant, qty=1, immediate confirm)
   const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number) => {
-    // Guard against oversell: use live currentStock from products state
-    const liveVariantCheck = products.flatMap(p => p.variants).find(v => v.id === variantId);
+    // Guard against oversell: use live currentStock from state.products directly
+    const liveVariantCheck = state.products.flatMap(p => p.variants).find(v => v.id === variantId);
     if (!liveVariantCheck || liveVariantCheck.currentStock <= 0) {
       toast.error(`${variantName} — no stock left!`, { duration: 2000 });
       return;
@@ -893,7 +896,7 @@ export default function TallyCounter() {
 
   // Mid-sale restock: pull units from warehouse into road stock
   const handleRestock = useCallback(async (variantId: string, productId: string, variantName: string, qty: number) => {
-    await transferStock(variantId, productId, variantName, 'to_road', qty);
+    await transferStock(variantId, productId, variantName, 'to_road', qty, 'Restock during sale');
     toast.success(`Restocked ${qty} × ${variantName} from warehouse`, { duration: 2500 });
   }, [transferStock]);
 

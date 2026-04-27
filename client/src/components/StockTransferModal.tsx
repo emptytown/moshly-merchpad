@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Warehouse, Truck, ArrowRight, Plus, Minus, ChevronsRight, RotateCcw } from 'lucide-react';
+import { Warehouse, Truck, ArrowRight, Plus, Minus, ChevronsRight, RotateCcw, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RightDrawer } from './RightDrawer';
 import { toast } from 'sonner';
@@ -15,11 +15,13 @@ interface Props {
 type Direction = 'to_road' | 'to_warehouse';
 
 export default function StockTransferModal({ product, open, onClose }: Props) {
-  const { transferStock } = useMerchPad();
+  const { state, transferStock } = useMerchPad();
+  const { settings } = state;
   const [direction, setDirection] = useState<Direction>('to_road');
   const [qtys, setQtys] = useState<Record<string, number>>(() =>
     Object.fromEntries(product.variants.map(v => [v.id, 0]))
   );
+  const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
 
   function sourceStock(v: typeof product.variants[0]) {
@@ -46,6 +48,8 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
 
   const totalUnits = useMemo(() => Object.values(qtys).reduce((s, q) => s + q, 0), [qtys]);
   const hasAny = totalUnits > 0;
+  const noteRequired = settings.requireTransferNote;
+  const canSubmit = hasAny && (!noteRequired || note.trim().length > 0);
 
   function switchDirection(d: Direction) {
     setDirection(d);
@@ -55,14 +59,17 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
   async function handleTransfer() {
     const transfers = product.variants.filter(v => qtys[v.id] > 0);
     if (transfers.length === 0) { toast.error('Set at least one quantity'); return; }
+    if (noteRequired && !note.trim()) { toast.error('Please enter a note'); return; }
+
     setLoading(true);
     try {
       for (const v of transfers) {
-        await transferStock(v.id, product.id, v.name, direction, qtys[v.id]);
+        await transferStock(v.id, product.id, v.name, direction, qtys[v.id], note.trim());
       }
       const label = direction === 'to_road' ? 'WH → Road' : 'Road → WH';
       toast.success(`Transferred ${totalUnits} unit${totalUnits !== 1 ? 's' : ''} (${label})`);
       clearAll();
+      setNote('');
       onClose();
     } finally {
       setLoading(false);
@@ -251,6 +258,23 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
           </div>
         </div>
 
+        {/* Note section */}
+        <div className="px-4 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <FileText size={15} className="text-muted-foreground" />
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Transfer Note {noteRequired && <span className="text-red-500">*</span>}
+            </span>
+          </div>
+          <textarea
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder={noteRequired ? "Required reason for transfer..." : "Optional transfer note..."}
+            className="w-full bg-muted border border-border rounded-xl p-3.5 text-sm focus:ring-1 ring-primary outline-none resize-none transition-all"
+            rows={4}
+          />
+        </div>
+
         {/* Sticky footer */}
         <div
           className="flex-shrink-0 p-4 space-y-3"
@@ -264,10 +288,10 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
           )}
           <Button
             onClick={handleTransfer}
-            disabled={!hasAny || loading}
+            disabled={!canSubmit || loading}
             className="w-full font-bold text-white"
             style={{
-              background: hasAny
+              background: canSubmit
                 ? direction === 'to_road'
                   ? 'linear-gradient(to right, #6B5CFF, #c026d3)'
                   : 'linear-gradient(to right, #f59e0b, #ea580c)'
@@ -276,9 +300,11 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
           >
             {loading
               ? 'Transferring…'
-              : hasAny
-                ? `${direction === 'to_road' ? 'Load Van' : 'Return to WH'} · ${totalUnits} unit${totalUnits !== 1 ? 's' : ''}`
-                : 'Set quantities above'}
+              : !hasAny
+                ? 'Set quantities above'
+                : noteRequired && !note.trim()
+                  ? 'Note required'
+                  : `${direction === 'to_road' ? 'Load Van' : 'Return to WH'} · ${totalUnits} unit${totalUnits !== 1 ? 's' : ''}`}
           </Button>
         </div>
       </div>
