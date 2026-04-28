@@ -6,12 +6,14 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { MerchPadProvider } from "./contexts/MerchPadContext";
 import { ProjectProvider } from "./contexts/ProjectContext";
+import { MoshlyAuthProvider } from "./contexts/MoshlyAuthContext";
 import AppShell from "./components/AppShell";
 import MerchOffice from "./pages/MerchOffice";
 import TallyCounter from "./pages/TallyCounter";
 import DetailInfo from "./pages/DetailInfo";
 import Settings from "./pages/Settings";
 import EndSaleScreen from "./pages/EndSaleScreen";
+import AuthCallback from "./pages/AuthCallback";
 
 function ThemedToaster() {
   const { mode, skin } = useTheme();
@@ -34,33 +36,40 @@ function ThemedToaster() {
 
 function Router() {
   return (
-    <AppShell>
-      <Switch>
-        <Route path="/" component={MerchOffice} />
-        <Route path="/tally" component={TallyCounter} />
-        <Route path="/end-sale" component={EndSaleScreen} />
-        <Route path="/detail" component={DetailInfo} />
-        <Route path="/settings" component={Settings} />
-        <Route path="/404" component={NotFound} />
-        <Route component={NotFound} />
-      </Switch>
-    </AppShell>
+    <Switch>
+      <Route path="/auth/callback" component={AuthCallback} />
+      <Route>
+        <AppShell>
+          <Switch>
+            <Route path="/" component={MerchOffice} />
+            <Route path="/tally" component={TallyCounter} />
+            <Route path="/end-sale" component={EndSaleScreen} />
+            <Route path="/detail" component={DetailInfo} />
+            <Route path="/settings" component={Settings} />
+            <Route path="/404" component={NotFound} />
+            <Route component={NotFound} />
+          </Switch>
+        </AppShell>
+      </Route>
+    </Switch>
   );
 }
 
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
-        <ProjectProvider>
-          <MerchPadProvider>
-            <TooltipProvider>
-              <ThemedToaster />
-              <Router />
-            </TooltipProvider>
-          </MerchPadProvider>
-        </ProjectProvider>
-      </ThemeProvider>
+      <MoshlyAuthProvider>
+        <ThemeProvider defaultTheme="dark">
+          <ProjectProvider>
+            <MerchPadProvider>
+              <TooltipProvider>
+                <ThemedToaster />
+                <Router />
+              </TooltipProvider>
+            </MerchPadProvider>
+          </ProjectProvider>
+        </ThemeProvider>
+      </MoshlyAuthProvider>
     </ErrorBoundary>
   );
 }
