@@ -56,11 +56,12 @@ interface TallyCardProps {
   allowMidSaleRestock: boolean;
   warehouseStock: number;
   onRestock: (qty: number) => void;
+  symbol: string;
 }
 function TallyCard({
   variant, liveStock, sessionSoldQty, basketQty, stockStatus,
   tallyMode, effectivelyEmpty, onIncrement, onDecrement, onInstantSell,
-  allowMidSaleRestock, warehouseStock, onRestock,
+  allowMidSaleRestock, warehouseStock, onRestock, symbol,
 }: TallyCardProps) {
   const [bumping, setBumping] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -81,15 +82,22 @@ function TallyCard({
   // The big displayed number: cumulative sold in Tally mode, basket qty in Register mode
   const displayQty = tallyMode ? sessionSoldQty : basketQty;
 
-  function handleIncrement() {
+  function handleIncrement(e: React.MouseEvent) {
+    e.stopPropagation();
+    // Allow click even if isEmpty=true so handleInstantSell can show the toast/feedback
+    if (tallyMode) {
+      onInstantSell();
+      if (!isEmpty) {
+        setBumping(true);
+        setTimeout(() => setBumping(false), 200);
+      }
+      return;
+    }
+
     if (isEmpty) return;
     setBumping(true);
     setTimeout(() => setBumping(false), 200);
-    if (tallyMode) {
-      onInstantSell();
-    } else {
-      onIncrement();
-    }
+    onIncrement();
   }
 
   // stockLabel removed — 'In Stock' indicator removed per design decision
@@ -162,23 +170,24 @@ function TallyCard({
       <div className="flex-1 flex items-center justify-center py-2">
         <span
           className={cn('mp-tally-number', bumping && 'animate-counter-bump')}
-          style={{ color: displayQty > 0 ? 'var(--foreground)' : 'var(--border)' }}>
+          style={{ color: displayQty > 0 ? 'var(--foreground)' : 'var(--muted-foreground)' }}>
           {displayQty}
         </span>
       </div>
 
       {/* +/- controls */}
       <div className="flex items-center gap-1.5 mb-2">
-        <button onClick={onDecrement} disabled={basketQty === 0 || tallyMode}
+        <button onClick={e => { e.stopPropagation(); onDecrement(); }} disabled={basketQty === 0 || tallyMode}
           className="flex-1 flex items-center justify-center h-9 rounded-lg transition-all active:scale-95 disabled:opacity-30"
           style={{ background: '#0E0F14', border: '1px solid #2D3048' }}>
           <Minus size={14} className="text-[#A4A7B5]" />
         </button>
-        <button onClick={handleIncrement} disabled={isEmpty}
+        <button onClick={handleIncrement}
           className="flex-[2] flex items-center justify-center h-9 rounded-lg font-bold text-white transition-all active:scale-95 disabled:opacity-30"
           style={{ background: tallyMode
             ? 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)'
-            : 'linear-gradient(135deg, #6B5CFF 0%, #C026D3 100%)' }}>
+            : 'linear-gradient(135deg, #6B5CFF 0%, #C026D3 100%)',
+            opacity: isEmpty ? 0.4 : 1 }}>
           <Plus size={16} />
         </button>
       </div>
@@ -245,10 +254,11 @@ function TallyCard({
 interface BasketPreviewProps {
   items: Array<{ variantId: string; name: string; qty: number; unitPrice: number }>;
   totalRevenue: number;
+  symbol: string;
   onClose: () => void;
   onAdjust: (variantId: string, variantName: string, unitPrice: number, delta: number) => void;
 }
-function BasketPreview({ items, totalRevenue, onClose, onAdjust }: BasketPreviewProps) {
+function BasketPreview({ items, totalRevenue, symbol, onClose, onAdjust }: BasketPreviewProps) {
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center"
       style={{ background: 'rgba(14,15,20,0.7)', backdropFilter: 'blur(4px)' }}
@@ -311,6 +321,7 @@ function BasketPreview({ items, totalRevenue, onClose, onAdjust }: BasketPreview
 interface ShortfallModalProps {
   shortfall: number;
   totalRevenue: number;
+  symbol: string;
   requireDiscountReason: boolean;
   allowSellerDebt: boolean;
   requireDebtReason: boolean;
@@ -324,7 +335,7 @@ interface ShortfallModalProps {
 type ShortfallStep = 'main' | 'discount-reason' | 'debt-pick-member' | 'debt-reason';
 
 function ShortfallModal({
-  shortfall, totalRevenue, requireDiscountReason, allowSellerDebt, requireDebtReason,
+  shortfall, totalRevenue, symbol, requireDiscountReason, allowSellerDebt, requireDebtReason,
   activeMembers, onDiscount, onSellerDebt, onGoBack, onCancel,
 }: ShortfallModalProps) {
   const [step, setStep] = useState<ShortfallStep>('main');
@@ -527,12 +538,13 @@ const NUMPAD_KEYS = ['7','8','9','4','5','6','1','2','3','00','0','\u232b'] as c
 interface RegisterModalProps {
   items: Array<{ variantId: string; name: string; qty: number; unitPrice: number }>;
   totalRevenue: number;
+  symbol: string;
   requireMoneyInput: boolean;
   onConfirm: (moneyIn: number) => void;
   onCancel: () => void;
   onAdjust: (variantId: string, variantName: string, unitPrice: number, delta: number) => void;
 }
-function RegisterModal({ items, totalRevenue, requireMoneyInput, onConfirm, onCancel, onAdjust }: RegisterModalProps) {
+function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfirm, onCancel, onAdjust }: RegisterModalProps) {
   const [moneyIn, setMoneyIn] = useState(0);
   const [numpadOpen, setNumpadOpen] = useState(true);
   const [numpadRaw, setNumpadRaw] = useState('');
@@ -879,20 +891,27 @@ export default function TallyCounter() {
       toast.error(`${variantName} — no stock left!`, { duration: 2000 });
       return;
     }
-    dispatch({ type: 'TALLY_INCREMENT', payload: { variantId, variantName, unitPrice } });
-    setTimeout(async () => {
-      const batch = await confirmSale();
-      if (batch) {
-        // Remove this variant from basket (sale confirmed) — sessionSold counter stays
-        dispatch({ type: 'TALLY_REMOVE_VARIANT', payload: { variantId } });
-        // Accumulate session sold count
-        setSessionSold(prev => ({ ...prev, [variantId]: (prev[variantId] ?? 0) + 1 }));
-        setJustConfirmed(true);
-        toast.success(`${variantName} · ${symbol}${unitPrice.toFixed(2)}`, { duration: 1500 });
-        setTimeout(() => setJustConfirmed(false), 1500);
-      }
-    }, 50);
-  }, [dispatch, confirmSale, products]);
+
+    // Use a fresh tally override to bypass state sync lag
+    const instantTally = {
+      items: {
+        [variantId]: { variantId, variantName, qty: 1, unitPrice }
+      },
+      lastAction: null
+    };
+
+    const batch = await confirmSale({ tallyOverride: instantTally });
+    if (batch) {
+      // Clear any accidental leftovers for this variant and update session counter
+      dispatch({ type: 'TALLY_REMOVE_VARIANT', payload: { variantId } });
+      setSessionSold(prev => ({ ...prev, [variantId]: (prev[variantId] ?? 0) + 1 }));
+      setJustConfirmed(true);
+      toast.success(`${variantName} · ${symbol}${unitPrice.toFixed(2)}`, { duration: 1500 });
+      setTimeout(() => setJustConfirmed(false), 1500);
+    } else {
+      toast.error(`Failed to record sale: no active session found.`, { duration: 3000 });
+    }
+  }, [dispatch, confirmSale, state.products, symbol]);
 
   // Mid-sale restock: pull units from warehouse into road stock
   const handleRestock = useCallback(async (variantId: string, productId: string, variantName: string, qty: number) => {
@@ -1108,6 +1127,7 @@ export default function TallyCounter() {
                 allowMidSaleRestock={allowMidSaleRestock}
                 onRestock={(qty) => handleRestock(variant.id, variant.productId ?? '', variant.name, qty)}
                 warehouseStock={liveVariant.warehouseStock ?? 0}
+                symbol={symbol}
               />
             );
           })}
@@ -1133,7 +1153,7 @@ export default function TallyCounter() {
             <div className="flex items-center gap-3">
               <div>
                 <p className="text-xs text-[#7B7F93]">{tallyMode ? 'Sold' : 'Units'}</p>
-                <p className="text-lg font-black text-[#E6E7EB] mp-mono leading-none">
+                <p className="text-lg font-black text-foreground mp-mono leading-none">
                   {tallyMode ? sessionTotalUnits : totalUnits}
                 </p>
               </div>
@@ -1198,6 +1218,7 @@ export default function TallyCounter() {
         <BasketPreview
           items={basketItems}
           totalRevenue={totalRevenue}
+          symbol={symbol}
           onClose={() => setShowBasketPreview(false)}
           onAdjust={handleAdjust}
         />
@@ -1208,6 +1229,7 @@ export default function TallyCounter() {
         <RegisterModal
           items={basketItems}
           totalRevenue={totalRevenue}
+          symbol={symbol}
           requireMoneyInput={settings.requireMoneyInput ?? false}
           onConfirm={handleRegisterConfirm}
           onCancel={() => setShowRegisterModal(false)}
@@ -1220,6 +1242,7 @@ export default function TallyCounter() {
         <ShortfallModal
           shortfall={totalRevenue - pendingMoneyIn}
           totalRevenue={totalRevenue}
+          symbol={symbol}
           requireDiscountReason={settings.requireDiscountReason ?? true}
           allowSellerDebt={settings.allowSellerDebt ?? true}
           requireDebtReason={settings.requireDebtReason ?? true}

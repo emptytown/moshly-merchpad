@@ -470,8 +470,10 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     shortfallAmount?: number;
     shortfallReason?: string;
     shortfallMemberId?: string;
+    tallyOverride?: TallyState;
   }): Promise<TallyBatch | null> => {
-    const { tally, activeSession, repName, products: stateProducts } = stateRef.current;
+    const { tally: stateTally, activeSession, repName, products: stateProducts } = stateRef.current;
+    const tally = opts?.tallyOverride || stateTally;
     const items = Object.values(tally.items).filter(i => i.qty > 0);
     if (items.length === 0 || !activeSession) return null;
 
@@ -482,7 +484,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
 
     const batch: TallyBatch = {
       id: uuidv4(),
-      projectId,
+      projectId: activeSession.projectId,
       sessionId: activeSession.id,
       showId: activeSession.showId,
       deviceId: activeSession.deviceId,
@@ -503,21 +505,29 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     await db.put('tallyBatches', batch);
 
     // Decrement stock using in-memory state (avoids DB read race) then persist to DB
+    const updatedProductsMap = new Map<string, Product>();
+
     for (const item of items) {
       for (const p of stateProducts) {
         const v = p.variants.find(v => v.id === item.variantId);
         if (v) {
-          const newStock = Math.max(0, v.currentStock - item.qty);
+          const currentProduct = updatedProductsMap.get(p.id) || p;
+          const newStock = Math.max(0, (currentProduct.variants.find(vv => vv.id === v.id)?.currentStock ?? v.currentStock) - item.qty);
+          
           const updatedProduct = {
-            ...p,
-            variants: p.variants.map(pv =>
+            ...currentProduct,
+            variants: currentProduct.variants.map(pv =>
               pv.id === v.id ? { ...pv, currentStock: newStock } : pv
             ),
           };
-          await db.put('products', updatedProduct);
+          updatedProductsMap.set(p.id, updatedProduct);
           dispatch({ type: 'UPDATE_VARIANT_STOCK', payload: { variantId: v.id, productId: p.id, delta: -item.qty } });
         }
       }
+    }
+
+    for (const p of updatedProductsMap.values()) {
+      await db.put('products', p);
     }
 
     await addAuditEntry(projectId, {
