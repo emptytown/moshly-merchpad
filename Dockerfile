@@ -4,6 +4,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
 RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
@@ -15,6 +16,7 @@ RUN pnpm build
 FROM base AS runner
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=builder /app/dist ./dist
 ENV NODE_ENV=production
