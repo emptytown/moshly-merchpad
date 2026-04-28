@@ -24,7 +24,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { syncStatus, pendingSyncCount, activeSession } = state;
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground lg:flex lg:justify-center">
+    <div className="flex flex-col min-h-screen w-full lg:max-w-[430px] lg:relative">
       {/* Top status bar */}
       <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3"
         style={{ background: 'var(--popover)', opacity: 0.95, backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)' }}>
@@ -74,12 +75,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto pb-20">
+      <main className="flex-1 overflow-auto pb-20 lg:pb-0">
         {children}
       </main>
 
       {/* Bottom navigation */}
-      <nav className="mp-bottom-nav fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around px-2 py-2">
+      <nav className="mp-bottom-nav fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around px-2 py-2 lg:sticky lg:bottom-0">
         {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
           const isActive = path === '/' ? location === '/' : location.startsWith(path);
           return (
@@ -97,6 +98,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
+    </div>
     </div>
   );
 }
