@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 const MOSHLY_SSO_VERIFY_URL =
   process.env.MOSHLY_SSO_VERIFY_URL ||
-  "https://api.moshly.io/auth/sso/verify";
+  "https://moshly.io/api/auth/sso/verify";
 
 const SESSION_COOKIE = "mp_session";
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days

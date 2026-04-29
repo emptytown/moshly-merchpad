@@ -2,7 +2,11 @@
 
 ## Overview
 
-MerchPad authenticates users via Moshly Hub SSO. Users log in to the Hub (moshly.io) and are redirected to MerchPad with a short-lived token. MerchPad validates the token server-side and creates its own session cookie.
+MerchPad authenticates users via Moshly Hub SSO. Users log in to the Hub (moshly.io) and are
+redirected to MerchPad with a short-lived token. MerchPad validates the token server-side and
+creates its own session cookie.
+
+**Full checklist for connecting any Moshly app:** see `Moshly-Site/docs/APP_CONNECTION.md`.
 
 ---
 
@@ -11,15 +15,18 @@ MerchPad authenticates users via Moshly Hub SSO. Users log in to the Hub (moshly
 ```
 Hub (moshly.io/dashboard)
   └─ User clicks MerchPad slot
-      └─ Hub calls GET /api/auth/sso/token → { token, expiresIn: 60 }
+      └─ Hub calls POST /api/auth/sso/token → { token, expiresIn: 60 }
           └─ Hub redirects → https://merchpad.moshly.io/auth/callback?token=TOKEN
               └─ AuthCallback.tsx reads token from URL
                   └─ POST /api/auth/moshly-verify (Express, server-side)
-                      └─ Express calls POST https://api.moshly.io/auth/sso/verify
+                      └─ Express calls POST https://moshly.io/api/auth/sso/verify
                           └─ { success: true, user: { id, email, role, plan } }
                               └─ Express sets HttpOnly cookie mp_session
                                   └─ React navigates to /
 ```
+
+> **Note:** The Hub API is served by Cloudflare Pages at `moshly.io` — there is no
+> `api.moshly.io` subdomain. All Hub API calls go to `https://moshly.io/api/...`.
 
 ---
 
@@ -38,10 +45,10 @@ Hub (moshly.io/dashboard)
 
 ## Environment Variables
 
-**Production (`.env`):**
+**Production (`.env` or Fly.io secrets):**
 ```
 VITE_MOSHLY_HUB_URL=https://moshly.io
-MOSHLY_SSO_VERIFY_URL=https://api.moshly.io/auth/sso/verify
+MOSHLY_SSO_VERIFY_URL=https://moshly.io/api/auth/sso/verify
 ```
 
 **Dev (`.env.local`, not committed):**
@@ -50,7 +57,8 @@ VITE_MOSHLY_HUB_URL=http://localhost:8788
 MOSHLY_SSO_VERIFY_URL=http://localhost:8788/api/auth/sso/verify
 ```
 
-Note: `MOSHLY_SSO_VERIFY_URL` is a server-side env var (no `VITE_` prefix). It is read by the Express server, not the browser.
+`MOSHLY_SSO_VERIFY_URL` is a server-side env var (no `VITE_` prefix). The Express server reads
+it, not the browser. Set it on Fly.io with: `fly secrets set MOSHLY_SSO_VERIFY_URL=https://moshly.io/api/auth/sso/verify`
 
 ---
 
@@ -81,8 +89,18 @@ Returns 401 if no valid cookie.
 ### `POST /api/auth/logout` (MerchPad Express)
 Clears `mp_session` cookie. No body required.
 
-### `POST https://api.moshly.io/auth/sso/verify` (Hub API — called by Express)
+### `POST https://moshly.io/api/auth/sso/verify` (Hub API — called by Express)
 One-time use. Token is deleted after first successful call.
+
+Request:
+```json
+{ "token": "<uuid>" }
+```
+Response (200):
+```json
+{ "success": true, "user": { "id": "...", "email": "...", "role": "...", "plan": "..." } }
+```
+Errors: `400` missing token, `401` invalid/expired token, `500` server error.
 
 ---
 
@@ -103,7 +121,7 @@ function MyComponent() {
 
 ## Dev Testing
 
-1. Start Hub: `wrangler dev` (port 8788, in Moshly-Site repo)
+1. Start Hub: `npm run dev` (port 8788, in Moshly-Site repo)
 2. Start MerchPad: `pnpm dev` (port 3000)
 3. Log in to Hub at `http://localhost:8788/login`
 4. Go to Dashboard, connect MerchPad, then click the slot
@@ -115,7 +133,7 @@ function MyComponent() {
 
 ## Notes
 
-- Tokens are 60 seconds TTL and single-use — do not retry on success
-- The `mp_session` cookie is `SameSite=Strict; HttpOnly` — not accessible from JS
+- Tokens are 60-second TTL and single-use — never retry a successful verify
+- `mp_session` cookie is `SameSite=Strict; HttpOnly` — not accessible from JS
 - `MOSHLY_SSO_VERIFY_URL` must NOT have a trailing slash
 - `cookie-parser` is required in Express (`pnpm add cookie-parser`)

@@ -31,21 +31,45 @@ function LoadingScreen() {
 
 function GateScreen() {
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center gap-6 bg-[#0E0F14] px-8 text-center">
-      <span className="font-bold text-2xl tracking-tight" style={{ fontFamily: "Inter, sans-serif" }}>
-        <span style={{ background: "linear-gradient(135deg,#6B5CFF,#C026D3)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Merch</span>
-        <span className="text-[#E6E7EB]">Pad</span>
-      </span>
-      <div>
-        <p className="text-sm font-semibold text-[#E6E7EB] mb-1">Access required</p>
-        <p className="text-xs text-[#7B7F93]">Open MerchPad from your Moshly dashboard to sign in.</p>
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#0E0F14] px-8">
+      <div className="w-full max-w-[340px] flex flex-col items-center gap-6 text-center">
+        {/* Wordmark */}
+        <span className="font-black text-3xl tracking-tight" style={{ fontFamily: "Inter, sans-serif", letterSpacing: "-0.03em" }}>
+          <span style={{ background: "linear-gradient(135deg,#6B5CFF,#C026D3)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Merch</span>
+          <span className="text-[#E6E7EB]">Pad</span>
+        </span>
+
+        <div className="w-full h-px" style={{ background: "linear-gradient(90deg, transparent, #2D3048, transparent)" }} />
+
+        {/* Message */}
+        <div className="flex flex-col gap-1.5">
+          <p className="text-base font-bold text-[#E6E7EB]">No active session found.</p>
+          <p className="text-sm text-[#7B7F93]">Please log in or sign up to continue.</p>
+        </div>
+
+        {/* CTAs */}
+        <div className="w-full flex flex-col gap-3">
+          <a
+            href="https://moshly.io/login"
+            className="w-full py-3 rounded-xl text-sm font-bold text-white text-center"
+            style={{ background: "linear-gradient(135deg,#6B5CFF 0%,#C026D3 100%)" }}>
+            Log In
+          </a>
+          <a
+            href="https://moshly.io/join"
+            className="w-full py-3 rounded-xl text-sm font-bold text-center"
+            style={{ border: "1px solid #6B5CFF", color: "#9B8FFF" }}>
+            Sign Up
+          </a>
+          <a
+            href={HUB_URL}
+            className="text-xs text-[#7B7F93] hover:text-[#A4A7B5] transition-colors pt-1">
+            Visit Moshly.io
+          </a>
+        </div>
+
+        <p className="text-[10px] text-[#3D4060] mt-2">MerchPad is part of the Moshly ecosystem</p>
       </div>
-      <a
-        href={HUB_URL}
-        className="px-6 py-3 rounded-xl text-sm font-bold text-white"
-        style={{ background: "linear-gradient(135deg,#6B5CFF 0%,#C026D3 100%)" }}>
-        Go to Moshly →
-      </a>
     </div>
   );
 }
