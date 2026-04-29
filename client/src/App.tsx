@@ -6,7 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { MerchPadProvider } from "./contexts/MerchPadContext";
 import { ProjectProvider } from "./contexts/ProjectContext";
-import { MoshlyAuthProvider } from "./contexts/MoshlyAuthContext";
+import { MoshlyAuthProvider, useMoshlyAuth } from "./contexts/MoshlyAuthContext";
 import AppShell from "./components/AppShell";
 import MerchOffice from "./pages/MerchOffice";
 import TallyCounter from "./pages/TallyCounter";
@@ -14,6 +14,48 @@ import DetailInfo from "./pages/DetailInfo";
 import Settings from "./pages/Settings";
 import EndSaleScreen from "./pages/EndSaleScreen";
 import AuthCallback from "./pages/AuthCallback";
+
+const HUB_URL = import.meta.env.VITE_MOSHLY_HUB_URL ?? "https://moshly.io";
+
+function LoadingScreen() {
+  return (
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#0E0F14]">
+      <span className="font-bold text-xl tracking-tight mb-6" style={{ fontFamily: "Inter, sans-serif" }}>
+        <span style={{ background: "linear-gradient(135deg,#6B5CFF,#C026D3)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Merch</span>
+        <span className="text-[#E6E7EB]">Pad</span>
+      </span>
+      <div className="w-6 h-6 rounded-full border-2 border-[#6B5CFF] border-t-transparent animate-spin" />
+    </div>
+  );
+}
+
+function GateScreen() {
+  return (
+    <div className="fixed inset-0 flex flex-col items-center justify-center gap-6 bg-[#0E0F14] px-8 text-center">
+      <span className="font-bold text-2xl tracking-tight" style={{ fontFamily: "Inter, sans-serif" }}>
+        <span style={{ background: "linear-gradient(135deg,#6B5CFF,#C026D3)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Merch</span>
+        <span className="text-[#E6E7EB]">Pad</span>
+      </span>
+      <div>
+        <p className="text-sm font-semibold text-[#E6E7EB] mb-1">Access required</p>
+        <p className="text-xs text-[#7B7F93]">Open MerchPad from your Moshly dashboard to sign in.</p>
+      </div>
+      <a
+        href={HUB_URL}
+        className="px-6 py-3 rounded-xl text-sm font-bold text-white"
+        style={{ background: "linear-gradient(135deg,#6B5CFF 0%,#C026D3 100%)" }}>
+        Go to Moshly →
+      </a>
+    </div>
+  );
+}
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useMoshlyAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <GateScreen />;
+  return <>{children}</>;
+}
 
 function ThemedToaster() {
   const { mode, skin } = useTheme();
@@ -39,6 +81,7 @@ function Router() {
     <Switch>
       <Route path="/auth/callback" component={AuthCallback} />
       <Route>
+        <ProtectedRoute>
         <AppShell>
           <Switch>
             <Route path="/" component={MerchOffice} />
@@ -50,6 +93,7 @@ function Router() {
             <Route component={NotFound} />
           </Switch>
         </AppShell>
+        </ProtectedRoute>
       </Route>
     </Switch>
   );

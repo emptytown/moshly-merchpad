@@ -21,6 +21,12 @@ async function startServer() {
   app.use(express.json());
   app.use(cookieParser());
 
+  function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+    const raw = req.cookies?.[SESSION_COOKIE];
+    if (!raw) { res.status(401).json({ error: "no_session" }); return; }
+    try { JSON.parse(raw); next(); } catch { res.status(401).json({ error: "invalid_session" }); }
+  }
+
   // SSO callback: MerchPad receives token from Hub and validates it server-side
   app.post("/api/auth/moshly-verify", async (req, res) => {
     const { token } = req.body ?? {};

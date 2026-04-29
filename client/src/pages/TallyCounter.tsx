@@ -926,7 +926,7 @@ export default function TallyCounter() {
 
   if (!activeSession) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 px-6">
+      <div className="flex flex-col items-center justify-center h-full gap-4 px-6 pt-[100px]">
         <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
           style={{ background: 'rgba(107,92,255,0.12)' }}>
           <Zap size={28} className="text-[#7C6DFF]" />
