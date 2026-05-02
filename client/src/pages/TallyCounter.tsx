@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { setSetting, getSetting, ProductVariant, TeamMember } from '../lib/db';
+import { setSetting, getSetting, getDB, ProductVariant, TeamMember } from '../lib/db';
 import { cn } from '../lib/utils';
 
 // ── Euro denominations for quick-amount buttons ────────────────────────────
@@ -767,12 +767,7 @@ export default function TallyCounter() {
       if (saved) setFilterCategory(saved);
     });
   }, []);
-  const [justConfirmed, setJustConfirmed] = useState(false);
-  const [showStopConfirm, setShowStopConfirm] = useState(false);
 
-  // TALLY = instant-confirm mode (default), REGISTER = cash drawer modal mode
-  const [mode, setMode] = useState<'tally' | 'register'>('tally');
-  const tallyMode = mode === 'tally';
   // Restore persisted mode on mount
   useEffect(() => {
     getSetting<string>('tallyMode', 'tally').then(saved => {
@@ -780,8 +775,36 @@ export default function TallyCounter() {
     });
   }, []);
 
+  const [justConfirmed, setJustConfirmed] = useState(false);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
+
+  // TALLY = instant-confirm mode (default), REGISTER = cash drawer modal mode
+  const [mode, setMode] = useState<'tally' | 'register'>('tally');
+  const tallyMode = mode === 'tally';
+
   // Cumulative session-sold counts — persists across individual sales, resets only at session close
   const [sessionSold, setSessionSold] = useState<Record<string, number>>({});
+
+  // Restore sessionSold from database on mount or session change
+  useEffect(() => {
+    if (!activeSession) {
+      setSessionSold({});
+      return;
+    }
+    async function loadSessionTotals() {
+      const db = await getDB();
+      const batches = await db.getAllFromIndex('tallyBatches', 'by-session', activeSession!.id);
+      const totals: Record<string, number> = {};
+      batches.forEach(batch => {
+        if (batch.status === 'voided') return;
+        batch.items.forEach(item => {
+          totals[item.variantId] = (totals[item.variantId] ?? 0) + item.qty;
+        });
+      });
+      setSessionSold(totals);
+    }
+    loadSessionTotals();
+  }, [activeSession?.id]);
 
   // Reset sessionSold when the active session changes (new session started)
   const prevSessionId = useRef<string | null>(null);
@@ -789,7 +812,7 @@ export default function TallyCounter() {
     const currentId = activeSession?.id ?? null;
     if (currentId !== prevSessionId.current) {
       prevSessionId.current = currentId;
-      setSessionSold({});
+      // loadSessionTotals above handles the update
     }
   }, [activeSession?.id]);
 
@@ -900,15 +923,26 @@ export default function TallyCounter() {
       lastAction: null
     };
 
+    // Optimistic update for UI responsiveness
+    setSessionSold(prev => ({ ...prev, [variantId]: (prev[variantId] ?? 0) + 1 }));
+
     const batch = await confirmSale({ tallyOverride: instantTally });
     if (batch) {
-      // Clear any accidental leftovers for this variant and update session counter
+      // Clear any accidental leftovers for this variant
       dispatch({ type: 'TALLY_REMOVE_VARIANT', payload: { variantId } });
-      setSessionSold(prev => ({ ...prev, [variantId]: (prev[variantId] ?? 0) + 1 }));
       setJustConfirmed(true);
       toast.success(`${variantName} · ${symbol}${unitPrice.toFixed(2)}`, { duration: 1500 });
       setTimeout(() => setJustConfirmed(false), 1500);
     } else {
+      // Rollback optimistic update on failure
+      setSessionSold(prev => {
+        const next = { ...prev };
+        if (next[variantId] > 0) {
+          next[variantId] -= 1;
+          if (next[variantId] === 0) delete next[variantId];
+        }
+        return next;
+      });
       toast.error(`Failed to record sale: no active session found.`, { duration: 3000 });
     }
   }, [dispatch, confirmSale, state.products, symbol]);
