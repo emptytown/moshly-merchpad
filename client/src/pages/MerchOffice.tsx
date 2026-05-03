@@ -793,11 +793,24 @@ export default function MerchOffice() {
   return (
     <div className="min-h-full animate-fade-in">
       {/* Hero header */}
-      <div className="relative overflow-hidden px-4 pt-4 pb-3"
-        style={{
-          background: `linear-gradient(to bottom, transparent 0%, var(--background) 100%), url(https://d2xsxph8kpxj0f.cloudfront.net/310519663361417877/U3ZSLTmW8mQsvZ2KUYsYhR/merchpad-hero-bg-QTNZkgshAugSQaW8YVe4nh.webp) center/cover no-repeat`,
-          minHeight: 120,
-        }}>
+      <div className="relative overflow-hidden px-4 pt-4 pb-3" style={{ minHeight: 120 }}>
+        <div className="absolute inset-0 opacity-[0.06] pointer-events-none text-foreground" aria-hidden="true">
+          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="merch-bg-pattern" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
+                {/* t-shirt */}
+                <path d="M6 10 L2 18 L9 20 L9 32 L21 32 L21 20 L28 18 L24 10 C21 14 15 14 11 10 Z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinejoin="round"/>
+                {/* vinyl */}
+                <circle cx="62" cy="25" r="9" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+                <circle cx="62" cy="25" r="3" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+                {/* tote bag */}
+                <path d="M34 56 L32 70 L48 70 L46 56 Z M37 56 Q37 51 40 51 Q43 51 43 56" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#merch-bg-pattern)"/>
+          </svg>
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background pointer-events-none" />
         <div className="relative z-10">
           <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1 opacity-80">Merch Office</p>
           <h1 className="text-2xl font-black text-foreground leading-tight" style={{ letterSpacing: '-0.03em' }}>
