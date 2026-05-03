@@ -79,7 +79,7 @@ export function AdjustmentModal({ variantName, currentStock, onSave, onClose }: 
 
   return (
     <RightDrawer open={true} onClose={onClose} title="Stock Adjustment" subtitle={variantName}>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="overflow-y-auto p-3 space-y-3">
         <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
           {(['remove', 'add'] as const).map(m => (
             <button key={m} onClick={() => setMode(m)}
@@ -117,7 +117,7 @@ export function AdjustmentModal({ variantName, currentStock, onSave, onClose }: 
           className="w-full px-3 py-2 rounded-lg text-sm text-foreground border focus:outline-none placeholder:text-muted-foreground"
           style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
       </div>
-      <div className="flex gap-2 p-4 flex-shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+      <div className="flex gap-2 p-3 flex-shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
         <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground"
           style={{ border: '1px solid var(--border)' }}>Cancel</button>
         <button onClick={() => { if (!qty || parseInt(qty) <= 0) { toast.error('Enter a valid quantity'); return; } onSave(delta, reason, notes); }}
