@@ -78,7 +78,7 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
 
   return (
     <RightDrawer open={open} onClose={onClose} title={product.name} subtitle="Stock Transfer">
-      <div className="overflow-y-auto p-3 space-y-3 pb-6">
+      <div className="min-h-0 overflow-y-auto p-3 space-y-3 pb-6">
 
         {/* Direction picker */}
         <div className="grid grid-cols-2 gap-2">
