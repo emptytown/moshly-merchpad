@@ -1177,7 +1177,7 @@ export default function TallyCounter() {
       {(() => {
         const isSticky = tallyMode ? stickyBarTally : stickyBarRegister;
         return (
-        <div className={isSticky ? 'fixed left-0 right-0 bottom-16 z-30 px-4 pb-2' : 'px-4 pb-4 mt-4'}>
+        <div className={isSticky ? 'fixed left-0 right-0 bottom-16 z-30 px-4 pb-2 lg:max-w-[430px] lg:left-1/2 lg:-translate-x-1/2' : 'px-4 pb-4 mt-4'}>
         <div className={cn(
           'mp-tally-action-bar rounded-2xl p-3 shadow-2xl transition-all duration-300',
         )}
