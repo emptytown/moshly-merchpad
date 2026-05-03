@@ -429,7 +429,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
                       type="number" min="0" step="1"
                       className="w-full pl-5 pr-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right" />
                   </div>
-                  <input value={v.currentStock} onChange={e => { const n = parseInt(e.target.value) || 0; updateVariant(v.id, 'currentStock', n); updateVariant(v.id, 'initialStock', n); }}
+                  <input value={v.currentStock} onChange={e => { const n = parseInt(e.target.value) || 0; const isWH = settings.defaultStockLocation === 'warehouse'; updateVariant(v.id, 'currentStock', n); updateVariant(v.id, 'initialStock', n); updateVariant(v.id, 'warehouseStock', isWH ? n : 0); updateVariant(v.id, 'roadStock', isWH ? 0 : n); }}
                     type="number" min="0" placeholder="Stock"
                     className="w-16 px-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right" />
                   <button onClick={() => removeVariant(v.id)} className="text-[#7B7F93] hover:text-[#F87171] p-1 flex-shrink-0">
@@ -663,7 +663,7 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
   if (!shows.length) return null;
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-1">
         <button onClick={() => setSecPastShows(v => !v)} className="flex items-center gap-1.5 group">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Past Shows</p>
           <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secPastShows ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
@@ -819,7 +819,7 @@ export default function MerchOffice() {
         </div>
       </div>
 
-      <div className="px-4 space-y-4 -mt-2">
+      <div className="px-4 space-y-6 -mt-2">
         {/* Quick stats */}
         <div className="grid grid-cols-3 gap-2">
           {[
@@ -837,7 +837,7 @@ export default function MerchOffice() {
 
         {/* Show selector */}
         <div>
-          <button onClick={() => setSecShow(v => !v)} className="flex items-center justify-between w-full mb-2 group">
+          <button onClick={() => setSecShow(v => !v)} className="flex items-center justify-between w-full mb-1 group">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Show</p>
             <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secShow ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
           </button>
@@ -884,7 +884,7 @@ export default function MerchOffice() {
 
         {/* Products */}
         <div>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-1">
             <button onClick={() => setSecProducts(v => !v)} className="flex items-center gap-1.5 group">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Products</p>
               <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secProducts ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
@@ -1021,7 +1021,7 @@ export default function MerchOffice() {
 
         {/* Stock Management */}
         <div>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-1">
             <button onClick={() => setSecStock(v => !v)} className="flex items-center gap-1.5 group">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Stock Management</p>
               <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secStock ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
@@ -1123,7 +1123,7 @@ export default function MerchOffice() {
         </div>
         {/* Team */}
         <div>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1">
             <button onClick={() => setSecTeam(v => !v)} className="flex items-center gap-1.5 group">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Team</p>
               <span className="text-xs text-[#7B7F93] ml-1">· {state.teamMembers.filter(m => m.active).length} active</span>

@@ -202,7 +202,18 @@ export default function DetailInfo() {
       setAuditEntries(all.sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
     }
     load();
-  }, [activeSession]);
+  }, [activeSession, products]);
+
+  // variant → product lookup for filters
+  const variantProductMap = useMemo(() => {
+    const map = new Map<string, { productId: string; category?: string }>();
+    for (const p of activeProducts) {
+      for (const v of p.variants) {
+        map.set(v.id, { productId: p.id, category: p.category });
+      }
+    }
+    return map;
+  }, [activeProducts]);
 
   // ── Filtered sale entries ──────────────────────────────────────────────
 
@@ -217,8 +228,24 @@ export default function DetailInfo() {
       entries = entries.filter(e => new Date(e.timestamp) >= new Date(activeSession.startedAt));
     }
 
+    // Product filter
+    if (filterProduct !== 'all') {
+      entries = entries.filter(e => {
+        const items = e.newValue as Array<{ variantId: string }> | undefined;
+        return items?.some(i => variantProductMap.get(i.variantId)?.productId === filterProduct);
+      });
+    }
+
+    // Category filter
+    if (filterCategory !== 'all') {
+      entries = entries.filter(e => {
+        const items = e.newValue as Array<{ variantId: string }> | undefined;
+        return items?.some(i => variantProductMap.get(i.variantId)?.category === filterCategory);
+      });
+    }
+
     return entries;
-  }, [auditEntries, timeRange, activeSession]);
+  }, [auditEntries, timeRange, activeSession, filterProduct, filterCategory, variantProductMap]);
 
   // ── KPI metrics ────────────────────────────────────────────────────────
 

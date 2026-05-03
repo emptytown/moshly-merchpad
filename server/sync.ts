@@ -62,7 +62,12 @@ syncRouter.post("/batch", async (req, res) => {
 
   // Cleanup expired rows for each unique project in this batch (best-effort)
   const projectIdSet = new Set(items.map((i) => (i as Record<string, unknown>)?.projectId as string).filter(Boolean));
-  await Promise.allSettled(Array.from(projectIdSet).map((pid) => cleanupExpiredRows(userId, pid)));
+  const cleanupResults = await Promise.allSettled(Array.from(projectIdSet).map((pid) => cleanupExpiredRows(userId, pid)));
+  for (const result of cleanupResults) {
+    if (result.status === "rejected") {
+      console.error("sync cleanup error", { userId, error: result.reason instanceof Error ? result.reason.message : result.reason });
+    }
+  }
 
   res.json({ processed, failed });
 });

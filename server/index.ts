@@ -12,6 +12,8 @@ const MOSHLY_SSO_VERIFY_URL =
   process.env.MOSHLY_SSO_VERIFY_URL ||
   "https://moshly.io/api/auth/sso/verify";
 
+const SSO_VERIFY_TIMEOUT_MS = 5000;
+
 const SESSION_COOKIE = "mp_session";
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -42,6 +44,7 @@ async function startServer() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
+        signal: AbortSignal.timeout(SSO_VERIFY_TIMEOUT_MS),
       });
       const data = (await hubRes.json()) as Record<string, unknown>;
       if (!hubRes.ok || !data.success) {

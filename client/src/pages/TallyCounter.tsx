@@ -106,7 +106,7 @@ function TallyCard({
 
   return (
     <div className={cn(
-      'mp-card flex flex-col p-3 select-none transition-all',
+      'mp-card flex flex-col p-3 select-none transition-all min-h-[180px]',
       stockStrokeClass(stockStatus),
       isEmpty && 'opacity-50',
     )}>
@@ -1052,22 +1052,21 @@ export default function TallyCounter() {
 
           {/* TALLY / REGISTER pill toggle */}
           <div className="flex items-center rounded-xl overflow-hidden"
-            style={{ border: '1px solid #2D3048', background: '#0E0F14' }}>
+            style={{ border: '1px solid var(--pill-border)', background: 'var(--pill-bg)' }}>
             <button
               onClick={() => { setMode('tally'); setSetting('tallyMode', 'tally'); }}
               className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold transition-all"
               style={tallyMode
-                ? { background: 'rgba(107,92,255,0.25)', color: '#A78BFA' }
-                : { color: '#7B7F93' }}>
+                ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)', color: '#fff' }
+                : { color: 'var(--pill-text)' }}>
               <Zap size={11} /> Tally
             </button>
-            <div className="w-px h-4 bg-[#2D3048]" />
             <button
               onClick={() => { setMode('register'); setSetting('tallyMode', 'register'); }}
               className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold transition-all"
               style={!tallyMode
-                ? { background: 'rgba(74,222,128,0.2)', color: '#4ADE80' }
-                : { color: '#7B7F93' }}>
+                ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)', color: '#fff' }
+                : { color: 'var(--pill-text)' }}>
               <ShoppingBag size={11} /> Register
             </button>
           </div>
@@ -1140,7 +1139,12 @@ export default function TallyCounter() {
 
       {/* Tally grid */}
       <div className="px-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className={cn(
+          'grid gap-3',
+          filteredVariants.length === 1 ? 'grid-cols-1 max-w-xs mx-auto w-full' :
+          filteredVariants.length === 2 ? 'grid-cols-2' :
+          'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
+        )}>
           {filteredVariants.map(({ variant }) => {
             const stockStatus = getVariantStockStatus(variant);
             const basketQty = tally.items[variant.id]?.qty ?? 0;

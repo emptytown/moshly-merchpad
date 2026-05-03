@@ -235,7 +235,8 @@ function reducer(state: AppState, action: Action): AppState {
             ...p,
             variants: p.variants.map(v => {
               if (v.id !== variantId) return v;
-              return { ...v, currentStock: Math.max(0, v.currentStock + delta) };
+              const newStock = Math.max(0, v.currentStock + delta);
+              return { ...v, currentStock: newStock, roadStock: Math.max(0, (v.roadStock ?? v.currentStock) + delta) };
             }),
           };
         }),
@@ -540,12 +541,14 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
         const v = p.variants.find(v => v.id === item.variantId);
         if (v) {
           const currentProduct = updatedProductsMap.get(p.id) || p;
-          const newStock = Math.max(0, (currentProduct.variants.find(vv => vv.id === v.id)?.currentStock ?? v.currentStock) - item.qty);
-          
+          const existingVariant = currentProduct.variants.find(vv => vv.id === v.id);
+          const newStock = Math.max(0, (existingVariant?.currentStock ?? v.currentStock) - item.qty);
+          const newRoadStock = Math.max(0, (existingVariant?.roadStock ?? existingVariant?.currentStock ?? v.currentStock) - item.qty);
+
           const updatedProduct = {
             ...currentProduct,
             variants: currentProduct.variants.map(pv =>
-              pv.id === v.id ? { ...pv, currentStock: newStock } : pv
+              pv.id === v.id ? { ...pv, currentStock: newStock, roadStock: newRoadStock } : pv
             ),
           };
           updatedProductsMap.set(p.id, updatedProduct);
