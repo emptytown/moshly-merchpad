@@ -565,7 +565,7 @@ function NewShowModal({ onSave, onClose }: { onSave: (s: Show) => void; onClose:
 
   return (
     <RightDrawer open={true} onClose={onClose} title="New Show">
-      <div className="min-h-0 overflow-y-auto p-3 space-y-3">
+      <div className="min-h-0 overflow-y-auto p-3 space-y-4">
         {[
           { label: 'Show Name', val: name, set: setName, ph: 'Summer Tour 2026' },
           { label: 'Venue', val: venue, set: setVenue, ph: 'Altice Arena' },
@@ -600,7 +600,7 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
 
   return (
     <RightDrawer open={true} onClose={onClose} title="Start Sale Session">
-      <div className="min-h-0 overflow-y-auto p-3 space-y-3">
+      <div className="min-h-0 overflow-y-auto p-3 space-y-4">
         <p className="text-sm text-muted-foreground">This will snapshot the current stock for your stand. Stock stroke colors will reflect this allocation.</p>
         <div>
           <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Your Name</label>
@@ -1465,7 +1465,7 @@ function OneOffModal({ onStart, onClose }: { onStart: (repName: string) => Promi
 
   return (
     <RightDrawer open={true} onClose={onClose} title="Quick Sale" subtitle="OneOff — no show required">
-      <div className="min-h-0 overflow-y-auto p-3 space-y-3">
+      <div className="min-h-0 overflow-y-auto p-3 space-y-4">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.2)' }}>
           <Truck size={14} className="text-amber-400 flex-shrink-0" />
           <p className="text-xs text-amber-300">Sale is logged in the OneOff register</p>

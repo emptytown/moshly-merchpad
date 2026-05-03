@@ -109,7 +109,7 @@ export default function TeamEditor() {
         title={editing ? 'Edit Member' : 'New Team Member'}
         subtitle={editing ? editing.name : 'Fill in the details below'}
       >
-        <div className="min-h-0 p-3 space-y-3 overflow-y-auto">
+        <div className="min-h-0 p-3 space-y-4 overflow-y-auto">
           {/* Name */}
           <div>
             <label className="block text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1.5">Name *</label>
