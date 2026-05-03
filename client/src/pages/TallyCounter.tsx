@@ -100,8 +100,6 @@ function TallyCard({
     onIncrement();
   }
 
-  // stockLabel removed — 'In Stock' indicator removed per design decision
-  const stockLabel = stockStatus !== 'high' ? ({ medium: 'Low', low: 'Critical', empty: 'Out' }[stockStatus] ?? '') : '';
   const stockColor = { high: '#4ADE80', medium: '#FBBF24', low: '#F87171', empty: '#F87171' }[stockStatus] ?? '#7B7F93';
 
   return (
@@ -121,12 +119,6 @@ function TallyCard({
           </p>
         </div>
         <div className="flex items-center gap-1.5 ml-2 flex-shrink-0 relative" ref={infoRef}>
-          {stockStatus !== 'high' && (
-            <>
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: stockColor }} />
-              <span className="text-[10px] font-semibold" style={{ color: stockColor }}>{stockLabel}</span>
-            </>
-          )}
           <button
             onClick={e => { e.stopPropagation(); setShowInfo(v => !v); }}
             className="w-5 h-5 rounded-full flex items-center justify-center transition-colors"
