@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, BookOpen, Sparkles, AlertCircle, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign, Info, Pencil } from 'lucide-react';
+import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, BookOpen, Sparkles, AlertCircle, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign, Info, Pencil, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { Product, ProductVariant, Show, TeamMember, getDB } from '../lib/db';
@@ -205,7 +205,7 @@ function ProductEditor({ product, onSave, onClose }: ProductEditorProps) {
   return (
     <RightDrawer open={true} onClose={onClose} title={product ? 'Edit Product' : 'New Product'} className="max-w-md">
 
-        <div className="p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
 
           {/* Catalogue template picker */}
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--primary)', background: 'var(--primary)/5' }}>
@@ -565,7 +565,7 @@ function NewShowModal({ onSave, onClose }: { onSave: (s: Show) => void; onClose:
 
   return (
     <RightDrawer open={true} onClose={onClose} title="New Show">
-      <div className="p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {[
           { label: 'Show Name', val: name, set: setName, ph: 'Summer Tour 2026' },
           { label: 'Venue', val: venue, set: setVenue, ph: 'Altice Arena' },
@@ -600,7 +600,7 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
 
   return (
     <RightDrawer open={true} onClose={onClose} title="Start Sale Session">
-      <div className="p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         <p className="text-sm text-muted-foreground">This will snapshot the current stock for your stand. Stock stroke colors will reflect this allocation.</p>
         <div>
           <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Your Name</label>
@@ -630,6 +630,7 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
 // ── Past Shows Section ────────────────────────────────────────────────────
 interface PastShowsSectionProps {
   shows: Show[];
+  symbol: string;
   secPastShows: boolean;
   setSecPastShows: (v: (prev: boolean) => boolean) => void;
   expandedPastShow: string | null;
@@ -638,7 +639,36 @@ interface PastShowsSectionProps {
   setPastShowStats: React.Dispatch<React.SetStateAction<Record<string, { sessions: number; items: number; revenue: number }>>>;
   onDelete: (showId: string) => Promise<void>;
 }
-function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastShow, setExpandedPastShow, pastShowStats, setPastShowStats, onDelete }: PastShowsSectionProps) {
+
+async function downloadShowReport(show: Show) {
+  const db = await getDB();
+  const batches = await db.getAll('tallyBatches');
+  const showBatches = batches.filter(b => b.showId === show.id && b.status !== 'voided');
+  const rows: string[][] = [['Date', 'Rep', 'Item', 'Qty', 'Unit Price', 'Subtotal', 'Sale Total', 'Shortfall Type']];
+  for (const batch of showBatches) {
+    for (const item of batch.items) {
+      rows.push([
+        new Date(batch.confirmedAt).toLocaleString(),
+        batch.repName,
+        item.variantName,
+        String(item.qty),
+        item.unitPrice.toFixed(2),
+        (item.qty * item.unitPrice).toFixed(2),
+        batch.totalPrice.toFixed(2),
+        batch.shortfallType ?? '',
+      ]);
+    }
+  }
+  const csv = rows.map(r => r.map(v => `"${v.replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${show.name.replace(/\s+/g, '_')}_${show.date}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function PastShowsSection({ shows, symbol, secPastShows, setSecPastShows, expandedPastShow, setExpandedPastShow, pastShowStats, setPastShowStats, onDelete }: PastShowsSectionProps) {
   useEffect(() => {
     if (!shows.length) return;
     async function loadStats() {
@@ -660,7 +690,6 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
     loadStats();
   }, [shows, setPastShowStats]);
 
-  if (!shows.length) return null;
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
@@ -668,11 +697,17 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Past Shows</p>
           <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secPastShows ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
         </button>
-        <span className="text-[10px] text-[#7B7F93]">{shows.length} show{shows.length !== 1 ? 's' : ''}</span>
+        {shows.length > 0 && <span className="text-[10px] text-[#7B7F93]">{shows.length} show{shows.length !== 1 ? 's' : ''}</span>}
       </div>
       {secPastShows && (
         <div className="space-y-2">
-          {shows.map(show => {
+          {shows.length === 0 ? (
+            <div className="mp-card p-6 text-center">
+              <Calendar size={24} className="text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm font-semibold text-muted-foreground">No past shows yet</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Archived shows will appear here with sales reports</p>
+            </div>
+          ) : shows.map(show => {
             const isExpanded = expandedPastShow === show.id;
             const stats = pastShowStats[show.id];
             return (
@@ -698,13 +733,22 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={() => onDelete(show.id)}
-                    className="flex-shrink-0 ml-2 w-7 h-7 flex items-center justify-center rounded-lg text-[#F87171] hover:bg-[rgba(248,113,113,0.12)] transition-colors"
-                    style={{ border: '1px solid rgba(248,113,113,0.25)' }}
-                    title="Permanently delete show">
-                    <Trash2 size={13} />
-                  </button>
+                  <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                    <button
+                      onClick={() => downloadShowReport(show)}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-primary hover:bg-primary/10 transition-colors"
+                      style={{ border: '1px solid rgba(107,92,255,0.25)' }}
+                      title="Download CSV report">
+                      <Download size={13} />
+                    </button>
+                    <button
+                      onClick={() => onDelete(show.id)}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-[#F87171] hover:bg-[rgba(248,113,113,0.12)] transition-colors"
+                      style={{ border: '1px solid rgba(248,113,113,0.25)' }}
+                      title="Permanently delete show">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
                 {/* Expanded stats */}
                 {isExpanded && (
@@ -723,6 +767,12 @@ function PastShowsSection({ shows, secPastShows, setSecPastShows, expandedPastSh
                         <p className="text-base font-black mp-mono text-green-500">{symbol}{stats?.revenue.toFixed(0) ?? '—'}</p>
                       </div>
                     </div>
+                    <button
+                      onClick={() => downloadShowReport(show)}
+                      className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-primary hover:bg-primary/10 transition-colors"
+                      style={{ border: '1px solid rgba(107,92,255,0.2)' }}>
+                      <Download size={12} /> Download Report CSV
+                    </button>
                     <p className="text-[10px] text-[#4A4D5E] mt-2 text-center">Trash icon permanently removes this show and all its data</p>
                   </div>
                 )}
@@ -775,9 +825,31 @@ export default function MerchOffice() {
   }, [shows, selectedShowId]);
 
   // Stats
-  const totalVariants = products.reduce((s, p) => s + p.variants.length, 0);
   const totalStockValue = products.reduce((s, p) => s + p.variants.reduce((vs, v) => vs + v.currentStock * v.price, 0), 0);
-  const totalUnits = products.reduce((s, p) => s + p.variants.reduce((vs, v) => vs + v.currentStock, 0), 0);
+
+  const [allTimeSales, setAllTimeSales] = useState<number | null>(null);
+  const [lastGigRevenue, setLastGigRevenue] = useState<number | null>(null);
+
+  useEffect(() => {
+    async function loadSalesStats() {
+      const db = await getDB();
+      const batches = await db.getAll('tallyBatches');
+      const active = batches.filter(b => b.status !== 'voided');
+      setAllTimeSales(active.reduce((s, b) => s + b.totalPrice, 0));
+
+      const completedShows = shows
+        .filter(s => s.status === 'completed' || s.status === 'archived')
+        .sort((a, b) => b.date.localeCompare(a.date));
+      if (completedShows.length > 0) {
+        const lastShow = completedShows[0];
+        const showBatches = active.filter(b => b.showId === lastShow.id);
+        setLastGigRevenue(showBatches.reduce((s, b) => s + b.totalPrice, 0));
+      } else {
+        setLastGigRevenue(0);
+      }
+    }
+    loadSalesStats();
+  }, [shows]);
 
   if (isLoading) {
     return (
@@ -823,14 +895,14 @@ export default function MerchOffice() {
         {/* Quick stats */}
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: 'Products', value: products.length, sub: `${totalVariants} variants` },
-            { label: 'Units', value: totalUnits, sub: 'in stock' },
-            { label: 'Stock Value', value: formatCurrency(totalStockValue, currency), sub: 'at retail' },
+            { label: 'All-time Sales', value: allTimeSales !== null ? formatCurrency(allTimeSales, currency) : '—', sub: 'total revenue' },
+            { label: 'Last Gig', value: lastGigRevenue !== null ? formatCurrency(lastGigRevenue, currency) : '—', sub: shows.some(s => s.status === 'completed' || s.status === 'archived') ? 'prev show' : 'no shows yet' },
+            { label: 'In Stock', value: formatCurrency(totalStockValue, currency), sub: 'at retail' },
           ].map(({ label, value, sub }) => (
             <div key={label} className="mp-card p-3 text-center">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
-              <p className="text-xl font-black text-foreground leading-none mp-mono">{value}</p>
-              <p className="text-xs text-muted-foreground mt-1">{sub}</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 leading-tight">{label}</p>
+              <p className="text-lg font-black text-foreground leading-none mp-mono">{value}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">{sub}</p>
             </div>
           ))}
         </div>
@@ -874,6 +946,14 @@ export default function MerchOffice() {
             <div>
               <p className="text-sm font-bold text-[#7C6DFF]">Session Active</p>
               <p className="text-xs text-[#A4A7B5]">{activeSession.repName}{activeSession.standName ? ` · ${activeSession.standName}` : ''}</p>
+              {(() => {
+                const activeShow = shows.find(s => s.id === activeSession.showId);
+                return activeShow ? (
+                  <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'rgba(124,109,255,0.7)' }}>
+                    <Calendar size={10} />{activeShow.name} · {activeShow.venue}
+                  </p>
+                ) : null;
+              })()}
             </div>
             <button onClick={() => navigate('/tally')}
               className="px-4 py-2 rounded-xl text-sm font-bold text-white mp-btn-primary flex items-center gap-1.5">
@@ -886,7 +966,9 @@ export default function MerchOffice() {
         <div>
           <div className="flex items-center justify-between mb-1">
             <button onClick={() => setSecProducts(v => !v)} className="flex items-center gap-1.5 group">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Products</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Products {products.length > 0 && <span className="font-normal normal-case">({products.length} item{products.length !== 1 ? 's' : ''})</span>}
+              </p>
               <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secProducts ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
             </button>
             <button onClick={() => setEditingProduct('new')}
@@ -1152,6 +1234,7 @@ export default function MerchOffice() {
         {/* Past shows summary */}
         <PastShowsSection
           shows={shows.filter(s => s.status === 'completed' || s.status === 'archived')}
+          symbol={symbol}
           secPastShows={secPastShows}
           setSecPastShows={setSecPastShows}
           expandedPastShow={expandedPastShow}
@@ -1382,7 +1465,7 @@ function OneOffModal({ onStart, onClose }: { onStart: (repName: string) => Promi
 
   return (
     <RightDrawer open={true} onClose={onClose} title="Quick Sale" subtitle="OneOff — no show required">
-      <div className="p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.2)' }}>
           <Truck size={14} className="text-amber-400 flex-shrink-0" />
           <p className="text-xs text-amber-300">Sale is logged in the OneOff register</p>

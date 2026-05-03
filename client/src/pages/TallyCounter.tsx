@@ -750,7 +750,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
 export default function TallyCounter() {
   const [, navigate] = useLocation();
   const { state, dispatch, confirmSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock } = useMerchPad();
-  const { products, activeSession, tally, settings, teamMembers } = state;
+  const { products, activeSession, tally, settings, teamMembers, shows } = state;
   const currency = settings.currency ?? 'EUR';
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
   const allowMidSaleRestock = settings.allowMidSaleRestock ?? false;
@@ -1027,6 +1027,10 @@ export default function TallyCounter() {
             {activeSession.sessionType === 'oneoff' ? 'ONEOFF' : 'SESSION'}
           </span>
           <span className="text-xs text-[#7B7F93] truncate">· {activeSession.repName}</span>
+          {activeSession.sessionType !== 'oneoff' && (() => {
+            const show = shows?.find(s => s.id === activeSession.showId);
+            return show ? <span className="text-xs text-[#4A4D5E] truncate">· {show.name}</span> : null;
+          })()}
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -1143,7 +1147,7 @@ export default function TallyCounter() {
           'grid gap-3',
           filteredVariants.length === 1 ? 'grid-cols-1 max-w-xs mx-auto w-full' :
           filteredVariants.length === 2 ? 'grid-cols-2' :
-          'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
+          'grid-cols-2 sm:grid-cols-3'
         )}>
           {filteredVariants.map(({ variant }) => {
             const stockStatus = getVariantStockStatus(variant);
@@ -1185,19 +1189,19 @@ export default function TallyCounter() {
         <div className={cn(
           'mp-tally-action-bar rounded-2xl p-3 shadow-2xl transition-all duration-300',
         )}
-          style={{ background: 'rgba(20,22,36,0.97)', backdropFilter: 'blur(20px)', border: '1px solid #2D3048' }}>
+          style={{ background: 'var(--card)', backdropFilter: 'blur(20px)', border: '1px solid var(--border)' }}>
           {/* Totals row */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <div>
-                <p className="text-xs text-[#7B7F93]">{tallyMode ? 'Sold' : 'Units'}</p>
+                <p className="text-xs text-muted-foreground">{tallyMode ? 'Sold' : 'Units'}</p>
                 <p className="text-lg font-black text-foreground mp-mono leading-none">
                   {tallyMode ? sessionTotalUnits : totalUnits}
                 </p>
               </div>
-              <div className="w-px h-8 bg-[#24273A]" />
+              <div className="w-px h-8 bg-border" />
               <div>
-                <p className="text-xs text-[#7B7F93]">Total</p>
+                <p className="text-xs text-muted-foreground">Total</p>
                 <p className="text-lg font-black mp-gradient-text mp-mono leading-none">
                   {symbol}{(tallyMode ? sessionTotalRevenue : totalRevenue).toFixed(2)}
                 </p>
@@ -1207,8 +1211,8 @@ export default function TallyCounter() {
               {settings.undoEnabled && tally.lastAction && (
                 <button
                   onClick={() => dispatch({ type: 'TALLY_UNDO_LAST' })}
-                  className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] hover:text-[#E6E7EB] transition-colors"
-                  style={{ border: '1px solid #2D3048' }}>
+                  className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                  style={{ border: '1px solid var(--border)' }}>
                   <RotateCcw size={13} /> Undo
                 </button>
               )}
@@ -1225,7 +1229,7 @@ export default function TallyCounter() {
           {/* Action button — context-aware */}
           {tallyMode ? (
             <div className="mp-tally-mode-hint w-full py-3.5 rounded-xl text-sm font-bold text-center select-none"
-              style={{ background: '#1B1E2E', color: '#3D4060', border: '1px solid #1E2030' }}>
+              style={{ background: 'var(--muted)', color: 'var(--muted-foreground)', border: '1px solid var(--border)' }}>
               Tally Mode — tap + to sell instantly
             </div>
           ) : (

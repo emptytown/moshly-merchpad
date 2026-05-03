@@ -78,8 +78,8 @@ export function RightDrawer({ open, onClose, title, subtitle, children, classNam
           </button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        {/* Body — flex column so children own their own scroll areas */}
+        <div className="flex-1 min-h-0 flex flex-col">
           {children}
         </div>
       </div>

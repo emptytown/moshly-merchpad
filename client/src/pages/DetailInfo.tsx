@@ -79,7 +79,7 @@ export function AdjustmentModal({ variantName, currentStock, onSave, onClose }: 
 
   return (
     <RightDrawer open={true} onClose={onClose} title="Stock Adjustment" subtitle={variantName}>
-      <div className="p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
           {(['remove', 'add'] as const).map(m => (
             <button key={m} onClick={() => setMode(m)}
