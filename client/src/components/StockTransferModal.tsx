@@ -78,8 +78,7 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
 
   return (
     <RightDrawer open={open} onClose={onClose} title={product.name} subtitle="Stock Transfer">
-      {/* Single scrollable column — content flows top→bottom, no wasted space */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-8">
+      <div className="overflow-y-auto p-3 space-y-3 pb-6">
 
         {/* Direction picker */}
         <div className="grid grid-cols-2 gap-2">
@@ -90,7 +89,7 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
               <button
                 key={d}
                 onClick={() => switchDirection(d)}
-                className="relative flex flex-col items-center gap-2 rounded-xl p-4 transition-all"
+                className="relative flex flex-col items-center gap-1.5 rounded-xl p-2.5 transition-all"
                 style={{
                   border: active
                     ? `2px solid ${isToRoad ? '#6B5CFF' : '#f59e0b'}`
@@ -102,7 +101,7 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
               >
                 {active && (
                   <div
-                    className="absolute top-2 right-2 w-2 h-2 rounded-full"
+                    className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full"
                     style={{ background: isToRoad ? '#6B5CFF' : '#f59e0b' }}
                   />
                 )}
@@ -169,7 +168,7 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
             return (
               <div
                 key={v.id}
-                className="rounded-xl p-3 space-y-3"
+                className="rounded-xl p-2.5 space-y-2"
                 style={{
                   background: 'var(--muted)',
                   opacity: exhausted ? 0.5 : 1,
@@ -258,7 +257,7 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
         </div>
 
         {/* Note */}
-        <div className="pt-1">
+        <div>
           <div className="flex items-center gap-1.5 mb-2.5">
             <FileText size={15} className="text-muted-foreground" />
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
@@ -270,7 +269,7 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
             onChange={e => setNote(e.target.value)}
             placeholder={noteRequired ? "Required reason for transfer..." : "Optional transfer note..."}
             className="w-full bg-muted border border-border rounded-xl p-3.5 text-sm focus:ring-1 ring-primary outline-none resize-none transition-all"
-            rows={3}
+            rows={2}
           />
         </div>
 
