@@ -131,7 +131,9 @@ export interface StockAdjustment {
 export interface SyncQueueItem {
   id: string;
   projectId: string; // SCOPED
-  type: 'tally_batch' | 'stock_adjustment' | 'session_start' | 'session_end';
+  type: 'tally_batch' | 'stock_adjustment' | 'session_start' | 'session_end'
+      | 'product_upsert' | 'show_upsert' | 'team_member_upsert' | 'settings_update'
+      | 'product_delete' | 'show_delete' | 'team_member_delete';
   payload: unknown;
   createdAt: string;
   attempts: number;

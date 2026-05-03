@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
+import { syncRouter } from "./sync.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +27,8 @@ async function startServer() {
     if (!raw) { res.status(401).json({ error: "no_session" }); return; }
     try { JSON.parse(raw); next(); } catch { res.status(401).json({ error: "invalid_session" }); }
   }
+
+  app.use("/api/sync", requireAuth, syncRouter);
 
   // SSO callback: MerchPad receives token from Hub and validates it server-side
   app.post("/api/auth/moshly-verify", async (req, res) => {

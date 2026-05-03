@@ -7,9 +7,12 @@ import React, { createContext, useContext, useEffect, useReducer, useCallback, u
 import { v4 as uuidv4 } from 'uuid';
 import {
   getDB, getDeviceId, getSetting, setSetting, enqueueSync, addAuditEntry,
+  getPendingSyncItems, markSyncItemDone,
   Product, ProductVariant, Show, SaleSession, TallyBatch, StockAdjustment, AuditEntry,
   calcStockStatus, StockStatus, TeamMember,
 } from '../lib/db';
+import { startSyncWorker, stopSyncWorker, onSyncComplete } from '../lib/syncWorker';
+import { restoreProjectFromServer } from '../lib/restoreFromServer';
 import { useProjects } from './ProjectContext';
 
 // ── Tally State ────────────────────────────────────────────────────────────
@@ -328,6 +331,12 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       const db = await getDB();
       const projectId = activeProject.id;
 
+      // If IndexedDB is empty for this project, try to restore from server (new device)
+      const existingProducts = await db.getAllFromIndex('products', 'by-project', projectId);
+      if (existingProducts.length === 0 && navigator.onLine) {
+        await restoreProjectFromServer(projectId);
+      }
+
       const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason, currency, defaultStockLocation, requireTransferNote] = await Promise.all([
         db.getAllFromIndex('products', 'by-project', projectId),
         db.getAllFromIndex('shows', 'by-project', projectId),
@@ -390,6 +399,24 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // ── Sync worker — starts/restarts when active project changes ────────────
+
+  useEffect(() => {
+    if (!activeProject) return;
+    const projectId = activeProject.id;
+
+    startSyncWorker(projectId);
+
+    const unsubscribe = onSyncComplete((pendingCount) => {
+      dispatch({ type: 'SET_PENDING_SYNC_COUNT', payload: pendingCount });
+    });
+
+    return () => {
+      stopSyncWorker();
+      unsubscribe();
+    };
+  }, [activeProject]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -478,6 +505,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     if (items.length === 0 || !activeSession) return null;
 
     const db = await getDB();
+    const projectId = activeSession.projectId;
     const now = new Date().toISOString();
     const totalItems = items.reduce((s, i) => s + i.qty, 0);
     const totalPrice = items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
@@ -526,7 +554,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    for (const p of updatedProductsMap.values()) {
+    for (const p of Array.from(updatedProductsMap.values())) {
       await db.put('products', p);
     }
 
@@ -608,6 +636,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     };
 
     await db.put('stockAdjustments', adjustment);
+    await enqueueSync(projectId, 'stock_adjustment', adjustment);
 
     // Update product stock
     const products = await db.getAllFromIndex('products', 'by-project', projectId);
@@ -640,6 +669,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     const db = await getDB();
     const taggedProduct = { ...product, projectId: activeProject.id };
     await db.put('products', taggedProduct);
+    await enqueueSync(activeProject.id, 'product_upsert', taggedProduct);
     const existing = stateRef.current.products.find(p => p.id === taggedProduct.id);
     if (existing) {
       dispatch({ type: 'UPDATE_PRODUCT', payload: taggedProduct });
@@ -649,30 +679,37 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
   }, [activeProject]);
 
   const deleteProduct = useCallback(async (productId: string) => {
+    if (!activeProject) return;
     const db = await getDB();
     await db.delete('products', productId);
+    await enqueueSync(activeProject.id, 'product_delete', { id: productId });
     dispatch({ type: 'DELETE_PRODUCT', payload: productId });
-  }, []);
+  }, [activeProject]);
 
   const deleteShow = useCallback(async (showId: string) => {
+    if (!activeProject) return;
     const db = await getDB();
     await db.delete('shows', showId);
+    await enqueueSync(activeProject.id, 'show_delete', { id: showId });
     dispatch({ type: 'DELETE_SHOW', payload: showId });
-  }, []);
+  }, [activeProject]);
 
   const saveTeamMember = useCallback(async (member: TeamMember) => {
     if (!activeProject) return;
     const db = await getDB();
     const taggedMember = { ...member, projectId: activeProject.id };
     await db.put('teamMembers', taggedMember);
+    await enqueueSync(activeProject.id, 'team_member_upsert', taggedMember);
     dispatch({ type: 'UPSERT_TEAM_MEMBER', payload: taggedMember });
   }, [activeProject]);
 
   const deleteTeamMember = useCallback(async (memberId: string) => {
+    if (!activeProject) return;
     const db = await getDB();
     await db.delete('teamMembers', memberId);
+    await enqueueSync(activeProject.id, 'team_member_delete', { id: memberId });
     dispatch({ type: 'DELETE_TEAM_MEMBER', payload: memberId });
-  }, []);
+  }, [activeProject]);
 
   const getTeamMemberStats = useCallback(async (memberId: string) => {
     if (!activeProject) return { shifts: 0, hoursWorked: 0, totalItems: 0, totalRevenue: 0 };
@@ -719,6 +756,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     const db = await getDB();
     const taggedShow = { ...show, projectId: activeProject.id };
     await db.put('shows', taggedShow);
+    await enqueueSync(activeProject.id, 'show_upsert', taggedShow);
     const existing = stateRef.current.shows.find(s => s.id === taggedShow.id);
     if (existing) {
       dispatch({ type: 'UPDATE_SHOW', payload: taggedShow });
