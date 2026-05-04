@@ -501,15 +501,15 @@ function ShowSelector({ shows, selectedShowId, onSelect, onNewShow, onEdit, onDe
       <button onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-left transition-colors"
         style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-1">
           <Calendar size={16} className="text-primary" />
           {selected ? (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between flex-1">
               <div>
                 <p className="text-sm font-semibold text-foreground">{selected.name}</p>
                 <p className="text-xs text-muted-foreground">{selected.venue} · {formatDate(selected.date)}</p>
               </div>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 uppercase tracking-tighter">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 uppercase tracking-tighter mr-2">
                 Active Sale
               </span>
             </div>
@@ -1159,7 +1159,7 @@ export default function MerchOffice() {
                         <span className="text-[#7B7F93] flex-shrink-0">
                           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </span>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold text-foreground truncate">{product.name}</p>
                             {product.status === 'suspended' && (
@@ -1171,9 +1171,9 @@ export default function MerchOffice() {
                           <p className="text-xs text-[#7B7F93]">{product.variants.length} variants</p>
                         </div>
                     {!isExpanded && (
-                      <div className="flex items-center gap-2 ml-2">
-                        <span className="text-xs font-bold mp-mono text-primary">{totalWH} WH</span>
-                        <span className="text-xs font-bold mp-mono text-green-500">{totalRoad} Road</span>
+                      <div className="flex items-center gap-2 px-2">
+                        <span className="text-xs font-bold mp-mono text-primary whitespace-nowrap">{totalWH} WH</span>
+                        <span className="text-xs font-bold mp-mono text-green-500 whitespace-nowrap">{totalRoad} Road</span>
                       </div>
                     )}
                       </div>

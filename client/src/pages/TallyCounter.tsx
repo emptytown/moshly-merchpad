@@ -138,8 +138,12 @@ function TallyCard({
                 ))}
                 <div className="border-t border-[#24273A] pt-1.5 mt-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-[#7B7F93]">In stock</span>
-                    <span className="text-[10px] font-bold" style={{ color: stockColor }}>{liveStock}</span>
+                    <span className="text-[10px] text-[#7B7F93]">Road stock</span>
+                    <span className="text-[10px] font-bold" style={{ color: stockColor }}>{variant.roadStock ?? liveStock}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-[#7B7F93]">Warehouse</span>
+                    <span className="text-[10px] font-semibold text-[#A4A7B5]">{variant.warehouseStock ?? 0}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-[#7B7F93]">Price</span>
@@ -223,15 +227,15 @@ function TallyCard({
           </span>
         ) : tallyMode ? (
           (() => {
-            // liveStock is already post-sale (confirmSale decrements currentStock in DB+state)
-            if (liveStock <= 0) return (
+            const displayStock = variant.roadStock ?? liveStock;
+            if (displayStock <= 0) return (
               <span className="text-xs font-bold mp-mono text-[#F87171]">Out</span>
             );
-            if (liveStock <= 3) return (
-              <span className="text-xs font-bold mp-mono text-[#FBBF24]">{liveStock} Left</span>
+            if (displayStock <= 3) return (
+              <span className="text-xs font-bold mp-mono text-[#FBBF24]">{displayStock} Left</span>
             );
             return (
-              <span className="text-xs font-bold mp-mono text-[#4ADE80]">{liveStock} Left</span>
+              <span className="text-xs font-bold mp-mono text-[#4ADE80]">{displayStock} Left</span>
             );
           })()
         ) : (
@@ -902,7 +906,7 @@ export default function TallyCounter() {
   const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number) => {
     // Guard against oversell: use live currentStock from state.products directly
     const liveVariantCheck = state.products.flatMap(p => p.variants).find(v => v.id === variantId);
-    if (!liveVariantCheck || liveVariantCheck.currentStock <= 0) {
+    if (!liveVariantCheck || (liveVariantCheck.roadStock ?? liveVariantCheck.currentStock) <= 0) {
       toast.error(`${variantName} — no stock left!`, { duration: 2000 });
       return;
     }
@@ -1154,7 +1158,7 @@ export default function TallyCounter() {
                 basketQty={basketQty}
                 stockStatus={stockStatus}
                 tallyMode={tallyMode}
-                effectivelyEmpty={liveVariant.currentStock <= 0}
+                effectivelyEmpty={(variant.roadStock ?? liveVariant.currentStock) <= 0}
                 onIncrement={() => dispatch({ type: 'TALLY_INCREMENT', payload: { variantId: variant.id, variantName: variant.name, unitPrice: variant.price } })}
                 onDecrement={() => dispatch({ type: 'TALLY_DECREMENT', payload: { variantId: variant.id, variantName: variant.name } })}
                 onInstantSell={() => handleInstantSell(variant.id, variant.name, variant.price)}

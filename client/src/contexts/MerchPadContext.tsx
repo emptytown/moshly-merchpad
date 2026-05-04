@@ -235,8 +235,8 @@ function reducer(state: AppState, action: Action): AppState {
             ...p,
             variants: p.variants.map(v => {
               if (v.id !== variantId) return v;
-              const newStock = Math.max(0, v.currentStock + delta);
-              return { ...v, currentStock: newStock, roadStock: Math.max(0, (v.roadStock ?? v.currentStock) + delta) };
+              const newRoadStock = Math.max(0, (v.roadStock ?? v.currentStock) + delta);
+              return { ...v, currentStock: newRoadStock, roadStock: newRoadStock };
             }),
           };
         }),
@@ -542,13 +542,12 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
         if (v) {
           const currentProduct = updatedProductsMap.get(p.id) || p;
           const existingVariant = currentProduct.variants.find(vv => vv.id === v.id);
-          const newStock = Math.max(0, (existingVariant?.currentStock ?? v.currentStock) - item.qty);
           const newRoadStock = Math.max(0, (existingVariant?.roadStock ?? existingVariant?.currentStock ?? v.currentStock) - item.qty);
 
           const updatedProduct = {
             ...currentProduct,
             variants: currentProduct.variants.map(pv =>
-              pv.id === v.id ? { ...pv, currentStock: newStock, roadStock: newRoadStock } : pv
+              pv.id === v.id ? { ...pv, currentStock: newRoadStock, roadStock: newRoadStock } : pv
             ),
           };
           updatedProductsMap.set(p.id, updatedProduct);
@@ -775,8 +774,9 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     // Use the live currentStock from the products array (updated via UPDATE_VARIANT_STOCK dispatch)
     const liveVariant = products.flatMap(p => p.variants).find(v => v.id === variant.id) ?? variant;
     const initial = activeSession?.stockSnapshot[variant.id] ?? liveVariant.initialStock;
-    if (liveVariant.currentStock <= 0) return 'empty';
-    const pct = liveVariant.currentStock / (initial || 1);
+    const current = liveVariant.roadStock ?? liveVariant.currentStock;
+    if (current <= 0) return 'empty';
+    const pct = current / (initial || 1);
     if (pct > settings.stockThresholdYellow) return 'high';
     if (pct > settings.stockThresholdRed) return 'medium';
     return 'low';
