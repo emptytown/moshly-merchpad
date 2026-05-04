@@ -487,9 +487,12 @@ interface ShowSelectorProps {
   selectedShowId: string;
   onSelect: (id: string) => void;
   onNewShow: () => void;
+  onEdit: (s: Show) => void;
+  onDelete: (id: string) => void;
+  onActivate: (id: string) => void;
 }
 
-function ShowSelector({ shows, selectedShowId, onSelect, onNewShow }: ShowSelectorProps) {
+function ShowSelector({ shows, selectedShowId, onSelect, onNewShow, onEdit, onDelete, onActivate }: ShowSelectorProps) {
   const [open, setOpen] = useState(false);
   const selected = shows.find(s => s.id === selectedShowId);
 
@@ -501,9 +504,14 @@ function ShowSelector({ shows, selectedShowId, onSelect, onNewShow }: ShowSelect
         <div className="flex items-center gap-3">
           <Calendar size={16} className="text-primary" />
           {selected ? (
-            <div>
-              <p className="text-sm font-semibold text-foreground">{selected.name}</p>
-              <p className="text-xs text-muted-foreground">{selected.venue} · {formatDate(selected.date)}</p>
+            <div className="flex items-center gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">{selected.name}</p>
+                <p className="text-xs text-muted-foreground">{selected.venue} · {formatDate(selected.date)}</p>
+              </div>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 uppercase tracking-tighter">
+                Active Sale
+              </span>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">Select a show</p>
@@ -515,22 +523,32 @@ function ShowSelector({ shows, selectedShowId, onSelect, onNewShow }: ShowSelect
       {open && (
         <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-10 shadow-2xl"
           style={{ background: 'var(--popover)', border: '1px solid var(--border)' }}>
-          {shows.map(s => (
-            <button key={s.id} onClick={() => { onSelect(s.id); setOpen(false); }}
-              className={cn('w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-accent/10 transition-colors',
-                s.id === selectedShowId && 'bg-primary/10')}>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">{s.name}</p>
-                <p className="text-xs text-muted-foreground">{s.venue} · {formatDate(s.date)}</p>
+          <div className="max-h-60 overflow-y-auto">
+            {shows.map(s => (
+              <div key={s.id} onClick={() => { onSelect(s.id); setOpen(false); }}
+                className={cn('w-full flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/10 transition-colors',
+                  s.id === selectedShowId && 'bg-primary/10')}>
+                <div className="flex-1 min-w-0 mr-2">
+                  <p className="text-sm font-semibold text-foreground truncate">{s.name}</p>
+                  <p className="text-xs text-muted-foreground">{s.venue} · {formatDate(s.date)}</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button onClick={(e) => { e.stopPropagation(); onActivate(s.id); }} 
+                    className="p-1.5 rounded-lg text-primary hover:bg-primary/20 transition-colors" title="Activate">
+                    <Play size={14} fill="currentColor" />
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); onEdit(s); }} 
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Edit">
+                    <Pencil size={14} />
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); onDelete(s.id); }} 
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Delete">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
-              <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
-                s.status === 'upcoming' ? 'text-green-500 bg-green-500/10' :
-                s.status === 'active' ? 'text-primary bg-primary/10' :
-                'text-muted-foreground bg-muted')}>
-                {s.status}
-              </span>
-            </button>
-          ))}
+            ))}
+          </div>
           <button onClick={() => { onNewShow(); setOpen(false); }}
             className="w-full flex items-center gap-2 px-4 py-3 text-sm text-primary hover:bg-accent/10 transition-colors border-t border-border">
             <Plus size={14} /> New Show
@@ -543,28 +561,28 @@ function ShowSelector({ shows, selectedShowId, onSelect, onNewShow }: ShowSelect
 
 // ── New Show Modal ─────────────────────────────────────────────────────────
 
-function NewShowModal({ onSave, onClose }: { onSave: (s: Show) => void; onClose: () => void }) {
-  const [name, setName] = useState('');
-  const [venue, setVenue] = useState('');
-  const [city, setCity] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+function NewShowModal({ initialShow, onSave, onClose }: { initialShow?: Show; onSave: (s: Show) => void; onClose: () => void }) {
+  const [name, setName] = useState(initialShow?.name ?? '');
+  const [venue, setVenue] = useState(initialShow?.venue ?? '');
+  const [city, setCity] = useState(initialShow?.city ?? '');
+  const [date, setDate] = useState(initialShow?.date ?? new Date().toISOString().split('T')[0]);
 
   function handleSave() {
     if (!name.trim() || !venue.trim()) { toast.error('Name and venue required'); return; }
     const show: Show = {
-      id: uuidv4(),
+      id: initialShow?.id ?? uuidv4(),
       name: name.trim(),
       venue: venue.trim(),
       city: city.trim() || undefined,
       date,
-      status: 'upcoming',
-      createdAt: new Date().toISOString(),
+      status: initialShow?.status ?? 'upcoming',
+      createdAt: initialShow?.createdAt ?? new Date().toISOString(),
     };
     onSave(show);
   }
 
   return (
-    <RightDrawer open={true} onClose={onClose} title="New Show">
+    <RightDrawer open={true} onClose={onClose} title={initialShow ? "Edit Show" : "New Show"}>
       <div className="min-h-0 overflow-y-auto p-3 space-y-4">
         {[
           { label: 'Show Name', val: name, set: setName, ph: 'Summer Tour 2026' },
@@ -585,7 +603,9 @@ function NewShowModal({ onSave, onClose }: { onSave: (s: Show) => void; onClose:
       </div>
       <div className="flex gap-2 p-3 border-t border-border flex-shrink-0">
         <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground" style={{ border: '1px solid var(--border)' }}>Cancel</button>
-        <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">Save Show</button>
+        <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
+          {initialShow ? "Update Show" : "Save Show"}
+        </button>
       </div>
     </RightDrawer>
   );
@@ -605,12 +625,15 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
         <div>
           <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Your Name</label>
           <input value={repName} onChange={e => setRepName(e.target.value)} placeholder="João"
-            className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+            className="w-full px-3 py-2.5 rounded-xl text-sm text-[#E6E7EB] placeholder:text-[#4A4D5E] outline-none"
+            style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)' }}
+            autoFocus />
         </div>
         <div>
           <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Stand / Location (optional)</label>
           <input value={stand} onChange={e => setStand(e.target.value)} placeholder="Stand A"
-            className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none" />
+            className="w-full px-3 py-2.5 rounded-xl text-sm text-[#E6E7EB] placeholder:text-[#4A4D5E] outline-none"
+            style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)' }} />
         </div>
       </div>
       <div className="flex gap-2 p-3 border-t border-border flex-shrink-0">
@@ -794,7 +817,11 @@ export default function MerchOffice() {
 
   const [selectedShowId, setSelectedShowId] = useState(shows.find(s => s.status === 'upcoming')?.id ?? shows[0]?.id ?? '');
   const [editingProduct, setEditingProduct] = useState<Product | 'new' | null>(null);
-  const [showNewShow, setShowNewShow] = useState(false);
+  const [editingShow, setEditingShow] = useState<Show | 'new' | null>(null);
+  const [confirmDeleteShowId, setConfirmDeleteShowId] = useState<string | null>(null);
+  const [confirmDeleteProductId, setConfirmDeleteProductId] = useState<string | null>(null);
+  const [confirmSuspendProductId, setConfirmSuspendProductId] = useState<string | null>(null);
+  const [confirmActivateShowId, setConfirmActivateShowId] = useState<string | null>(null);
   const [showStartSale, setShowStartSale] = useState(false);
   const [showOneOff, setShowOneOff] = useState(false);
   const [transferProduct, setTransferProduct] = useState<Product | null>(null);
@@ -825,7 +852,7 @@ export default function MerchOffice() {
   }, [shows, selectedShowId]);
 
   // Stats
-  const totalStockValue = products.reduce((s, p) => s + p.variants.reduce((vs, v) => vs + v.currentStock * v.price, 0), 0);
+  const totalStockValue = products.reduce((s, p) => s + p.variants.reduce((vs, v) => vs + ((v.warehouseStock ?? 0) + (v.roadStock ?? v.currentStock)) * v.price, 0), 0);
 
   const [allTimeSales, setAllTimeSales] = useState<number | null>(null);
   const [lastGigRevenue, setLastGigRevenue] = useState<number | null>(null);
@@ -917,7 +944,10 @@ export default function MerchOffice() {
             shows={shows}
             selectedShowId={selectedShowId}
             onSelect={setSelectedShowId}
-            onNewShow={() => setShowNewShow(true)}
+            onNewShow={() => setEditingShow('new')}
+            onEdit={setEditingShow}
+            onDelete={setConfirmDeleteShowId}
+            onActivate={setConfirmActivateShowId}
           />}
         </div>
 
@@ -1002,7 +1032,7 @@ export default function MerchOffice() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-[#E6E7EB] mp-mono">
-                      {product.variants.reduce((s, v) => s + v.currentStock, 0)} units
+                      {product.variants.reduce((s, v) => s + (v.warehouseStock ?? 0) + (v.roadStock ?? v.currentStock), 0)} units
                     </span>
                     {expandedProduct === product.id ? <ChevronUp size={14} className="text-[#7B7F93]" /> : <ChevronDown size={14} className="text-[#7B7F93]" />}
                   </div>
@@ -1069,18 +1099,14 @@ export default function MerchOffice() {
                         </button>
                       ) : (
                         <button onClick={async () => {
-                          if (confirm(`Suspend product, are you sure?`)) {
-                            const updated = { ...product, status: 'suspended' as const, updatedAt: new Date().toISOString() };
-                            await saveProduct(updated);
-                            toast.success(`${product.name} suspended`);
-                          }
+                          setConfirmSuspendProductId(product.id);
                         }}
                           className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-orange-500 hover:bg-orange-500/10 transition-colors"
                           style={{ border: '1px solid var(--border)' }}>
                           <UserX size={12} /> Suspend
                         </button>
                       )}
-                      <button onClick={() => { if (confirm(`Delete ${product.name}?`)) deleteProduct(product.id); }}
+                      <button onClick={() => { setConfirmDeleteProductId(product.id); }}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-destructive hover:bg-destructive/10 transition-colors"
                         style={{ border: '1px solid var(--border)' }}>
                         <Trash2 size={12} /> Delete
@@ -1242,10 +1268,8 @@ export default function MerchOffice() {
           pastShowStats={pastShowStats}
           setPastShowStats={setPastShowStats}
           onDelete={async (showId) => {
-            if (!confirm('Permanently delete this show and all its data? This cannot be undone.')) return;
-            await deleteShow(showId);
-            toast.success('Show deleted');
-          }}
+          setConfirmDeleteShowId(showId);
+        }}
         />
 
         <div className="h-4" />
@@ -1373,18 +1397,27 @@ export default function MerchOffice() {
       {confirmDeleteMember && (() => {
         const m = state.teamMembers.find(x => x.id === confirmDeleteMember);
         return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)' }}>
-            <div className="mp-card p-5 max-w-xs w-full space-y-3 animate-in zoom-in-95 duration-200">
-              <p className="text-sm font-bold text-foreground uppercase tracking-tight">Remove {m?.name}?</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">This only removes the team member record. Historical sales data is preserved.</p>
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setConfirmDeleteMember(null)} className="flex-1 py-2 rounded-lg text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors" style={{ border: '1px solid var(--border)' }}>Cancel</button>
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in">
+            <div className="mp-card w-full max-w-xs p-6 shadow-2xl border-destructive/20 text-center">
+              <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-4 mx-auto">
+                <Trash2 size={24} className="text-destructive" />
+              </div>
+              <p className="text-sm font-bold text-foreground mb-1">Remove {m?.name}?</p>
+              <p className="text-xs text-muted-foreground mb-6">This only removes the team member record. Historical sales data is preserved.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmDeleteMember(null)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground border border-border hover:bg-muted transition-colors">
+                  Cancel
+                </button>
                 <button onClick={async () => {
                   await deleteTeamMember(confirmDeleteMember);
                   toast.success('Team member removed');
                   setConfirmDeleteMember(null);
                   setEditingMember(null);
-                }} className="flex-1 py-2 rounded-lg text-sm font-bold text-white bg-destructive/20 hover:bg-destructive/30 border border-destructive/40 transition-colors">Remove</button>
+                }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-destructive hover:bg-destructive/90 transition-colors">
+                  Remove
+                </button>
               </div>
             </div>
           </div>
@@ -1410,11 +1443,134 @@ export default function MerchOffice() {
         />
       )}
 
-      {showNewShow && (
+      {editingShow !== null && (
         <NewShowModal
-          onSave={async (s) => { await saveShow(s); setSelectedShowId(s.id); setShowNewShow(false); toast.success('Show added'); }}
-          onClose={() => setShowNewShow(false)}
+          initialShow={editingShow !== 'new' ? editingShow : undefined}
+          onSave={async (s) => {
+            await saveShow(s);
+            if (editingShow === 'new') setSelectedShowId(s.id);
+            setEditingShow(null);
+            toast.success(editingShow === 'new' ? 'Show added' : 'Show updated');
+          }}
+          onClose={() => setEditingShow(null)}
         />
+      )}
+
+      {confirmDeleteProductId && (() => {
+        const p = products.find(x => x.id === confirmDeleteProductId);
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in">
+            <div className="mp-card w-full max-w-xs p-6 shadow-2xl border-destructive/20 text-center">
+              <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-4 mx-auto">
+                <Trash2 size={24} className="text-destructive" />
+              </div>
+              <p className="text-sm font-bold text-foreground mb-1">Delete {p?.name}?</p>
+              <p className="text-xs text-muted-foreground mb-6">This will permanently remove the product and all its variants. This cannot be undone.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmDeleteProductId(null)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground border border-border hover:bg-muted transition-colors">
+                  Cancel
+                </button>
+                <button onClick={async () => {
+                  if (p) await deleteProduct(p.id);
+                  setConfirmDeleteProductId(null);
+                  toast.success('Product deleted');
+                }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-destructive hover:bg-destructive/90 transition-colors">
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {confirmSuspendProductId && (() => {
+        const p = products.find(x => x.id === confirmSuspendProductId);
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in">
+            <div className="mp-card w-full max-w-xs p-6 shadow-2xl border-orange-500/20 text-center">
+              <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center mb-4 mx-auto">
+                <UserX size={24} className="text-orange-500" />
+              </div>
+              <p className="text-sm font-bold text-foreground mb-1">Suspend {p?.name}?</p>
+              <p className="text-xs text-muted-foreground mb-6">Suspended products are hidden from the sales screen but their stock is preserved.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmSuspendProductId(null)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground border border-border hover:bg-muted transition-colors">
+                  Cancel
+                </button>
+                <button onClick={async () => {
+                  if (p) {
+                    const updated = { ...p, status: 'suspended' as const, updatedAt: new Date().toISOString() };
+                    await saveProduct(updated);
+                    toast.success(`${p.name} suspended`);
+                  }
+                  setConfirmSuspendProductId(null);
+                }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 transition-colors">
+                  Suspend
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {confirmDeleteShowId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in">
+          <div className="mp-card w-full max-w-xs p-6 shadow-2xl border-destructive/20">
+            <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-4 mx-auto">
+              <Trash2 size={24} className="text-destructive" />
+            </div>
+            <p className="text-center text-sm font-bold text-foreground mb-1">Delete this show?</p>
+            <p className="text-center text-xs text-muted-foreground mb-6">Historical data will be preserved, but the show will be removed from lists.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDeleteShowId(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground border border-border hover:bg-muted transition-colors">
+                Cancel
+              </button>
+              <button onClick={async () => {
+                await deleteShow(confirmDeleteShowId);
+                if (selectedShowId === confirmDeleteShowId) {
+                  const remaining = shows.filter(s => s.id !== confirmDeleteShowId);
+                  setSelectedShowId(remaining.find(s => s.status === 'upcoming')?.id ?? remaining[0]?.id ?? '');
+                }
+                setConfirmDeleteShowId(null);
+                toast.success('Show deleted');
+              }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-destructive hover:bg-destructive/90 transition-colors">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmActivateShowId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in">
+          <div className="mp-card w-full max-w-xs p-6 shadow-2xl border-primary/20 text-center">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4 mx-auto">
+              <Play size={24} className="text-primary" fill="currentColor" />
+            </div>
+            <p className="text-sm font-bold text-foreground mb-1">Activate this show?</p>
+            <p className="text-xs text-muted-foreground mb-6">All subsequent sales will be linked to this show's account.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmActivateShowId(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground border border-border hover:bg-muted transition-colors">
+                Cancel
+              </button>
+              <button onClick={() => {
+                setSelectedShowId(confirmActivateShowId);
+                setConfirmActivateShowId(null);
+                toast.success('Show activated');
+              }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showStartSale && (
@@ -1479,7 +1635,7 @@ function OneOffModal({ onStart, onClose }: { onStart: (repName: string) => Promi
             onKeyDown={e => e.key === 'Enter' && handleStart()}
             placeholder="Your name"
             className="w-full px-3 py-2.5 rounded-xl text-sm text-[#E6E7EB] placeholder:text-[#4A4D5E] outline-none"
-            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+            style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)' }}
             autoFocus
           />
         </div>
