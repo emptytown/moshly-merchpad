@@ -261,6 +261,7 @@ interface MerchPadContextValue {
     shortfallAmount?: number;
     shortfallReason?: string;
     shortfallMemberId?: string;
+    tallyOverride?: TallyState;
   }) => Promise<TallyBatch | null>;
   recordSellerDebt: (memberId: string, amount: number) => Promise<void>;
   adjustStock: (variantId: string, productId: string, variantName: string, delta: number, reason: StockAdjustment['reason'], notes?: string) => Promise<void>;
@@ -646,7 +647,9 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       if (p.id !== productId) continue;
       const v = p.variants.find(v => v.id === variantId);
       if (v) {
-        v.currentStock = Math.max(0, v.currentStock + delta);
+        const newStock = Math.max(0, (v.roadStock ?? v.currentStock) + delta);
+        v.currentStock = newStock;
+        v.roadStock = newStock;
         await db.put('products', p);
         dispatch({ type: 'UPDATE_VARIANT_STOCK', payload: { variantId, productId, delta } });
       }

@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { setSetting, getSetting, getDB, ProductVariant, TeamMember } from '../lib/db';
+import { getDB, ProductVariant, TeamMember } from '../lib/db';
 import { cn } from '../lib/utils';
 
 // ── Euro denominations for quick-amount buttons ────────────────────────────
@@ -79,8 +79,9 @@ function TallyCard({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showInfo]);
 
-  // The big displayed number: cumulative sold in Tally mode, basket qty in Register mode
-  const displayQty = tallyMode ? sessionSoldQty : basketQty;
+  // Tally mode: always session cumulative.
+  // Register mode: current basket qty while building a sale; falls back to session cumulative when basket is empty.
+  const displayQty = (!tallyMode && basketQty > 0) ? basketQty : sessionSoldQty;
 
   function handleIncrement(e: React.MouseEvent) {
     e.stopPropagation();
@@ -756,26 +757,17 @@ export default function TallyCounter() {
   const [showShortfallModal, setShowShortfallModal] = useState(false);
   const [pendingMoneyIn, setPendingMoneyIn] = useState(0);
   const [showBasketPreview, setShowBasketPreview] = useState(false);
-  const [filterCategory, setFilterCategory] = useState<string>('all');
-  // Restore persisted category filter on mount
-  useEffect(() => {
-    getSetting<string>('tallyFilterCategory', 'all').then(saved => {
-      if (saved) setFilterCategory(saved);
-    });
-  }, []);
-
-  // Restore persisted mode on mount
-  useEffect(() => {
-    getSetting<string>('tallyMode', 'tally').then(saved => {
-      if (saved === 'register') setMode('register');
-    });
-  }, []);
+  const [filterCategory, setFilterCategory] = useState<string>(
+    () => localStorage.getItem('mp_tallyFilterCategory') ?? 'all'
+  );
 
   const [justConfirmed, setJustConfirmed] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
 
   // TALLY = instant-confirm mode (default), REGISTER = cash drawer modal mode
-  const [mode, setMode] = useState<'tally' | 'register'>('tally');
+  const [mode, setMode] = useState<'tally' | 'register'>(
+    () => localStorage.getItem('mp_tallyMode') === 'register' ? 'register' : 'tally'
+  );
   const tallyMode = mode === 'tally';
 
   // Cumulative session-sold counts — persists across individual sales, resets only at session close
@@ -1054,7 +1046,7 @@ export default function TallyCounter() {
           <div className="flex items-center rounded-xl overflow-hidden"
             style={{ border: '1px solid var(--pill-border)', background: 'var(--pill-bg)' }}>
             <button
-              onClick={() => { setMode('tally'); setSetting('tallyMode', 'tally'); }}
+              onClick={() => { setMode('tally'); localStorage.setItem('mp_tallyMode', 'tally'); }}
               className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold transition-all"
               style={tallyMode
                 ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)', color: '#fff' }
@@ -1062,7 +1054,7 @@ export default function TallyCounter() {
               <Zap size={11} /> Tally
             </button>
             <button
-              onClick={() => { setMode('register'); setSetting('tallyMode', 'register'); }}
+              onClick={() => { setMode('register'); localStorage.setItem('mp_tallyMode', 'register'); }}
               className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold transition-all"
               style={!tallyMode
                 ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)', color: '#fff' }
@@ -1109,7 +1101,7 @@ export default function TallyCounter() {
       {categories.length > 2 && (
         <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-none">
           {categories.map(cat => (
-            <button key={cat} onClick={() => { setFilterCategory(cat); setSetting('tallyFilterCategory', cat); }}
+            <button key={cat} onClick={() => { setFilterCategory(cat); localStorage.setItem('mp_tallyFilterCategory', cat); }}
               className={cn('mp-tally-cat-pill flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
                 filterCategory === cat ? 'mp-tally-cat-pill--active text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]'
               )}
