@@ -17,7 +17,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   Minus, Plus, RotateCcw, Trash2, CheckCircle2, Zap, ShoppingBag,
-  StopCircle, Archive, Info, ChevronDown, ChevronUp, Delete, Eye, Package, X,
+  StopCircle, Archive, Info, ChevronDown, ChevronUp, Delete, Package, X, ShoppingCart,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
@@ -57,11 +57,13 @@ interface TallyCardProps {
   warehouseStock: number;
   onRestock: (qty: number) => void;
   symbol: string;
+  /** Register mode: show only current basket qty (resets to 0 after each confirmed sale) */
+  resetAfterSale: boolean;
 }
 function TallyCard({
   variant, liveStock, sessionSoldQty, basketQty, stockStatus,
   tallyMode, effectivelyEmpty, onIncrement, onDecrement, onInstantSell,
-  allowMidSaleRestock, warehouseStock, onRestock, symbol,
+  allowMidSaleRestock, warehouseStock, onRestock, symbol, resetAfterSale,
 }: TallyCardProps) {
   const [bumping, setBumping] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -80,8 +82,13 @@ function TallyCard({
   }, [showInfo]);
 
   // Tally mode: always session cumulative.
-  // Register mode: current basket qty while building a sale; falls back to session cumulative when basket is empty.
-  const displayQty = (!tallyMode && basketQty > 0) ? basketQty : sessionSoldQty;
+  // Register + resetAfterSale: always show basket qty (reads 0 between confirmed sales).
+  // Register + keep: basket qty while building; fall back to session cumulative when basket is empty.
+  const displayQty = tallyMode
+    ? sessionSoldQty
+    : resetAfterSale
+      ? basketQty
+      : (basketQty > 0 ? basketQty : sessionSoldQty);
 
   function handleIncrement(e: React.MouseEvent) {
     e.stopPropagation();
@@ -257,11 +264,11 @@ interface BasketPreviewProps {
 }
 function BasketPreview({ items, totalRevenue, symbol, onClose, onAdjust }: BasketPreviewProps) {
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center"
+    <div className="fixed inset-0 z-50 flex items-end justify-center"
       style={{ background: 'rgba(14,15,20,0.7)', backdropFilter: 'blur(4px)' }}
       onClick={onClose}>
       <div
-        className="w-full max-w-sm rounded-t-2xl animate-slide-up pb-safe"
+        className="w-full max-w-sm rounded-t-2xl animate-slide-up pb-24"
         style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
@@ -753,6 +760,7 @@ export default function TallyCounter() {
   const allowMidSaleRestock = settings.allowMidSaleRestock ?? false;
   const stickyBarTally = settings.stickyBarTally ?? true;
   const stickyBarRegister = settings.stickyBarRegister ?? true;
+  const resetAfterSale = settings.registerResetBigNumbers ?? false;
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showShortfallModal, setShowShortfallModal] = useState(false);
   const [pendingMoneyIn, setPendingMoneyIn] = useState(0);
@@ -769,6 +777,11 @@ export default function TallyCounter() {
     () => localStorage.getItem('mp_tallyMode') === 'register' ? 'register' : 'tally'
   );
   const tallyMode = mode === 'tally';
+
+  const registerModeTipKey = `mp_hideRegModeTip_${activeSession?.repName ?? 'default'}`;
+  const [hideRegisterModeTip, setHideRegisterModeTip] = useState(
+    () => localStorage.getItem(registerModeTipKey) === '1'
+  );
 
   // Cumulative session-sold counts — persists across individual sales, resets only at session close
   const [sessionSold, setSessionSold] = useState<Record<string, number>>({});
@@ -1022,26 +1035,6 @@ export default function TallyCounter() {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Basket preview button — Register mode only */}
-          {!tallyMode && (
-            <button
-              onClick={() => setShowBasketPreview(true)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 relative"
-              style={{
-                background: hasItems ? 'rgba(107,92,255,0.2)' : 'rgba(45,48,72,0.4)',
-                border: `1px solid ${hasItems ? 'rgba(107,92,255,0.4)' : '#2D3048'}`,
-                color: hasItems ? '#A78BFA' : '#7B7F93',
-              }}>
-              <Eye size={11} />
-              {hasItems && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white"
-                  style={{ background: '#6B5CFF' }}>
-                  {totalUnits}
-                </span>
-              )}
-            </button>
-          )}
-
           {/* TALLY / REGISTER pill toggle */}
           <div className="flex items-center rounded-xl overflow-hidden"
             style={{ border: '1px solid var(--pill-border)', background: 'var(--pill-bg)' }}>
@@ -1088,14 +1081,21 @@ export default function TallyCounter() {
           <span className="text-xs text-[#7C6DFF] font-semibold">Tally Mode</span>
           <span className="text-xs text-[#7B7F93]">— tap + to instantly record each sale</span>
         </div>
-      ) : (
+      ) : !hideRegisterModeTip ? (
         <div className="mp-tally-mode-banner mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
           style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)' }}>
           <ShoppingBag size={12} className="text-[#4ADE80] flex-shrink-0" />
           <span className="text-xs text-[#4ADE80] font-semibold">Register Mode</span>
-          <span className="text-xs text-[#7B7F93]">— build basket, then confirm with cash drawer</span>
+          <span className="text-xs text-[#7B7F93] flex-1">— build basket, then confirm with cash drawer</span>
+          <button
+            onClick={() => { localStorage.setItem(registerModeTipKey, '1'); setHideRegisterModeTip(true); }}
+            className="flex items-center gap-1 text-[10px] text-[#7B7F93] hover:text-[#A4A7B5] flex-shrink-0 transition-colors"
+          >
+            <X size={11} />
+            don't show again
+          </button>
         </div>
-      )}
+      ) : null}
 
       {/* Category filter */}
       {categories.length > 2 && (
@@ -1158,6 +1158,7 @@ export default function TallyCounter() {
                 onRestock={(qty) => handleRestock(variant.id, variant.productId ?? '', variant.name, qty)}
                 warehouseStock={liveVariant.warehouseStock ?? 0}
                 symbol={symbol}
+                resetAfterSale={resetAfterSale}
               />
             );
           })}
@@ -1221,20 +1222,38 @@ export default function TallyCounter() {
               Tally Mode — tap + to sell instantly
             </div>
           ) : (
-            <button
-              onClick={handleConfirmButton}
-              disabled={!hasItems}
-              className={cn(
-                'w-full py-3.5 rounded-xl text-base font-black text-white transition-all flex items-center justify-center gap-2',
-                hasItems ? 'mp-btn-primary' : 'opacity-30 cursor-not-allowed'
-              )}
-              style={hasItems ? { boxShadow: '0 0 24px rgba(107,92,255,0.35)' } : {}}>
-              {justConfirmed ? (
-                <><CheckCircle2 size={18} /> Sale Confirmed!</>
-              ) : (
-                <><CheckCircle2 size={18} /> Confirm Sale</>
-              )}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleConfirmButton}
+                disabled={!hasItems}
+                className={cn(
+                  'flex-[4] py-3.5 rounded-xl text-base font-black text-white transition-all flex items-center justify-center gap-2',
+                  hasItems ? 'mp-btn-primary' : 'opacity-30 cursor-not-allowed'
+                )}
+                style={hasItems ? { boxShadow: '0 0 24px rgba(107,92,255,0.35)' } : {}}>
+                {justConfirmed ? (
+                  <><CheckCircle2 size={18} /> Sale Confirmed!</>
+                ) : (
+                  <><CheckCircle2 size={18} /> Confirm Sale</>
+                )}
+              </button>
+              <button
+                onClick={() => setShowBasketPreview(true)}
+                className="flex-1 py-3.5 rounded-xl flex items-center justify-center relative transition-all active:scale-95"
+                style={{
+                  background: hasItems ? 'rgba(107,92,255,0.2)' : 'rgba(45,48,72,0.4)',
+                  border: `1px solid ${hasItems ? 'rgba(107,92,255,0.4)' : '#2D3048'}`,
+                  color: hasItems ? '#A78BFA' : '#7B7F93',
+                }}>
+                <ShoppingCart size={20} />
+                {hasItems && (
+                  <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white"
+                    style={{ background: '#6B5CFF' }}>
+                    {totalUnits}
+                  </span>
+                )}
+              </button>
+            </div>
           )}
         </div>
       </div>

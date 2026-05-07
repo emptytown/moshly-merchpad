@@ -12,7 +12,6 @@ import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { Product, Show, TeamMember, getDB } from '../lib/db';
 import { cn } from '../lib/utils';
-import StockTransferModal from '../components/StockTransferModal';
 import { AdjustmentModal } from './DetailInfo';
 import { RightDrawer } from '../components/RightDrawer';
 import TeamSection from '../components/TeamSection';
@@ -373,7 +372,6 @@ export default function MerchOffice() {
   const [confirmActivateShowId, setConfirmActivateShowId] = useState<string | null>(null);
   const [showStartSale, setShowStartSale] = useState(false);
   const [showOneOff, setShowOneOff] = useState(false);
-  const [transferProduct, setTransferProduct] = useState<Product | null>(null);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [expandedStockProduct, setExpandedStockProduct] = useState<Set<string>>(() => new Set());
   // Collapsible section state (all open by default)
@@ -727,7 +725,7 @@ export default function MerchOffice() {
                     )}
                       </div>
                       <button
-                        onClick={() => setTransferProduct(product)}
+                        onClick={() => navigate(`/transfer?id=${product.id}`)}
                         className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-primary hover:text-primary/80 transition-colors flex-shrink-0 ml-2"
                         style={{ border: '1px solid var(--border)' }}>
                         <ArrowRightLeft size={11} /> Transfer
@@ -1138,13 +1136,7 @@ export default function MerchOffice() {
           onClose={() => setShowOneOff(false)}
         />
       )}
-      {transferProduct && (
-        <StockTransferModal
-          product={transferProduct}
-          open={true}
-          onClose={() => setTransferProduct(null)}
-        />
-      )}
+
     </div>
   );
 }

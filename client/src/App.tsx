@@ -10,6 +10,7 @@ import { MoshlyAuthProvider, useMoshlyAuth } from "./contexts/MoshlyAuthContext"
 import AppShell from "./components/AppShell";
 import MerchOffice from "./pages/MerchOffice";
 import ProductEditorPage from "./pages/ProductEditorPage";
+import StockTransferPage from "./pages/StockTransferPage";
 import TallyCounter from "./pages/TallyCounter";
 import DetailInfo from "./pages/DetailInfo";
 import Settings from "./pages/Settings";
@@ -112,6 +113,7 @@ function Router() {
             <Route path="/" component={MerchOffice} />
             <Route path="/new-product" component={ProductEditorPage} />
             <Route path="/edit-product" component={ProductEditorPage} />
+            <Route path="/transfer" component={StockTransferPage} />
             <Route path="/tally" component={TallyCounter} />
             <Route path="/end-sale" component={EndSaleScreen} />
             <Route path="/detail" component={DetailInfo} />

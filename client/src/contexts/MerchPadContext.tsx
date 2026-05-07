@@ -58,6 +58,7 @@ export interface AppState {
     currency: string;
     defaultStockLocation: 'road' | 'warehouse';
     requireTransferNote: boolean;
+    registerResetBigNumbers: boolean;
   };
 }
 
@@ -315,6 +316,7 @@ const initialState: AppState = {
     currency: 'EUR',
     defaultStockLocation: 'road',
     requireTransferNote: false,
+    registerResetBigNumbers: false,
   },
 };
 
@@ -339,7 +341,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
         await restoreProjectFromServer(projectId);
       }
 
-      const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason, currency, defaultStockLocation, requireTransferNote] = await Promise.all([
+      const [products, shows, repName, undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed, stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason, currency, defaultStockLocation, requireTransferNote, registerResetBigNumbers] = await Promise.all([
         db.getAllFromIndex('products', 'by-project', projectId),
         db.getAllFromIndex('shows', 'by-project', projectId),
         getSetting<string>(projectId, 'repName', ''),
@@ -356,6 +358,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
         getSetting<string>(projectId, 'currency', 'EUR'),
         getSetting<'road' | 'warehouse'>(projectId, 'defaultStockLocation', 'road'),
         getSetting<boolean>(projectId, 'requireTransferNote', false),
+        getSetting<boolean>(projectId, 'registerResetBigNumbers', false),
       ]);
 
       const teamMembers = await db.getAllFromIndex('teamMembers', 'by-project', projectId);
@@ -366,7 +369,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_SETTINGS', payload: {
         undoEnabled, requireMoneyInput, allowMidSaleRestock, stockThresholdYellow, stockThresholdRed,
         stickyBarTally, stickyBarRegister, requireDiscountReason, allowSellerDebt, requireDebtReason,
-        currency, defaultStockLocation, requireTransferNote
+        currency, defaultStockLocation, requireTransferNote, registerResetBigNumbers
       } });
       // Restore active session if anyy
       const activeSessions = await db.getAllFromIndex('sessions', 'by-status', 'active');
