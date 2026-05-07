@@ -25,7 +25,7 @@ import { getDB, ProductVariant, TeamMember } from '../lib/db';
 import { cn } from '../lib/utils';
 
 // ── Euro denominations for quick-amount buttons ────────────────────────────
-const EURO_DENOMS = [1, 2, 5, 10, 20, 50, 100, 200];
+const EURO_DENOMS = [1, 2, 5, 10, 20, 50, 100];
 
 // ── Stock stroke helper ────────────────────────────────────────────────────
 function stockStrokeClass(status: string) {
@@ -57,13 +57,11 @@ interface TallyCardProps {
   warehouseStock: number;
   onRestock: (qty: number) => void;
   symbol: string;
-  /** Register mode: show only current basket qty (resets to 0 after each confirmed sale) */
-  resetAfterSale: boolean;
 }
 function TallyCard({
   variant, liveStock, sessionSoldQty, basketQty, stockStatus,
   tallyMode, effectivelyEmpty, onIncrement, onDecrement, onInstantSell,
-  allowMidSaleRestock, warehouseStock, onRestock, symbol, resetAfterSale,
+  allowMidSaleRestock, warehouseStock, onRestock, symbol,
 }: TallyCardProps) {
   const [bumping, setBumping] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -81,14 +79,8 @@ function TallyCard({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showInfo]);
 
-  // Tally mode: always session cumulative.
-  // Register + resetAfterSale: always show basket qty (reads 0 between confirmed sales).
-  // Register + keep: basket qty while building; fall back to session cumulative when basket is empty.
-  const displayQty = tallyMode
-    ? sessionSoldQty
-    : resetAfterSale
-      ? basketQty
-      : (basketQty > 0 ? basketQty : sessionSoldQty);
+  // Tally mode: cumulative session total. Register mode: basket qty only (0 between sales).
+  const displayQty = tallyMode ? sessionSoldQty : basketQty;
 
   function handleIncrement(e: React.MouseEvent) {
     e.stopPropagation();
@@ -671,11 +663,11 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
           </div>
 
           {/* Euro denomination quick-add buttons */}
-          <div className="flex gap-1 flex-wrap mb-1.5">
+          <div className="flex gap-1 mb-1.5">
             {EURO_DENOMS.map(d => (
               <button key={d}
                 onClick={() => handleDenom(d)}
-                className="mp-denom-btn px-2.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
+                className="mp-denom-btn flex-1 min-w-0 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
                 style={{
                   background: '#1B1E2E',
                   border: '1px solid #2D3048',
@@ -760,7 +752,6 @@ export default function TallyCounter() {
   const allowMidSaleRestock = settings.allowMidSaleRestock ?? false;
   const stickyBarTally = settings.stickyBarTally ?? true;
   const stickyBarRegister = settings.stickyBarRegister ?? true;
-  const resetAfterSale = settings.registerResetBigNumbers ?? false;
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showShortfallModal, setShowShortfallModal] = useState(false);
   const [pendingMoneyIn, setPendingMoneyIn] = useState(0);
@@ -782,6 +773,9 @@ export default function TallyCounter() {
   const [hideRegisterModeTip, setHideRegisterModeTip] = useState(
     () => localStorage.getItem(registerModeTipKey) === '1'
   );
+
+  // Tracks in-flight instant-sell debits to prevent oversell during rapid taps (state is stale until dispatch settles)
+  const inFlightDebits = useRef<Record<string, number>>({});
 
   // Cumulative session-sold counts — persists across individual sales, resets only at session close
   const [sessionSold, setSessionSold] = useState<Record<string, number>>({});
@@ -867,6 +861,7 @@ export default function TallyCounter() {
         snapshot.forEach(item => { next[item.variantId] = (next[item.variantId] ?? 0) + item.qty; });
         return next;
       });
+      dispatch({ type: 'TALLY_CLEAR' });
       const change = moneyIn > 0 ? moneyIn - batch.totalPrice : 0;
       setShowRegisterModal(false);
       setShowShortfallModal(false);
@@ -909,33 +904,35 @@ export default function TallyCounter() {
 
   // Instant sell (Tally mode — single variant, qty=1, immediate confirm)
   const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number) => {
-    // Guard against oversell: use live currentStock from state.products directly
     const liveVariantCheck = state.products.flatMap(p => p.variants).find(v => v.id === variantId);
-    if (!liveVariantCheck || (liveVariantCheck.roadStock ?? liveVariantCheck.currentStock) <= 0) {
+    const snapshotStock = liveVariantCheck?.roadStock ?? liveVariantCheck?.currentStock ?? 0;
+    // Subtract in-flight debits so rapid taps can't bypass the stock guard before state settles
+    const effectiveStock = snapshotStock - (inFlightDebits.current[variantId] ?? 0);
+
+    if (!liveVariantCheck || effectiveStock <= 0) {
       toast.error(`${variantName} — no stock left!`, { duration: 2000 });
       return;
     }
 
-    // Use a fresh tally override to bypass state sync lag
+    // Reserve synchronously before the async confirmSale so the next tap sees reduced effective stock
+    inFlightDebits.current[variantId] = (inFlightDebits.current[variantId] ?? 0) + 1;
+
     const instantTally = {
-      items: {
-        [variantId]: { variantId, variantName, qty: 1, unitPrice }
-      },
-      lastAction: null
+      items: { [variantId]: { variantId, variantName, qty: 1, unitPrice } },
+      lastAction: null,
     };
 
-    // Optimistic update for UI responsiveness
     setSessionSold(prev => ({ ...prev, [variantId]: (prev[variantId] ?? 0) + 1 }));
 
     const batch = await confirmSale({ tallyOverride: instantTally });
+    inFlightDebits.current[variantId] = Math.max(0, (inFlightDebits.current[variantId] ?? 0) - 1);
+
     if (batch) {
-      // Clear any accidental leftovers for this variant
       dispatch({ type: 'TALLY_REMOVE_VARIANT', payload: { variantId } });
       setJustConfirmed(true);
       toast.success(`${variantName} · ${symbol}${unitPrice.toFixed(2)}`, { duration: 1500 });
       setTimeout(() => setJustConfirmed(false), 1500);
     } else {
-      // Rollback optimistic update on failure
       setSessionSold(prev => {
         const next = { ...prev };
         if (next[variantId] > 0) {
@@ -1158,7 +1155,6 @@ export default function TallyCounter() {
                 onRestock={(qty) => handleRestock(variant.id, variant.productId ?? '', variant.name, qty)}
                 warehouseStock={liveVariant.warehouseStock ?? 0}
                 symbol={symbol}
-                resetAfterSale={resetAfterSale}
               />
             );
           })}

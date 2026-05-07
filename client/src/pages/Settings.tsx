@@ -295,20 +295,6 @@ export default function Settings() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-[#A4A7B5]">Reset big numbers after each sale</p>
-                <p className="text-xs text-[#7B7F93]">In Register mode, card counters reset to 0 after each confirmed sale instead of showing the session running total</p>
-              </div>
-              <Switch
-                checked={settings.registerResetBigNumbers ?? false}
-                onCheckedChange={async (val) => {
-                  await setSetting('registerResetBigNumbers', val);
-                  dispatch({ type: 'SET_SETTINGS', payload: { registerResetBigNumbers: val } });
-                }}
-              />
-            </div>
-
-            <div className="flex items-center justify-between border-t border-[#24273A] pt-3">
-              <div>
                 <p className="text-sm text-[#A4A7B5]">Require reason for discounts</p>
                 <p className="text-xs text-[#7B7F93]">Ask seller to state why a discount was applied</p>
               </div>
