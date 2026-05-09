@@ -1,13 +1,10 @@
 import { useEffect } from "react";
-import { useLocation } from "wouter";
 
 export default function AuthCallback() {
-  const [, navigate] = useLocation();
-
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("token");
     if (!token) {
-      navigate("/");
+      window.location.replace("/");
       return;
     }
     fetch("/api/auth/moshly-verify", {
@@ -17,17 +14,17 @@ export default function AuthCallback() {
     })
       .then((r) => {
         if (r.ok) {
-          navigate("/");
+          // Hard redirect so MoshlyAuthProvider remounts and re-fetches /api/auth/me
+          // with the newly-set session cookie (client-side navigate won't re-trigger the effect).
+          window.location.replace("/");
         } else {
-          console.error("SSO callback failed:", r.status);
-          navigate("/?auth_error=1");
+          window.location.replace("/?auth_error=1");
         }
       })
-      .catch((err) => {
-        console.error("SSO callback error:", err);
-        navigate("/?auth_error=1");
+      .catch(() => {
+        window.location.replace("/?auth_error=1");
       });
-  }, [navigate]);
+  }, []);
 
   return (
     <div
