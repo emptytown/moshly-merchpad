@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import { AlertTriangle, RefreshCw, Trash2, FolderX, Bomb, Eraser, X, ChevronRight } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Trash2, FolderX, Bomb, Eraser, X, ChevronRight, BarChart2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   resetAllStock,
@@ -13,7 +13,9 @@ import {
   deleteProjectData,
   resetAndDeleteAll,
   removeMockData,
+  resetProjectSalesData,
 } from '../lib/db';
+import { useProjects } from '../contexts/ProjectContext';
 import { cn } from '../lib/utils';
 
 // ── Confirm Dialog ─────────────────────────────────────────────────────────
@@ -140,73 +142,87 @@ interface DangerAction {
   fn: () => Promise<void>;
 }
 
-const DANGER_ACTIONS: DangerAction[] = [
-  {
-    id: 'remove-mock',
-    label: 'Remove Mock Data',
-    description: 'Deletes the pre-loaded demo products and shows (T-Shirt, Poster, Vinyl, etc.).',
-    warning: 'Only demo data is removed. Your real products and shows are kept.',
-    ctaLabel: 'Remove Mock Data',
-    successMsg: 'Mock data removed',
-    icon: Eraser,
-    color: '#FBBF24',
-    fn: removeMockData,
-  },
-  {
-    id: 'reset-stock',
-    label: 'Reset All Stock',
-    description: 'Resets every variant\'s current stock back to its initial stock value.',
-    warning: 'All stock counts will be restored to their starting values. Sale history is kept.',
-    ctaLabel: 'Reset Stock',
-    successMsg: 'All stock reset to initial values',
-    icon: RefreshCw,
-    color: '#FBBF24',
-    confirmWord: 'RESET',
-    fn: resetAllStock,
-  },
-  {
-    id: 'delete-products',
-    label: 'Delete All Products',
-    description: 'Permanently removes every product and all their variants from this device.',
-    warning: 'This cannot be undone. All products and variants will be permanently deleted.',
-    ctaLabel: 'Delete All Products',
-    successMsg: 'All products deleted',
-    icon: Trash2,
-    color: '#F87171',
-    confirmWord: 'DELETE',
-    fn: deleteAllProducts,
-  },
-  {
-    id: 'delete-project',
-    label: 'Delete Project & Data',
-    description: 'Wipes all products, shows, sessions, sales, audit log, and sync queue for this project.',
-    warning: 'All project data will be permanently erased from this device. This cannot be undone.',
-    ctaLabel: 'Delete Project',
-    successMsg: 'Project data deleted',
-    icon: FolderX,
-    color: '#F87171',
-    confirmWord: 'DELETE',
-    fn: deleteProjectData,
-  },
-  {
-    id: 'full-reset',
-    label: 'Reset & Delete All',
-    description: 'Full factory reset. Wipes every store, all settings, device ID, and all projects. The app will reload.',
-    warning: 'IRREVERSIBLE. Every byte of MerchPad data on this device will be permanently destroyed.',
-    ctaLabel: 'Factory Reset',
-    successMsg: 'Factory reset complete — reloading…',
-    icon: Bomb,
-    color: '#C026D3',
-    confirmWord: 'DESTROY',
-    reload: true,
-    fn: resetAndDeleteAll,
-  },
-];
-
 // ── Main Component ─────────────────────────────────────────────────────────
 
 export default function DangerZone() {
+  const { activeProject } = useProjects();
+  const projectId = activeProject?.id ?? 'default';
   const [activeAction, setActiveAction] = useState<DangerAction | null>(null);
+
+  const DANGER_ACTIONS: DangerAction[] = [
+    {
+      id: 'reset-sales',
+      label: 'Reset Sales Statistics',
+      description: 'Clears all sessions, tally batches, and audit entries for this project. Stock and products are kept.',
+      warning: 'All sales history and audit log entries for this project will be permanently deleted. This cannot be undone.',
+      ctaLabel: 'Reset Sales Data',
+      successMsg: 'Sales data reset',
+      icon: BarChart2,
+      color: '#FBBF24',
+      confirmWord: 'RESET',
+      fn: () => resetProjectSalesData(projectId),
+    },
+    {
+      id: 'remove-mock',
+      label: 'Remove Mock Data',
+      description: 'Deletes the pre-loaded demo products and shows (T-Shirt, Poster, Vinyl, etc.).',
+      warning: 'Only demo data is removed. Your real products and shows are kept.',
+      ctaLabel: 'Remove Mock Data',
+      successMsg: 'Mock data removed',
+      icon: Eraser,
+      color: '#FBBF24',
+      fn: () => removeMockData(projectId),
+    },
+    {
+      id: 'reset-stock',
+      label: 'Reset All Stock',
+      description: 'Resets every variant\'s current stock back to its initial stock value.',
+      warning: 'All stock counts will be restored to their starting values. Sale history is kept.',
+      ctaLabel: 'Reset Stock',
+      successMsg: 'All stock reset to initial values',
+      icon: RefreshCw,
+      color: '#FBBF24',
+      confirmWord: 'RESET',
+      fn: () => resetAllStock(projectId),
+    },
+    {
+      id: 'delete-products',
+      label: 'Delete All Products',
+      description: 'Permanently removes every product and all their variants from this device.',
+      warning: 'This cannot be undone. All products and variants will be permanently deleted.',
+      ctaLabel: 'Delete All Products',
+      successMsg: 'All products deleted',
+      icon: Trash2,
+      color: '#F87171',
+      confirmWord: 'DELETE',
+      fn: () => deleteAllProducts(projectId),
+    },
+    {
+      id: 'delete-project',
+      label: 'Delete Project & Data',
+      description: 'Wipes all products, shows, sessions, sales, audit log, and sync queue for this project.',
+      warning: 'All project data will be permanently erased from this device. This cannot be undone.',
+      ctaLabel: 'Delete Project',
+      successMsg: 'Project data deleted',
+      icon: FolderX,
+      color: '#F87171',
+      confirmWord: 'DELETE',
+      fn: () => deleteProjectData(projectId),
+    },
+    {
+      id: 'full-reset',
+      label: 'Reset & Delete All',
+      description: 'Full factory reset. Wipes every store, all settings, device ID, and all projects. The app will reload.',
+      warning: 'IRREVERSIBLE. Every byte of MerchPad data on this device will be permanently destroyed.',
+      ctaLabel: 'Factory Reset',
+      successMsg: 'Factory reset complete — reloading…',
+      icon: Bomb,
+      color: '#C026D3',
+      confirmWord: 'DESTROY',
+      reload: true,
+      fn: resetAndDeleteAll,
+    },
+  ];
 
   return (
     <>

@@ -450,6 +450,18 @@ export async function seedDemoData(): Promise<void> {
   for (const s of shows) await db.put('shows', s);
 }
 
+// ── Sales / Statistics Reset ──────────────────────────────────────────────
+
+export async function resetProjectSalesData(projectId: string): Promise<void> {
+  const db = await getDB();
+  const batches = await db.getAllFromIndex('tallyBatches', 'by-project', projectId);
+  for (const b of batches) await db.delete('tallyBatches', b.id);
+  const sessions = await db.getAllFromIndex('sessions', 'by-project', projectId);
+  for (const s of sessions) await db.delete('sessions', s.id);
+  const entries = await db.getAllFromIndex('auditLog', 'by-project', projectId);
+  for (const e of entries) await db.delete('auditLog', e.id);
+}
+
 // ── Danger Zone Operations ────────────────────────────────────────────────
 
 export async function resetAllStock(projectId: string): Promise<void> {

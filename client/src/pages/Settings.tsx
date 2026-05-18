@@ -6,10 +6,10 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight, BookOpen, Package, Palette, Sun, Moon, DollarSign, Tag } from 'lucide-react';
+import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight, BookOpen, Package, Palette, Sun, Moon, DollarSign, Tag, TrendingUp, AlertTriangle, X } from 'lucide-react';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
-import { setSetting } from '../lib/db';
+import { setSetting, resetProjectSalesData } from '../lib/db';
 import { Switch } from '../components/ui/switch';
 import { Slider } from '../components/ui/slider';
 import ProjectsSettings from './ProjectsSettings';
@@ -29,6 +29,8 @@ export default function Settings() {
 
   const [localRepName, setLocalRepName] = useState(repName);
   const [view, setView] = useState<SettingsView>('main');
+  const [isResetStatsConfirmOpen, setIsResetStatsConfirmOpen] = useState(false);
+  const [isResettingStats, setIsResettingStats] = useState(false);
 
   async function saveRepName() {
     await setSetting('repName', localRepName);
@@ -45,6 +47,21 @@ export default function Settings() {
     if (!activeProject) return;
     await setSetting(activeProject.id, 'requireTransferNote', val);
     dispatch({ type: 'SET_SETTINGS', payload: { requireTransferNote: val } });
+  }
+
+  async function handleResetStatistics() {
+    if (!activeProject) return;
+    setIsResettingStats(true);
+    try {
+      await resetProjectSalesData(activeProject.id);
+      toast.success('Statistics reset to zero', { description: `All sales data for "${activeProject.name}" has been cleared.` });
+      setIsResetStatsConfirmOpen(false);
+    } catch (err) {
+      toast.error('Reset failed — check console');
+      throw new Error(`Failed to reset statistics for project ${activeProject.id}: ${err}`);
+    } finally {
+      setIsResettingStats(false);
+    }
   }
 
   if (view === 'projects') {
@@ -283,6 +300,24 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Statistics */}
+        <div className="mp-card p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <TrendingUp size={15} className="text-[#7C6DFF]" />
+            <p className="text-sm font-bold text-[#E6E7EB]">Statistics</p>
+          </div>
+          <p className="text-xs text-[#7B7F93]">
+            Reset all sales data for <span className="font-semibold text-[#A4A7B5]">{activeProject?.name ?? 'this project'}</span> to zero.
+            Tally batches, sessions, and audit entries are cleared. Products and stock are untouched.
+          </p>
+          <button
+            onClick={() => setIsResetStatsConfirmOpen(true)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-colors"
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: '#FBBF24' }}>
+            <RotateCcw size={14} /> Reset Statistics to Zero
+          </button>
+        </div>
+
         {/* Register & Cash */}
         <div className="mp-card p-4 space-y-4">
           <div className="flex items-center gap-2">
@@ -512,6 +547,60 @@ export default function Settings() {
         <DangerZone />
 
       </div>
+
+      {/* Reset Statistics Confirmation Modal */}
+      {isResetStatsConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
+          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up"
+            style={{ background: '#141624', border: '1px solid rgba(251,191,36,0.3)' }}>
+            <div className="flex items-start justify-between p-5 pb-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
+                  style={{ background: 'rgba(251,191,36,0.12)' }}>
+                  <RotateCcw size={18} className="text-[#FBBF24]" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-[#E6E7EB]">Reset Statistics?</h2>
+                  <p className="text-xs text-[#7B7F93] mt-0.5">For: {activeProject?.name ?? 'this project'}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsResetStatsConfirmOpen(false)}
+                className="text-[#7B7F93] hover:text-[#E6E7EB] p-1 flex-shrink-0">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mx-5 mb-4 rounded-xl px-3 py-2.5"
+              style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}>
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={13} className="text-[#FBBF24] flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-[#FBBF24] leading-relaxed">
+                  All tally batches, sessions, and audit entries for this project will be permanently deleted.
+                  Products, shows, and stock counts are unaffected.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 px-5 pb-5">
+              <button onClick={() => setIsResetStatsConfirmOpen(false)}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold text-[#A4A7B5]"
+                style={{ border: '1px solid #2D3048' }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleResetStatistics}
+                disabled={isResettingStats}
+                className="flex-[2] py-3 rounded-xl text-sm font-black text-[#0E0F14] flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, #FBBF24, #F59E0B)' }}>
+                {isResettingStats
+                  ? <div className="w-4 h-4 rounded-full border-2 border-[#0E0F14] border-t-transparent animate-spin" />
+                  : <><RotateCcw size={14} /> Reset to Zero</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

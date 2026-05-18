@@ -219,7 +219,7 @@ function HubProjectCard() {
 // ── Main Screen ────────────────────────────────────────────────────────────
 
 export default function ProjectsSettings() {
-  const { localProjects, activeProject, setActiveProject, createLocalProject, updateLocalProject, deleteLocalProject, canCreateMore } = useProjects();
+  const { localProjects, activeProject, setActiveProject, createLocalProject, updateLocalProject, deleteLocalProject } = useProjects();
 
   const [editingProject, setEditingProject] = useState<MerchPadProject | null>(null);
   const [creatingAtSlot, setCreatingAtSlot] = useState<number | null>(null);
@@ -230,8 +230,9 @@ export default function ProjectsSettings() {
   function handleCreate(name: string, description: string, color: string) {
     const project = createLocalProject(name, description, color);
     if (!project) { toast.error('Maximum 3 local projects reached'); return; }
+    setActiveProject(project);
     setCreatingAtSlot(null);
-    toast.success(`Project "${name}" created`);
+    toast.success(`Project "${name}" created and activated`);
   }
 
   function handleUpdate(name: string, description: string, color: string) {

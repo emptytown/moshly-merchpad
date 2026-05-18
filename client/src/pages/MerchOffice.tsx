@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, Sparkles, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign, Pencil, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
+import { useProjects } from '../contexts/ProjectContext';
 import { Product, Show, TeamMember, getDB } from '../lib/db';
 import { cn } from '../lib/utils';
 import { AdjustmentModal } from './DetailInfo';
@@ -203,6 +204,7 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
 interface PastShowsSectionProps {
   shows: Show[];
   symbol: string;
+  projectId: string;
   secPastShows: boolean;
   setSecPastShows: (v: (prev: boolean) => boolean) => void;
   expandedPastShow: string | null;
@@ -240,13 +242,13 @@ async function downloadShowReport(show: Show) {
   URL.revokeObjectURL(a.href);
 }
 
-function PastShowsSection({ shows, symbol, secPastShows, setSecPastShows, expandedPastShow, setExpandedPastShow, pastShowStats, setPastShowStats, onDelete }: PastShowsSectionProps) {
+function PastShowsSection({ shows, symbol, projectId, secPastShows, setSecPastShows, expandedPastShow, setExpandedPastShow, pastShowStats, setPastShowStats, onDelete }: PastShowsSectionProps) {
   useEffect(() => {
     if (!shows.length) return;
     async function loadStats() {
       const db = await getDB();
-      const allBatches = await db.getAll('tallyBatches');
-      const allSessions = await db.getAll('sessions');
+      const allBatches = await db.getAllFromIndex('tallyBatches', 'by-project', projectId);
+      const allSessions = await db.getAllFromIndex('sessions', 'by-project', projectId);
       const stats: Record<string, { sessions: number; items: number; revenue: number }> = {};
       for (const show of shows) {
         const showBatches = allBatches.filter(b => b.showId === show.id && b.status !== 'voided');
@@ -260,7 +262,7 @@ function PastShowsSection({ shows, symbol, secPastShows, setSecPastShows, expand
       setPastShowStats(stats);
     }
     loadStats();
-  }, [shows, setPastShowStats]);
+  }, [shows, projectId, setPastShowStats]);
 
   return (
     <div>
@@ -360,6 +362,8 @@ function PastShowsSection({ shows, symbol, secPastShows, setSecPastShows, expand
 export default function MerchOffice() {
   const [, navigate] = useLocation();
   const { state, saveProduct, deleteProduct, saveShow, deleteShow, startSession, startOneOffSession, adjustStock, saveTeamMember, deleteTeamMember, getTeamMemberStats } = useMerchPad();
+  const { activeProject } = useProjects();
+  const projectId = activeProject?.id ?? 'default';
   const { products, shows, activeSession, isLoading, settings } = state;
   const currency = settings.currency ?? 'EUR';
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
@@ -407,7 +411,7 @@ export default function MerchOffice() {
   useEffect(() => {
     async function loadSalesStats() {
       const db = await getDB();
-      const batches = await db.getAll('tallyBatches');
+      const batches = await db.getAllFromIndex('tallyBatches', 'by-project', projectId);
       const active = batches.filter(b => b.status !== 'voided');
       setAllTimeSales(active.reduce((s, b) => s + b.totalPrice, 0));
 
@@ -423,7 +427,7 @@ export default function MerchOffice() {
       }
     }
     loadSalesStats();
-  }, [shows]);
+  }, [shows, projectId]);
 
   if (isLoading) {
     return (
@@ -808,6 +812,7 @@ export default function MerchOffice() {
         <PastShowsSection
           shows={shows.filter(s => s.status === 'completed' || s.status === 'archived')}
           symbol={symbol}
+          projectId={projectId}
           secPastShows={secPastShows}
           setSecPastShows={setSecPastShows}
           expandedPastShow={expandedPastShow}
