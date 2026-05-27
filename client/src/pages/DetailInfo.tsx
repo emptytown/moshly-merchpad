@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   AlertTriangle, TrendingDown, TrendingUp, ChevronDown, ChevronUp,
-  Sliders, Clock, Package, BarChart2, X,
+  Sliders, Clock, Package, BarChart2, X, UserCheck,
 } from 'lucide-react';
 import { RightDrawer } from '../components/RightDrawer';
 import { ExportButton } from '../components/ExportSheet';
@@ -63,23 +63,45 @@ function ChartTooltip({ active, payload, label, currency }: any) {
 
 // ── Stock Adjustment Modal ─────────────────────────────────────────────────
 
+type AdjustmentReason = 'damaged' | 'theft' | 'counting_error' | 'restock' | 'other';
+
+const ADJUSTMENT_REASON_LABELS: Record<AdjustmentReason, string> = {
+  damaged:        'Damaged',
+  theft:          'Stolen / Lost',
+  counting_error: 'Recount',
+  restock:        'Restocked',
+  other:          'Other',
+};
+
 interface AdjustmentModalProps {
   variantId: string; productId: string; variantName: string; currentStock: number;
-  onSave: (delta: number, reason: 'damaged' | 'theft' | 'counting_error' | 'restock' | 'other', notes: string) => void;
+  /** Pre-fill adjuster name from active session rep name, if available */
+  defaultAdjusterName?: string;
+  onSave: (delta: number, reason: AdjustmentReason, notes: string, adjusterName: string) => void;
   onClose: () => void;
 }
 
-export function AdjustmentModal({ variantName, currentStock, onSave, onClose }: AdjustmentModalProps) {
+export function AdjustmentModal({ variantName, currentStock, defaultAdjusterName = '', onSave, onClose }: AdjustmentModalProps) {
   const [mode, setMode] = useState<'add' | 'remove'>('remove');
   const [qty, setQty] = useState('1');
-  const [reason, setReason] = useState<'damaged' | 'theft' | 'counting_error' | 'restock' | 'other'>('counting_error');
+  const [reason, setReason] = useState<AdjustmentReason>('counting_error');
   const [notes, setNotes] = useState('');
+  const [adjusterName, setAdjusterName] = useState(defaultAdjusterName);
+
   const delta = mode === 'add' ? parseInt(qty) || 0 : -(parseInt(qty) || 0);
   const newStock = Math.max(0, currentStock + delta);
+
+  function handleApply() {
+    if (!qty || parseInt(qty) <= 0) { toast.error('Enter a valid quantity'); return; }
+    if (!adjusterName.trim()) { toast.error('Adjuster name is required for the audit trail'); return; }
+    onSave(delta, reason, notes, adjusterName.trim());
+  }
 
   return (
     <RightDrawer open={true} onClose={onClose} title="Stock Adjustment" subtitle={variantName}>
       <div className="min-h-0 overflow-y-auto p-3 space-y-4">
+
+        {/* Add / Remove toggle */}
         <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
           {(['remove', 'add'] as const).map(m => (
             <button key={m} onClick={() => setMode(m)}
@@ -90,9 +112,13 @@ export function AdjustmentModal({ variantName, currentStock, onSave, onClose }: 
             </button>
           ))}
         </div>
+
+        {/* Quantity */}
         <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)}
           className="w-full px-3 py-2 rounded-lg text-lg font-bold text-center text-foreground border focus:outline-none"
           style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
+
+        {/* Current → New preview */}
         <div className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'var(--muted)' }}>
           <span className="text-xs text-muted-foreground">Current → New</span>
           <span className="text-sm font-bold">
@@ -101,27 +127,59 @@ export function AdjustmentModal({ variantName, currentStock, onSave, onClose }: 
             <span className={newStock < currentStock ? 'text-[#F87171]' : 'text-[#4ADE80]'}>{newStock}</span>
           </span>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          {(['damaged', 'theft', 'counting_error', 'restock', 'other'] as const).map(r => (
-            <button key={r} onClick={() => setReason(r)}
-              className={cn('py-2 rounded-lg text-xs font-semibold capitalize',
-                reason === r ? 'text-primary' : 'text-muted-foreground')}
-              style={reason === r
-                ? { background: 'rgba(107,92,255,0.15)', border: '1px solid var(--primary)', color: 'var(--primary)' }
-                : { background: 'var(--muted)', border: '1px solid var(--border)' }}>
-              {r.replace('_', ' ')}
-            </button>
-          ))}
+
+        {/* Reason grid */}
+        <div>
+          <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Reason</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(ADJUSTMENT_REASON_LABELS) as AdjustmentReason[]).map(r => (
+              <button key={r} onClick={() => setReason(r)}
+                className={cn('py-2 rounded-lg text-xs font-semibold',
+                  reason === r ? 'text-primary' : 'text-muted-foreground')}
+                style={reason === r
+                  ? { background: 'rgba(107,92,255,0.15)', border: '1px solid var(--primary)', color: 'var(--primary)' }
+                  : { background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                {ADJUSTMENT_REASON_LABELS[r]}
+              </button>
+            ))}
+          </div>
         </div>
-        <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes (optional)…"
-          className="w-full px-3 py-2 rounded-lg text-sm text-foreground border focus:outline-none placeholder:text-muted-foreground"
-          style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
+
+        {/* Notes */}
+        <div>
+          <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Notes (optional)</label>
+          <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Describe what happened…"
+            className="w-full px-3 py-2 rounded-lg text-sm text-foreground border focus:outline-none placeholder:text-muted-foreground"
+            style={{ background: 'var(--input)', borderColor: 'var(--border)' }} />
+        </div>
+
+        {/* Adjuster signature — required for audit trail */}
+        <div>
+          <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1">
+            <UserCheck size={11} className="text-primary" />
+            Adjusted By <span className="text-destructive ml-0.5">*</span>
+          </label>
+          <input
+            value={adjusterName}
+            onChange={e => setAdjusterName(e.target.value)}
+            placeholder="Your name (required for audit)"
+            className={cn(
+              'w-full px-3 py-2.5 rounded-lg text-sm text-foreground border focus:outline-none placeholder:text-muted-foreground transition-colors',
+              !adjusterName.trim() ? 'border-border focus:border-primary' : 'border-primary/50'
+            )}
+            style={{ background: 'var(--input)', borderColor: adjusterName.trim() ? 'rgba(107,92,255,0.4)' : undefined }}
+          />
+          <p className="text-[10px] text-muted-foreground/60 mt-1">Logged to the audit trail for accountability</p>
+        </div>
+
       </div>
       <div className="flex gap-2 p-3 flex-shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
         <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground"
           style={{ border: '1px solid var(--border)' }}>Cancel</button>
-        <button onClick={() => { if (!qty || parseInt(qty) <= 0) { toast.error('Enter a valid quantity'); return; } onSave(delta, reason, notes); }}
-          className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">Apply</button>
+        <button onClick={handleApply}
+          className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
+          Apply Adjustment
+        </button>
       </div>
     </RightDrawer>
   );
@@ -320,10 +378,10 @@ export default function DetailInfo() {
   ), [activeProducts, getVariantStockStatus]);
 
   const handleAdjust = useCallback(async (
-    delta: number, reason: 'damaged' | 'theft' | 'counting_error' | 'restock' | 'other', notes: string
+    delta: number, reason: AdjustmentReason, notes: string, adjusterName: string
   ) => {
     if (!adjustingVariant) return;
-    await adjustStock(adjustingVariant.variantId, adjustingVariant.productId, adjustingVariant.variantName, delta, reason, notes);
+    await adjustStock(adjustingVariant.variantId, adjustingVariant.productId, adjustingVariant.variantName, delta, reason, notes, adjusterName);
     setAdjustingVariant(null);
     toast.success('Stock adjusted');
     const db = await getDB();
@@ -681,6 +739,7 @@ export default function DetailInfo() {
       {adjustingVariant && (
         <AdjustmentModal
           {...adjustingVariant}
+          defaultAdjusterName={activeSession?.repName ?? state.repName}
           onSave={handleAdjust}
           onClose={() => setAdjustingVariant(null)}
         />

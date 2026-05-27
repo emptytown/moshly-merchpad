@@ -7,13 +7,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, Sparkles, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign, Pencil, Download } from 'lucide-react';
+import { Plus, Minus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign, Pencil, Download, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
-import { Product, Show, TeamMember, getDB } from '../lib/db';
+import { Product, Show, TeamMember, StockAdjustment, getDB } from '../lib/db';
 import { cn } from '../lib/utils';
-import { AdjustmentModal } from './DetailInfo';
 import { RightDrawer } from '../components/RightDrawer';
 import TeamSection from '../components/TeamSection';
 import { Switch } from '../components/ui/switch';
@@ -29,6 +28,15 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+const ADJUST_REASON_LABELS: Record<StockAdjustment['reason'], string> = {
+  damaged:                'Damaged',
+  theft:                  'Stolen',
+  counting_error:         'Recount',
+  restock:                'Restocked',
+  other:                  'Other',
+  transfer_to_road:       'Transfer →Road',
+  transfer_to_warehouse:  'Transfer →WH',
+};
 
 // ── Show Selector ──────────────────────────────────────────────────────────
 
@@ -361,7 +369,7 @@ function PastShowsSection({ shows, symbol, projectId, secPastShows, setSecPastSh
 
 export default function MerchOffice() {
   const [, navigate] = useLocation();
-  const { state, saveProduct, deleteProduct, saveShow, deleteShow, startSession, startOneOffSession, adjustStock, saveTeamMember, deleteTeamMember, getTeamMemberStats } = useMerchPad();
+  const { state, saveProduct, deleteProduct, saveShow, deleteShow, startSession, startOneOffSession, adjustStock, transferStock, saveTeamMember, deleteTeamMember, getTeamMemberStats } = useMerchPad();
   const { activeProject } = useProjects();
   const projectId = activeProject?.id ?? 'default';
   const { products, shows, activeSession, isLoading, settings } = state;
@@ -377,11 +385,19 @@ export default function MerchOffice() {
   const [showStartSale, setShowStartSale] = useState(false);
   const [showOneOff, setShowOneOff] = useState(false);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
-  const [expandedStockProduct, setExpandedStockProduct] = useState<Set<string>>(() => new Set());
+  // Inline transfer panel state — one product open at a time
+  const [transferProductId, setTransferProductId] = useState<string | null>(null);
+  const [transferDeltas, setTransferDeltas] = useState<Record<string, number>>({});
+  // Inline adjust panel state — one product open at a time
+  const [adjustProductId, setAdjustProductId] = useState<string | null>(null);
+  const [adjustWHDeltas, setAdjustWHDeltas] = useState<Record<string, number>>({});
+  const [adjustRoadDeltas, setAdjustRoadDeltas] = useState<Record<string, number>>({});
+  const [adjustReason, setAdjustReason] = useState<StockAdjustment['reason']>('counting_error');
+  const [adjustNotes, setAdjustNotes] = useState('');
+  const [adjustAdjusterName, setAdjustAdjusterName] = useState('');
   // Collapsible section state (all open by default)
   const [secShow, setSecShow] = useState(true);
   const [secProducts, setSecProducts] = useState(true);
-  const [secStock, setSecStock] = useState(true);
   const [secPastShows, setSecPastShows] = useState(true);
   const [expandedPastShow, setExpandedPastShow] = useState<string | null>(null);
   const [pastShowStats, setPastShowStats] = useState<Record<string, { sessions: number; items: number; revenue: number }>>({});
@@ -391,10 +407,96 @@ export default function MerchOffice() {
   const [memberForm, setMemberForm] = useState({ name: '', phone: '', email: '', active: true });
   const [memberStats, setMemberStats] = useState<{ shifts: number; hoursWorked: number; totalItems: number; totalRevenue: number } | null>(null);
   const [confirmDeleteMember, setConfirmDeleteMember] = useState<string | null>(null);
-  // Stock adjustment
-  const [adjustingVariant, setAdjustingVariant] = useState<{
-    variantId: string; productId: string; variantName: string; currentStock: number;
-  } | null>(null);
+  function openTransferPanel(productId: string, variants: typeof products[0]['variants']) {
+    closeAdjustPanel();
+    setTransferProductId(productId);
+    const initialDeltas: Record<string, number> = {};
+    variants.forEach(v => { initialDeltas[v.id] = 0; });
+    setTransferDeltas(initialDeltas);
+  }
+
+  function closeTransferPanel() {
+    setTransferProductId(null);
+    setTransferDeltas({});
+  }
+
+  function openAdjustPanel(productId: string, variants: typeof products[0]['variants']) {
+    closeTransferPanel();
+    setAdjustProductId(productId);
+    const zeroDeltas: Record<string, number> = {};
+    variants.forEach(v => { zeroDeltas[v.id] = 0; });
+    setAdjustWHDeltas({ ...zeroDeltas });
+    setAdjustRoadDeltas({ ...zeroDeltas });
+    setAdjustReason('counting_error');
+    setAdjustNotes('');
+    setAdjustAdjusterName(activeSession?.repName ?? state.repName ?? '');
+  }
+
+  function closeAdjustPanel() {
+    setAdjustProductId(null);
+    setAdjustWHDeltas({});
+    setAdjustRoadDeltas({});
+    setAdjustNotes('');
+    setAdjustAdjusterName('');
+  }
+
+  function changeWHAdjustDelta(variantId: string, warehouseStock: number, direction: 1 | -1) {
+    setAdjustWHDeltas(prev => {
+      const next = (prev[variantId] ?? 0) + direction;
+      if (next < -warehouseStock) return prev;
+      return { ...prev, [variantId]: next };
+    });
+  }
+
+  function changeRoadAdjustDelta(variantId: string, roadStock: number, direction: 1 | -1) {
+    setAdjustRoadDeltas(prev => {
+      const next = (prev[variantId] ?? 0) + direction;
+      if (next < -roadStock) return prev;
+      return { ...prev, [variantId]: next };
+    });
+  }
+
+  async function confirmAdjustments(product: typeof products[0]) {
+    const hasAnyDelta = product.variants.some(
+      v => (adjustWHDeltas[v.id] ?? 0) !== 0 || (adjustRoadDeltas[v.id] ?? 0) !== 0
+    );
+    if (!hasAnyDelta) { toast('No adjustments to apply'); return; }
+    if (!adjustAdjusterName.trim()) { toast.error('Adjuster name is required'); return; }
+    for (const variant of product.variants) {
+      const whDelta = adjustWHDeltas[variant.id] ?? 0;
+      const roadDelta = adjustRoadDeltas[variant.id] ?? 0;
+      if (whDelta !== 0) {
+        await adjustStock(variant.id, product.id, variant.name, whDelta, adjustReason, adjustNotes.trim() || undefined, adjustAdjusterName.trim(), 'warehouse');
+      }
+      if (roadDelta !== 0) {
+        await adjustStock(variant.id, product.id, variant.name, roadDelta, adjustReason, adjustNotes.trim() || undefined, adjustAdjusterName.trim(), 'road');
+      }
+    }
+    toast.success('Stock adjusted');
+    closeAdjustPanel();
+  }
+
+  function adjustTransferDelta(variantId: string, warehouseStock: number, roadStock: number, direction: 1 | -1) {
+    setTransferDeltas(prev => {
+      const current = prev[variantId] ?? 0;
+      const next = current + direction;
+      if (next > warehouseStock) return prev;   // can't move more than WH has
+      if (next < -roadStock) return prev;        // can't move more than Road has
+      return { ...prev, [variantId]: next };
+    });
+  }
+
+  async function confirmTransfer(product: typeof products[0]) {
+    const variantsWithDeltas = product.variants.filter(v => (transferDeltas[v.id] ?? 0) !== 0);
+    if (variantsWithDeltas.length === 0) { toast('No units to transfer'); return; }
+    for (const variant of variantsWithDeltas) {
+      const delta = transferDeltas[variant.id];
+      const direction = delta > 0 ? 'to_road' : 'to_warehouse';
+      await transferStock(variant.id, product.id, variant.name, direction, Math.abs(delta));
+    }
+    toast.success('Stock transferred');
+    closeTransferPanel();
+  }
 
   useEffect(() => {
     if (!selectedShowId && shows.length > 0) {
@@ -469,7 +571,7 @@ export default function MerchOffice() {
         </div>
       </div>
 
-      <div className="px-4 space-y-6 -mt-2">
+      <div className="px-4 space-y-[34px] -mt-2">
         {/* Quick stats */}
         <div className="grid grid-cols-3 gap-2">
           {[
@@ -591,8 +693,8 @@ export default function MerchOffice() {
 
                 {expandedProduct === product.id && (
                   <div className="border-t border-[#24273A]">
+                    {/* Variant table — Variant | Price | WH | Road */}
                     <div className={cn("p-3 space-y-1.5", product.status === 'suspended' && "opacity-50 grayscale-[0.5]")}>
-                      {/* Column headers */}
                       <div className="flex items-center justify-between px-2 pb-1">
                         <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Variant</span>
                         <div className="flex items-center gap-3">
@@ -601,25 +703,26 @@ export default function MerchOffice() {
                           <span className="text-[10px] font-semibold text-green-500 uppercase tracking-wider w-8 text-right">Road</span>
                         </div>
                       </div>
-                      {product.variants.map(v => (
-                        <div key={v.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
+                      {product.variants.map(variant => (
+                        <div key={variant.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
                           style={{ background: 'var(--background)', border: '2px solid var(--border)' }}>
-                          <span className="text-sm text-muted-foreground">{v.name}</span>
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs text-muted-foreground mp-mono w-12 text-right">{formatCurrency(v.price, currency)}</span>
-                            <span className="text-sm font-bold mp-mono text-primary w-8 text-right">{v.warehouseStock ?? 0}</span>
+                          <span className="text-sm text-muted-foreground truncate flex-1 mr-2">{variant.name}</span>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <span className="text-xs text-muted-foreground mp-mono w-12 text-right">{formatCurrency(variant.price, currency)}</span>
+                            <span className="text-sm font-bold mp-mono text-primary w-8 text-right">{variant.warehouseStock ?? 0}</span>
                             <span className={cn('text-sm font-bold mp-mono w-8 text-right',
-                              (v.roadStock ?? v.currentStock) <= 0 ? 'text-destructive' :
-                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-destructive' :
-                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-orange-500' :
+                              (variant.roadStock ?? variant.currentStock) <= 0 ? 'text-destructive' :
+                              (variant.roadStock ?? variant.currentStock) / (variant.initialStock || 1) <= 0.1 ? 'text-destructive' :
+                              (variant.roadStock ?? variant.currentStock) / (variant.initialStock || 1) <= 0.3 ? 'text-orange-500' :
                               'text-green-500')}>
-                              {v.roadStock ?? v.currentStock}
+                              {variant.roadStock ?? variant.currentStock}
                             </span>
                           </div>
                         </div>
                       ))}
                     </div>
-                    {/* Two-tier stock summary */}
+
+                    {/* WH ↔ Road summary */}
                     <div className={cn("mx-3 mb-2 p-2 rounded-lg flex items-center justify-between text-xs", product.status === 'suspended' && "opacity-50 grayscale-[0.5]")}
                       style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
                       <div className="flex items-center gap-1.5 text-primary">
@@ -632,7 +735,9 @@ export default function MerchOffice() {
                         <span>Road: {product.variants.reduce((s, v) => s + (v.roadStock ?? v.currentStock), 0)}</span>
                       </div>
                     </div>
-                    <div className="flex gap-2 p-3 pt-0">
+
+                    {/* Edit / Suspend / Delete */}
+                    <div className="flex gap-2 px-3 pb-2">
                       <button onClick={() => navigate(`/edit-product?id=${product.id}`)}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
                         style={{ border: '1px solid var(--border)' }}>
@@ -649,20 +754,212 @@ export default function MerchOffice() {
                           <Check size={12} /> Activate
                         </button>
                       ) : (
-                        <button onClick={async () => {
-                          setConfirmSuspendProductId(product.id);
-                        }}
+                        <button onClick={() => setConfirmSuspendProductId(product.id)}
                           className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-orange-500 hover:bg-orange-500/10 transition-colors"
                           style={{ border: '1px solid var(--border)' }}>
                           <UserX size={12} /> Suspend
                         </button>
                       )}
-                      <button onClick={() => { setConfirmDeleteProductId(product.id); }}
+                      <button onClick={() => setConfirmDeleteProductId(product.id)}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-destructive hover:bg-destructive/10 transition-colors"
                         style={{ border: '1px solid var(--border)' }}>
                         <Trash2 size={12} /> Delete
                       </button>
                     </div>
+
+                    {/* Transfer + Adjust — shared row */}
+                    <div className="flex gap-2 px-3 pb-3">
+                      <button
+                        onClick={() => transferProductId === product.id ? closeTransferPanel() : openTransferPanel(product.id, product.variants)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all"
+                        style={transferProductId === product.id
+                          ? { background: 'rgba(107,92,255,0.15)', border: '1px solid rgba(107,92,255,0.4)', color: '#7C6DFF' }
+                          : { background: 'rgba(107,92,255,0.06)', border: '1px solid rgba(107,92,255,0.2)', color: '#7C6DFF' }}>
+                        <ArrowRightLeft size={13} />
+                        Transfer
+                        {transferProductId === product.id ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                      </button>
+                      <button
+                        onClick={() => adjustProductId === product.id ? closeAdjustPanel() : openAdjustPanel(product.id, product.variants)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all"
+                        style={adjustProductId === product.id
+                          ? { background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', color: '#FBBF24' }
+                          : { background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', color: '#FBBF24' }}>
+                        <Sliders size={13} />
+                        Adjust
+                        {adjustProductId === product.id ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                      </button>
+                    </div>
+
+                    {/* Inline transfer panel */}
+                    {transferProductId === product.id && (
+                      <div className="border-t border-[#24273A] px-3 pb-3 pt-2 space-y-2 animate-fade-in">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                          + moves WH → Road · − moves Road → WH
+                        </p>
+                        {product.variants.map(variant => {
+                          const warehouseStock = variant.warehouseStock ?? 0;
+                          const roadStock = variant.roadStock ?? variant.currentStock;
+                          const delta = transferDeltas[variant.id] ?? 0;
+                          return (
+                            <div key={variant.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg"
+                              style={{ background: 'var(--background)', border: '1px solid var(--border)' }}>
+                              <span className="text-xs text-muted-foreground flex-1 truncate">{variant.name}</span>
+                              <span className="text-xs font-bold mp-mono text-primary w-10 text-right flex-shrink-0">WH {warehouseStock}</span>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <button
+                                  onClick={() => adjustTransferDelta(variant.id, warehouseStock, roadStock, -1)}
+                                  disabled={delta <= -roadStock}
+                                  className="w-6 h-6 rounded flex items-center justify-center disabled:opacity-30 transition-colors"
+                                  style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                                  <Minus size={10} className="text-muted-foreground" />
+                                </button>
+                                <span className={cn('text-sm font-black mp-mono w-8 text-center',
+                                  delta > 0 ? 'text-green-400' : delta < 0 ? 'text-amber-400' : 'text-muted-foreground')}>
+                                  {delta > 0 ? `+${delta}` : delta === 0 ? '0' : delta}
+                                </span>
+                                <button
+                                  onClick={() => adjustTransferDelta(variant.id, warehouseStock, roadStock, 1)}
+                                  disabled={delta >= warehouseStock}
+                                  className="w-6 h-6 rounded flex items-center justify-center disabled:opacity-30 transition-colors"
+                                  style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                                  <Plus size={10} className="text-muted-foreground" />
+                                </button>
+                              </div>
+                              <span className="text-xs font-bold mp-mono text-green-500 w-12 text-right flex-shrink-0">Road {roadStock}</span>
+                            </div>
+                          );
+                        })}
+                        <button
+                          onClick={() => confirmTransfer(product)}
+                          className="w-full py-2.5 rounded-xl text-xs font-black text-white flex items-center justify-center gap-1.5 mp-btn-primary"
+                          style={{ boxShadow: '0 0 16px rgba(107,92,255,0.25)' }}>
+                          <ArrowRightLeft size={13} /> Confirm Transfer
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Inline adjust panel */}
+                    {adjustProductId === product.id && (
+                      <div className="border-t border-[#24273A] px-3 pb-3 pt-2 space-y-3 animate-fade-in">
+
+                        {/* Per-variant: WH + Road delta controls side by side */}
+                        {product.variants.map(variant => {
+                          const warehouseStock = variant.warehouseStock ?? 0;
+                          const roadStock = variant.roadStock ?? variant.currentStock;
+                          const whDelta = adjustWHDeltas[variant.id] ?? 0;
+                          const roadDelta = adjustRoadDeltas[variant.id] ?? 0;
+                          return (
+                            <div key={variant.id} className="rounded-lg overflow-hidden"
+                              style={{ background: 'var(--background)', border: '1px solid var(--border)' }}>
+                              {/* Variant name header */}
+                              <div className="px-2 pt-1.5 pb-1">
+                                <span className="text-xs font-semibold text-foreground truncate block">{variant.name}</span>
+                              </div>
+                              {/* WH + Road controls */}
+                              <div className="flex items-center divide-x divide-border">
+                                {/* Warehouse column */}
+                                <div className="flex-1 flex items-center gap-1.5 px-2 py-1.5">
+                                  <Warehouse size={15} className="text-primary flex-shrink-0" />
+                                  <span className="text-[15px] font-bold mp-mono text-primary flex-shrink-0">{warehouseStock}</span>
+                                  <div className="flex items-center gap-0.5 ml-auto">
+                                    <button
+                                      onClick={() => changeWHAdjustDelta(variant.id, warehouseStock, -1)}
+                                      disabled={whDelta <= -warehouseStock}
+                                      className="w-6 h-6 rounded flex items-center justify-center disabled:opacity-30 transition-colors"
+                                      style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                                      <Minus size={9} className="text-muted-foreground" />
+                                    </button>
+                                    <span className={cn('text-xs font-black mp-mono w-7 text-center',
+                                      whDelta > 0 ? 'text-primary' : whDelta < 0 ? 'text-red-400' : 'text-muted-foreground/40')}>
+                                      {whDelta > 0 ? `+${whDelta}` : whDelta === 0 ? '·' : whDelta}
+                                    </span>
+                                    <button
+                                      onClick={() => changeWHAdjustDelta(variant.id, warehouseStock, 1)}
+                                      className="w-6 h-6 rounded flex items-center justify-center transition-colors"
+                                      style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                                      <Plus size={9} className="text-muted-foreground" />
+                                    </button>
+                                  </div>
+                                </div>
+                                {/* Road column */}
+                                <div className="flex-1 flex items-center gap-1.5 px-2 py-1.5">
+                                  <Truck size={15} className="text-green-500 flex-shrink-0" />
+                                  <span className="text-[15px] font-bold mp-mono text-green-500 flex-shrink-0">{roadStock}</span>
+                                  <div className="flex items-center gap-0.5 ml-auto">
+                                    <button
+                                      onClick={() => changeRoadAdjustDelta(variant.id, roadStock, -1)}
+                                      disabled={roadDelta <= -roadStock}
+                                      className="w-6 h-6 rounded flex items-center justify-center disabled:opacity-30 transition-colors"
+                                      style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                                      <Minus size={9} className="text-muted-foreground" />
+                                    </button>
+                                    <span className={cn('text-xs font-black mp-mono w-7 text-center',
+                                      roadDelta > 0 ? 'text-green-400' : roadDelta < 0 ? 'text-red-400' : 'text-muted-foreground/40')}>
+                                      {roadDelta > 0 ? `+${roadDelta}` : roadDelta === 0 ? '·' : roadDelta}
+                                    </span>
+                                    <button
+                                      onClick={() => changeRoadAdjustDelta(variant.id, roadStock, 1)}
+                                      className="w-6 h-6 rounded flex items-center justify-center transition-colors"
+                                      style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                                      <Plus size={9} className="text-muted-foreground" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Reason pills */}
+                        <div>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 px-1">Reason</p>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {(['damaged', 'theft', 'counting_error', 'restock', 'other'] as const).map(r => (
+                              <button key={r} onClick={() => setAdjustReason(r)}
+                                className={cn('py-1.5 rounded-lg text-[10px] font-semibold transition-all',
+                                  adjustReason === r ? 'text-amber-400' : 'text-muted-foreground')}
+                                style={adjustReason === r
+                                  ? { background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)' }
+                                  : { background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                                {ADJUST_REASON_LABELS[r]}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Notes */}
+                        <input
+                          value={adjustNotes}
+                          onChange={e => setAdjustNotes(e.target.value)}
+                          placeholder="Notes (optional)…"
+                          className="w-full px-3 py-2 rounded-lg text-xs text-foreground border focus:outline-none placeholder:text-muted-foreground transition-colors"
+                          style={{ background: 'var(--background)', borderColor: 'var(--border)' }}
+                        />
+
+                        {/* Adjuster signature */}
+                        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg"
+                          style={{ background: 'rgba(251,191,36,0.05)', border: `1px solid ${adjustAdjusterName.trim() ? 'rgba(251,191,36,0.4)' : 'rgba(251,191,36,0.2)'}` }}>
+                          <UserCheck size={11} className="text-amber-400 flex-shrink-0" />
+                          <input
+                            value={adjustAdjusterName}
+                            onChange={e => setAdjustAdjusterName(e.target.value)}
+                            placeholder="Adjuster name (required) *"
+                            className="flex-1 bg-transparent text-xs text-foreground focus:outline-none placeholder:text-muted-foreground/60"
+                          />
+                          {!adjustAdjusterName.trim() && (
+                            <AlertTriangle size={11} className="text-amber-500 flex-shrink-0" />
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => confirmAdjustments(product)}
+                          className="w-full py-2.5 rounded-xl text-xs font-black text-white flex items-center justify-center gap-1.5"
+                          style={{ background: 'linear-gradient(135deg, #FBBF24, #D97706)', boxShadow: '0 0 16px rgba(251,191,36,0.2)' }}>
+                          <Sliders size={13} /> Confirm Adjustment
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -678,108 +975,6 @@ export default function MerchOffice() {
           </div>}
         </div>
 
-        {/* Stock Management */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <button onClick={() => setSecStock(v => !v)} className="flex items-center gap-1.5 group">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Stock Management</p>
-              <span className="text-[#7B7F93] group-hover:text-[#A4A7B5] transition-colors">{secStock ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
-            </button>
-          </div>
-          {secStock && (
-            <div className="space-y-2">
-              {products.map(product => {
-                const isExpanded = expandedStockProduct.has(product.id);
-                const totalRoad = product.variants.reduce((s, v) => s + (v.roadStock ?? v.currentStock), 0);
-                const totalWH = product.variants.reduce((s, v) => s + (v.warehouseStock ?? 0), 0);
-                return (
-                  <div key={product.id} className="mp-card overflow-hidden">
-                    {/* Collapsible header — use div to avoid nested <button> */}
-                    <div className="p-3 flex items-center justify-between">
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setExpandedStockProduct(prev => {
-                          const next = new Set(prev);
-                          if (next.has(product.id)) next.delete(product.id); else next.add(product.id);
-                          return next;
-                        })}
-                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedStockProduct(prev => { const next = new Set(prev); if (next.has(product.id)) next.delete(product.id); else next.add(product.id); return next; }); } }}
-                        className={cn("flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer", product.status === 'suspended' && "opacity-50 grayscale-[0.5]")}
-                      >
-                        <span className="text-[#7B7F93] flex-shrink-0">
-                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold text-foreground truncate">{product.name}</p>
-                            {product.status === 'suspended' && (
-                              <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-500/10 text-orange-500 border border-orange-500/20 uppercase tracking-tight whitespace-nowrap">
-                                <UserX size={8} /> Suspended
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-[#7B7F93]">{product.variants.length} variants</p>
-                        </div>
-                    {!isExpanded && (
-                      <div className="flex items-center gap-2 px-2">
-                        <span className="text-xs font-bold mp-mono text-primary whitespace-nowrap">{totalWH} WH</span>
-                        <span className="text-xs font-bold mp-mono text-green-500 whitespace-nowrap">{totalRoad} Road</span>
-                      </div>
-                    )}
-                      </div>
-                      <button
-                        onClick={() => navigate(`/transfer?id=${product.id}`)}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-primary hover:text-primary/80 transition-colors flex-shrink-0 ml-2"
-                        style={{ border: '1px solid var(--border)' }}>
-                        <ArrowRightLeft size={11} /> Transfer
-                      </button>
-                    </div>
-                    {isExpanded && (
-                      <div className={cn("border-t border-[#24273A] p-3 space-y-1.5", product.status === 'suspended' && "opacity-50 grayscale-[0.5]")}>
-                        <div className="flex items-center justify-between px-2 pb-1">
-                          <span className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Variant</span>
-                          <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-semibold text-primary uppercase tracking-wider w-8 text-right">WH</span>
-                          <span className="text-[10px] font-semibold text-green-500 uppercase tracking-wider w-8 text-right">Road</span>
-                          <span className="text-[10px] font-semibold text-primary uppercase tracking-wider text-right">Adjust</span>
-                          </div>
-                        </div>
-                        {product.variants.map(v => (
-                        <div key={v.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg"
-                          style={{ background: 'var(--background)', border: '2px solid var(--border)' }}>
-                          <span className="text-sm text-muted-foreground">{v.name}</span>
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-bold mp-mono text-primary w-8 text-right">{v.warehouseStock ?? 0}</span>
-                            <span className={`text-sm font-bold mp-mono w-8 text-right ${
-                              (v.roadStock ?? v.currentStock) <= 0 ? 'text-destructive' :
-                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.1 ? 'text-destructive' :
-                              (v.roadStock ?? v.currentStock) / (v.initialStock || 1) <= 0.3 ? 'text-orange-500' :
-                              'text-green-500'}`}>
-                              {v.roadStock ?? v.currentStock}
-                            </span>
-                            <button
-                              onClick={() => setAdjustingVariant({ variantId: v.id, productId: product.id, variantName: v.name, currentStock: v.currentStock })}
-                              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
-                              style={{ background: 'rgba(107,92,255,0.1)', border: '1px solid rgba(107,92,255,0.2)' }}>
-                              <Sliders size={11} /> Adjust
-                            </button>
-                          </div>
-                        </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {products.length === 0 && (
-                <div className="mp-card p-6 text-center">
-                  <p className="text-sm text-[#7B7F93]">No products to manage</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
         {/* Team */}
         <div>
           <div className="flex items-center justify-between mb-1">
@@ -977,17 +1172,6 @@ export default function MerchOffice() {
       })()}
 
       {/* Modals */}
-      {adjustingVariant && (
-        <AdjustmentModal
-          {...adjustingVariant}
-          onSave={async (delta, reason, notes) => {
-            await adjustStock(adjustingVariant.variantId, adjustingVariant.productId, adjustingVariant.variantName, delta, reason, notes);
-            setAdjustingVariant(null);
-          }}
-          onClose={() => setAdjustingVariant(null)}
-        />
-      )}
-
       {editingShow !== null && (
         <NewShowModal
           initialShow={editingShow !== 'new' ? editingShow : undefined}

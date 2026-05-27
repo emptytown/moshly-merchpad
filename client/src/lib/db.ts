@@ -37,6 +37,7 @@ export interface Product {
   projectId: string; // SCOPED
   name: string;
   description?: string;
+  subtitle?: string;  // optional display subtitle shown on TallyCard below the variant label
   category?: string;
   variants: ProductVariant[];
   createdAt: string;
@@ -454,12 +455,22 @@ export async function seedDemoData(): Promise<void> {
 
 export async function resetProjectSalesData(projectId: string): Promise<void> {
   const db = await getDB();
-  const batches = await db.getAllFromIndex('tallyBatches', 'by-project', projectId);
-  for (const b of batches) await db.delete('tallyBatches', b.id);
   const sessions = await db.getAllFromIndex('sessions', 'by-project', projectId);
-  for (const s of sessions) await db.delete('sessions', s.id);
+  const activeSessionIds = new Set(sessions.filter(s => s.status === 'active').map(s => s.id));
+
+  for (const s of sessions) {
+    if (!activeSessionIds.has(s.id)) await db.delete('sessions', s.id);
+  }
+
+  const batches = await db.getAllFromIndex('tallyBatches', 'by-project', projectId);
+  for (const b of batches) {
+    if (!activeSessionIds.has(b.sessionId)) await db.delete('tallyBatches', b.id);
+  }
+
   const entries = await db.getAllFromIndex('auditLog', 'by-project', projectId);
-  for (const e of entries) await db.delete('auditLog', e.id);
+  for (const e of entries) {
+    if (!activeSessionIds.has(e.sessionId ?? '')) await db.delete('auditLog', e.id);
+  }
 }
 
 // ── Danger Zone Operations ────────────────────────────────────────────────

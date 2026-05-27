@@ -145,7 +145,7 @@ interface DangerAction {
 // ── Main Component ─────────────────────────────────────────────────────────
 
 export default function DangerZone() {
-  const { activeProject } = useProjects();
+  const { activeProject, deleteLocalProject } = useProjects();
   const projectId = activeProject?.id ?? 'default';
   const [activeAction, setActiveAction] = useState<DangerAction | null>(null);
 
@@ -168,9 +168,10 @@ export default function DangerZone() {
       description: 'Deletes the pre-loaded demo products and shows (T-Shirt, Poster, Vinyl, etc.).',
       warning: 'Only demo data is removed. Your real products and shows are kept.',
       ctaLabel: 'Remove Mock Data',
-      successMsg: 'Mock data removed',
+      successMsg: 'Mock data removed — reloading…',
       icon: Eraser,
       color: '#FBBF24',
+      reload: true,
       fn: () => removeMockData(projectId),
     },
     {
@@ -179,10 +180,11 @@ export default function DangerZone() {
       description: 'Resets every variant\'s current stock back to its initial stock value.',
       warning: 'All stock counts will be restored to their starting values. Sale history is kept.',
       ctaLabel: 'Reset Stock',
-      successMsg: 'All stock reset to initial values',
+      successMsg: 'All stock reset to initial values — reloading…',
       icon: RefreshCw,
       color: '#FBBF24',
       confirmWord: 'RESET',
+      reload: true,
       fn: () => resetAllStock(projectId),
     },
     {
@@ -191,10 +193,11 @@ export default function DangerZone() {
       description: 'Permanently removes every product and all their variants from this device.',
       warning: 'This cannot be undone. All products and variants will be permanently deleted.',
       ctaLabel: 'Delete All Products',
-      successMsg: 'All products deleted',
+      successMsg: 'All products deleted — reloading…',
       icon: Trash2,
       color: '#F87171',
       confirmWord: 'DELETE',
+      reload: true,
       fn: () => deleteAllProducts(projectId),
     },
     {
@@ -203,11 +206,15 @@ export default function DangerZone() {
       description: 'Wipes all products, shows, sessions, sales, audit log, and sync queue for this project.',
       warning: 'All project data will be permanently erased from this device. This cannot be undone.',
       ctaLabel: 'Delete Project',
-      successMsg: 'Project data deleted',
+      successMsg: 'Project data deleted — reloading…',
       icon: FolderX,
       color: '#F87171',
       confirmWord: 'DELETE',
-      fn: () => deleteProjectData(projectId),
+      reload: true,
+      fn: async () => {
+        await deleteProjectData(projectId);
+        deleteLocalProject(projectId);
+      },
     },
     {
       id: 'full-reset',

@@ -19,6 +19,122 @@ function formatCurrency(n: number, currency = 'EUR') {
   return `${symbol}${n.toFixed(2)}`;
 }
 
+// ── Category Picker ────────────────────────────────────────────────────────
+
+interface CategoryPickerProps {
+  value: string;
+  onChange: (category: string) => void;
+  availableCategories: string[];
+}
+
+function CategoryPicker({ value, onChange, availableCategories }: CategoryPickerProps) {
+  const [isAddingCustom, setIsAddingCustom] = useState(false);
+  const [customInput, setCustomInput] = useState('');
+
+  function handlePillSelect(cat: string) {
+    onChange(cat === value ? '' : cat);
+    setIsAddingCustom(false);
+  }
+
+  function handleCustomConfirm() {
+    const trimmed = customInput.trim();
+    if (trimmed) onChange(trimmed);
+    setIsAddingCustom(false);
+    setCustomInput('');
+  }
+
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+        Category
+      </label>
+      <div className="flex flex-wrap gap-1.5">
+        {availableCategories.map(cat => (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => handlePillSelect(cat)}
+            className={cn(
+              'px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
+              value === cat
+                ? 'text-white'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            style={value === cat
+              ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)', border: '1px solid transparent' }
+              : { background: 'var(--muted)', border: '1px solid var(--border)' }
+            }
+          >
+            {cat}
+          </button>
+        ))}
+
+        {/* Custom category input */}
+        {isAddingCustom ? (
+          <div className="flex items-center gap-1">
+            <input
+              autoFocus
+              value={customInput}
+              onChange={e => setCustomInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleCustomConfirm();
+                if (e.key === 'Escape') { setIsAddingCustom(false); setCustomInput(''); }
+              }}
+              placeholder="New category…"
+              className="px-3 py-1.5 rounded-full text-xs text-foreground bg-background border border-primary focus:outline-none w-32"
+            />
+            <button
+              type="button"
+              onClick={handleCustomConfirm}
+              className="px-2 py-1.5 rounded-full text-xs font-bold text-white"
+              style={{ background: 'var(--primary)' }}
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsAddingCustom(false); setCustomInput(''); }}
+              className="px-2 py-1.5 rounded-full text-xs text-muted-foreground hover:text-foreground"
+              style={{ border: '1px solid var(--border)' }}
+            >
+              <X size={11} />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsAddingCustom(true)}
+            className="px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+            style={{ border: '1px dashed rgba(107,92,255,0.4)', background: 'rgba(107,92,255,0.05)' }}
+          >
+            + New
+          </button>
+        )}
+      </div>
+
+      {/* Show selected value if it's a custom one not in the pill list */}
+      {value && !availableCategories.includes(value) && (
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <span className="text-xs text-muted-foreground">Custom:</span>
+          <span
+            className="px-2 py-0.5 rounded-full text-xs font-semibold text-white"
+            style={{ background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }}
+          >
+            {value}
+          </span>
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X size={11} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProductEditorPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
@@ -39,6 +155,7 @@ export default function ProductEditorPage() {
   }, [productId, product, state.isLoading, navigate]);
 
   const [name, setName] = useState(product?.name ?? '');
+  const [subtitle, setSubtitle] = useState(product?.subtitle ?? '');
   const [description, setDescription] = useState(product?.description ?? '');
   const [category, setCategory] = useState(product?.category ?? '');
   const [variants, setVariants] = useState<ProductVariant[]>(product?.variants ?? []);
@@ -67,16 +184,22 @@ export default function ProductEditorPage() {
 
   const catalogue = useMemo(() => loadCatalogue(), []);
   const catalogueNames = useMemo(() => catalogue.map(t => t.name), [catalogue]);
-  const catalogueCategories = useMemo(
-    () => Array.from(new Set(catalogue.map(t => t.category))).sort(),
-    [catalogue]
-  );
+
+  /** Categories from catalogue templates + already-used categories in this project */
+  const availableCategories = useMemo(() => {
+    const fromCatalogue = catalogue.map(t => t.category);
+    const fromProducts = products.map(p => p.category).filter((c): c is string => Boolean(c));
+    return Array.from(new Set([...fromCatalogue, ...fromProducts])).sort();
+  }, [catalogue, products]);
+
+  const MIN_NAME_LENGTH_FOR_FUZZY_WARNING = 4;
 
   function checkName(val: string) {
     setName(val);
-    if (!val.trim()) { setNameWarning(null); return; }
-    const lower = val.trim().toLowerCase();
-    const similar = catalogueNames.find(n => {
+    const trimmed = val.trim();
+    if (trimmed.length < MIN_NAME_LENGTH_FOR_FUZZY_WARNING) { setNameWarning(null); return; }
+    const lower = trimmed.toLowerCase();
+    const similarName = catalogueNames.find(n => {
       const nl = n.toLowerCase();
       if (nl === lower) return false;
       if (nl.startsWith(lower) || lower.startsWith(nl)) return true;
@@ -85,7 +208,7 @@ export default function ProductEditorPage() {
       for (let i = 0; i < maxLen; i++) { if (nl[i] !== lower[i]) diff++; }
       return diff <= 2 && maxLen > 3;
     });
-    setNameWarning(similar ? `Did you mean "${similar}"? Check the catalogue to avoid duplicates.` : null);
+    setNameWarning(similarName ? `Did you mean "${similarName}"? Check the catalogue to avoid duplicates.` : null);
   }
 
   function applyTemplate(t: CatalogueTemplate) {
@@ -189,6 +312,7 @@ export default function ProductEditorPage() {
       projectId: product?.projectId ?? activeProject?.id ?? '',
       name: name.trim(),
       description: description.trim() || undefined,
+      subtitle: subtitle.trim() || undefined,
       category: category.trim() || undefined,
       variants: finalVariants.map(v => ({ ...v, productId: pid })),
       createdAt: product?.createdAt ?? now,
@@ -271,51 +395,49 @@ export default function ProductEditorPage() {
 
         {/* Basic info */}
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                Product Name
-              </label>
-              <input
-                value={name}
-                onFocus={e => { e.target.value = ''; }}
-                onChange={e => checkName(e.target.value)}
-                placeholder="T-Shirt"
-                list="catalogue-name-suggestions"
-                className={cn(
-                  'w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border focus:outline-none transition-colors',
-                  nameWarning
-                    ? 'border-orange-500 focus:border-orange-500'
-                    : 'border-border focus:border-primary'
-                )}
-              />
-              <datalist id="catalogue-name-suggestions">
-                {catalogueNames.map(n => <option key={n} value={n} />)}
-              </datalist>
-              {nameWarning && (
-                <div className="flex items-start gap-1.5 mt-1.5">
-                  <AlertCircle size={11} className="text-orange-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-orange-500">{nameWarning}</p>
-                </div>
+          {/* Display Name — full width, no onFocus clear */}
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+              Display Name
+            </label>
+            <input
+              value={name}
+              onChange={e => checkName(e.target.value)}
+              placeholder="T-Shirt"
+              className={cn(
+                'w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border focus:outline-none transition-colors',
+                nameWarning
+                  ? 'border-orange-500 focus:border-orange-500'
+                  : 'border-border focus:border-primary'
               )}
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                Category
-              </label>
-              <input
-                value={category}
-                onFocus={e => { e.target.value = ''; }}
-                onChange={e => setCategory(e.target.value)}
-                placeholder="Apparel"
-                list="catalogue-category-suggestions"
-                className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors"
-              />
-              <datalist id="catalogue-category-suggestions">
-                {catalogueCategories.map(c => <option key={c} value={c} />)}
-              </datalist>
-            </div>
+            />
+            {nameWarning && (
+              <div className="flex items-start gap-1.5 mt-1.5">
+                <AlertCircle size={11} className="text-orange-500 flex-shrink-0 mt-0.5" />
+                <p className="text-[10px] text-orange-500">{nameWarning}</p>
+              </div>
+            )}
           </div>
+
+          {/* Display Subtitle — optional second line shown on TallyCard */}
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+              Display Subtitle <span className="normal-case font-normal text-muted-foreground/60">(optional · shown on Tally card)</span>
+            </label>
+            <input
+              value={subtitle}
+              onChange={e => setSubtitle(e.target.value)}
+              placeholder="e.g. Acoustic Edition · Limited Run"
+              className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors"
+            />
+          </div>
+
+          {/* Category — pill selector */}
+          <CategoryPicker
+            value={category}
+            onChange={setCategory}
+            availableCategories={availableCategories}
+          />
 
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
@@ -416,7 +538,6 @@ export default function ProductEditorPage() {
                 <div className="relative">
                   <input
                     value={bulkAttr}
-                    onFocus={e => { e.target.value = ''; }}
                     onChange={e => setBulkAttr(e.target.value)}
                     placeholder="Attribute (e.g. size)"
                     list="bulk-attr-suggestions"
@@ -521,7 +642,6 @@ export default function ProductEditorPage() {
               >
                 <input
                   value={v.name}
-                  onFocus={e => { e.target.value = ''; }}
                   onChange={e => updateVariant(v.id, 'name', e.target.value)}
                   className="flex-1 min-w-0 px-2 py-1 rounded text-sm text-foreground bg-transparent focus:outline-none"
                 />

@@ -27,19 +27,20 @@ export default function Settings() {
   const { settings, deviceId, repName } = state;
   const { activeProject, localProjects } = useProjects();
 
+  const projectId = activeProject?.id ?? 'default';
   const [localRepName, setLocalRepName] = useState(repName);
   const [view, setView] = useState<SettingsView>('main');
   const [isResetStatsConfirmOpen, setIsResetStatsConfirmOpen] = useState(false);
   const [isResettingStats, setIsResettingStats] = useState(false);
 
   async function saveRepName() {
-    await setSetting('repName', localRepName);
+    await setSetting(projectId, 'repName', localRepName);
     dispatch({ type: 'SET_REP_NAME', payload: localRepName });
     toast.success('Name saved');
   }
 
   async function toggleUndo(val: boolean) {
-    await setSetting('undoEnabled', val);
+    await setSetting(projectId, 'undoEnabled', val);
     dispatch({ type: 'SET_SETTINGS', payload: { undoEnabled: val } });
   }
 
@@ -54,11 +55,11 @@ export default function Settings() {
     setIsResettingStats(true);
     try {
       await resetProjectSalesData(activeProject.id);
-      toast.success('Statistics reset to zero', { description: `All sales data for "${activeProject.name}" has been cleared.` });
+      toast.success('Statistics reset to zero', { description: `All sales history for "${activeProject.name}" has been cleared.` });
       setIsResetStatsConfirmOpen(false);
     } catch (err) {
-      toast.error('Reset failed — check console');
-      throw new Error(`Failed to reset statistics for project ${activeProject.id}: ${err}`);
+      console.error(`[Settings] Failed to reset statistics for project ${activeProject.id}:`, err);
+      toast.error('Reset failed — please try again');
     } finally {
       setIsResettingStats(false);
     }
@@ -180,7 +181,7 @@ export default function Settings() {
               value={settings.currency || 'EUR'}
               onChange={async (e) => {
                 const val = e.target.value;
-                await setSetting(activeProject!.id, 'currency', val);
+                await setSetting(projectId, 'currency', val);
                 dispatch({ type: 'SET_SETTINGS', payload: { currency: val } });
                 toast.success(`Currency set to ${val}`);
               }}
@@ -201,7 +202,7 @@ export default function Settings() {
               value={settings.defaultStockLocation || 'road'}
               onChange={async (e) => {
                 const val = e.target.value as 'road' | 'warehouse';
-                await setSetting(activeProject!.id, 'defaultStockLocation', val);
+                await setSetting(projectId, 'defaultStockLocation', val);
                 dispatch({ type: 'SET_SETTINGS', payload: { defaultStockLocation: val } });
                 toast.success(`Default stock set to ${val.charAt(0).toUpperCase() + val.slice(1)}`);
               }}
@@ -257,7 +258,7 @@ export default function Settings() {
               <Switch
                 checked={settings.requireMoneyInput}
                 onCheckedChange={async (val) => {
-                  await setSetting('requireMoneyInput', val);
+                  await setSetting(projectId, 'requireMoneyInput', val);
                   dispatch({ type: 'SET_SETTINGS', payload: { requireMoneyInput: val } });
                 }}
               />
@@ -279,7 +280,7 @@ export default function Settings() {
               <Switch
                 checked={settings.stickyBarTally}
                 onCheckedChange={async (val) => {
-                  await setSetting('stickyBarTally', val);
+                  await setSetting(projectId, 'stickyBarTally', val);
                   dispatch({ type: 'SET_SETTINGS', payload: { stickyBarTally: val } });
                 }}
               />
@@ -292,7 +293,7 @@ export default function Settings() {
               <Switch
                 checked={settings.stickyBarRegister}
                 onCheckedChange={async (val) => {
-                  await setSetting('stickyBarRegister', val);
+                  await setSetting(projectId, 'stickyBarRegister', val);
                   dispatch({ type: 'SET_SETTINGS', payload: { stickyBarRegister: val } });
                 }}
               />
@@ -307,8 +308,8 @@ export default function Settings() {
             <p className="text-sm font-bold text-[#E6E7EB]">Statistics</p>
           </div>
           <p className="text-xs text-[#7B7F93]">
-            Reset all sales data for <span className="font-semibold text-[#A4A7B5]">{activeProject?.name ?? 'this project'}</span> to zero.
-            Tally batches, sessions, and audit entries are cleared. Products and stock are untouched.
+            Reset all sales history for <span className="font-semibold text-[#A4A7B5]">{activeProject?.name ?? 'this project'}</span> to zero.
+            Past sessions, tally batches, and audit entries are cleared. Active sale, stock, and products are untouched.
           </p>
           <button
             onClick={() => setIsResetStatsConfirmOpen(true)}
@@ -336,7 +337,7 @@ export default function Settings() {
               <Switch
                 checked={settings.requireDiscountReason ?? true}
                 onCheckedChange={async (val) => {
-                  await setSetting('requireDiscountReason', val);
+                  await setSetting(projectId, 'requireDiscountReason', val);
                   dispatch({ type: 'SET_SETTINGS', payload: { requireDiscountReason: val } });
                 }}
               />
@@ -350,7 +351,7 @@ export default function Settings() {
               <Switch
                 checked={settings.allowSellerDebt ?? true}
                 onCheckedChange={async (val) => {
-                  await setSetting('allowSellerDebt', val);
+                  await setSetting(projectId, 'allowSellerDebt', val);
                   dispatch({ type: 'SET_SETTINGS', payload: { allowSellerDebt: val } });
                 }}
               />
@@ -364,7 +365,7 @@ export default function Settings() {
               <Switch
                 checked={settings.requireDebtReason ?? true}
                 onCheckedChange={async (val) => {
-                  await setSetting('requireDebtReason', val);
+                  await setSetting(projectId, 'requireDebtReason', val);
                   dispatch({ type: 'SET_SETTINGS', payload: { requireDebtReason: val } });
                 }}
               />
@@ -471,7 +472,7 @@ export default function Settings() {
               </div>
               <Slider
                 value={[settings.stockThresholdYellow * 100]}
-                onValueChange={async ([v]) => { dispatch({ type: 'SET_SETTINGS', payload: { stockThresholdYellow: v / 100 } }); await setSetting('stockThresholdYellow', v / 100); }}
+                onValueChange={async ([v]) => { dispatch({ type: 'SET_SETTINGS', payload: { stockThresholdYellow: v / 100 } }); await setSetting(projectId, 'stockThresholdYellow', v / 100); }}
                 min={10} max={60} step={5}
                 className="w-full"
               />
@@ -490,7 +491,7 @@ export default function Settings() {
               </div>
               <Slider
                 value={[settings.stockThresholdRed * 100]}
-                onValueChange={async ([v]) => { dispatch({ type: 'SET_SETTINGS', payload: { stockThresholdRed: v / 100 } }); await setSetting('stockThresholdRed', v / 100); }}
+                onValueChange={async ([v]) => { dispatch({ type: 'SET_SETTINGS', payload: { stockThresholdRed: v / 100 } }); await setSetting(projectId, 'stockThresholdRed', v / 100); }}
                 min={1} max={20} step={1}
                 className="w-full"
               />
@@ -540,7 +541,7 @@ export default function Settings() {
             MerchPad is an offline-first merchandise sales tool for live shows. Part of the Moshly ecosystem.
             All data is stored locally on this device and syncs to the backend when online.
           </p>
-          <p className="text-xs text-[#7B7F93] mt-2">Version 0.3.0 — MVP</p>
+          <p className="text-xs text-[#7B7F93] mt-2">Version 1.0.31</p>
         </div>
 
         {/* Danger Zone */}
@@ -576,8 +577,8 @@ export default function Settings() {
               <div className="flex items-start gap-2">
                 <AlertTriangle size={13} className="text-[#FBBF24] flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-[#FBBF24] leading-relaxed">
-                  All tally batches, sessions, and audit entries for this project will be permanently deleted.
-                  Products, shows, and stock counts are unaffected.
+                  Past sessions, tally batches, and audit entries will be permanently deleted.
+                  Any active sale in progress, stock counts, and products are unaffected.
                 </p>
               </div>
             </div>

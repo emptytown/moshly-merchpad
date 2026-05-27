@@ -26,7 +26,7 @@ export interface TallyItem {
 
 export interface TallyState {
   items: Record<string, TallyItem>; // variantId → TallyItem
-  lastAction: { variantName: string; action: '+1' | '-1'; timestamp: string } | null;
+  lastAction: { variantId: string; variantName: string; action: '+1' | '-1'; timestamp: string } | null;
 }
 
 // ── App State ──────────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ type Action =
   | { type: 'DELETE_PRODUCT'; payload: string }
   | { type: 'ADD_SHOW'; payload: Show }
   | { type: 'UPDATE_SHOW'; payload: Show }
-  | { type: 'UPDATE_VARIANT_STOCK'; payload: { variantId: string; productId: string; delta: number } }
+  | { type: 'UPDATE_VARIANT_STOCK'; payload: { variantId: string; productId: string; delta: number; stockLocation?: 'road' | 'warehouse' } }
   | { type: 'SET_TEAM_MEMBERS'; payload: TeamMember[] }
   | { type: 'UPSERT_TEAM_MEMBER'; payload: TeamMember }
   | { type: 'DELETE_TEAM_MEMBER'; payload: string }
@@ -121,7 +121,7 @@ function reducer(state: AppState, action: Action): AppState {
               unitPrice,
             },
           },
-          lastAction: { variantName, action: '+1', timestamp: new Date().toISOString() },
+          lastAction: { variantId, variantName, action: '+1', timestamp: new Date().toISOString() },
         },
       };
     }
@@ -141,19 +141,14 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         tally: {
           items: newItems,
-          lastAction: { variantName, action: '-1', timestamp: new Date().toISOString() },
+          lastAction: { variantId, variantName, action: '-1', timestamp: new Date().toISOString() },
         },
       };
     }
 
     case 'TALLY_UNDO_LAST': {
       if (!state.tally.lastAction) return state;
-      const { variantName } = state.tally.lastAction;
-      // Find the variantId by name
-      const variantId = Object.keys(state.tally.items).find(
-        id => state.tally.items[id].variantName === variantName
-      );
-      if (!variantId) return state;
+      const { variantId } = state.tally.lastAction;
       const existing = state.tally.items[variantId];
       if (!existing) return state;
       const newQty = existing.qty - 1;
@@ -227,7 +222,7 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, teamMembers: state.teamMembers.filter(m => m.id !== action.payload) };
 
     case 'UPDATE_VARIANT_STOCK': {
-      const { variantId, productId, delta } = action.payload;
+      const { variantId, productId, delta, stockLocation = 'road' } = action.payload;
       return {
         ...state,
         products: state.products.map(p => {
@@ -236,6 +231,10 @@ function reducer(state: AppState, action: Action): AppState {
             ...p,
             variants: p.variants.map(v => {
               if (v.id !== variantId) return v;
+              if (stockLocation === 'warehouse') {
+                const newWarehouseStock = Math.max(0, (v.warehouseStock ?? 0) + delta);
+                return { ...v, warehouseStock: newWarehouseStock };
+              }
               const newRoadStock = Math.max(0, (v.roadStock ?? v.currentStock) + delta);
               return { ...v, currentStock: newRoadStock, roadStock: newRoadStock };
             }),
@@ -265,7 +264,7 @@ interface MerchPadContextValue {
     tallyOverride?: TallyState;
   }) => Promise<TallyBatch | null>;
   recordSellerDebt: (memberId: string, amount: number) => Promise<void>;
-  adjustStock: (variantId: string, productId: string, variantName: string, delta: number, reason: StockAdjustment['reason'], notes?: string) => Promise<void>;
+  adjustStock: (variantId: string, productId: string, variantName: string, delta: number, reason: StockAdjustment['reason'], notes?: string, adjusterName?: string, stockLocation?: 'road' | 'warehouse') => Promise<void>;
   saveProduct: (product: Product) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
   saveShow: (show: Show) => Promise<void>;
@@ -619,13 +618,16 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     variantName: string,
     delta: number,
     reason: StockAdjustment['reason'],
-    notes?: string
+    notes?: string,
+    adjusterName?: string,
+    stockLocation: 'road' | 'warehouse' = 'road'
   ) => {
     if (!activeProject) return;
     const db = await getDB();
     const projectId = activeProject.id;
     const { activeSession, repName } = stateRef.current;
     const now = new Date().toISOString();
+    const resolvedAdjusterName = adjusterName?.trim() || repName || 'Unknown';
 
     const adjustment: StockAdjustment = {
       id: uuidv4(),
@@ -637,24 +639,28 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       delta,
       reason,
       notes,
-      adjustedBy: repName || 'Unknown',
+      adjustedBy: resolvedAdjusterName,
       adjustedAt: now,
     };
 
     await db.put('stockAdjustments', adjustment);
     await enqueueSync(projectId, 'stock_adjustment', adjustment);
 
-    // Update product stock
-    const products = await db.getAllFromIndex('products', 'by-project', projectId);
-    for (const p of products) {
+    // Update product stock in IDB and optimistically in state
+    const allProducts = await db.getAllFromIndex('products', 'by-project', projectId);
+    for (const p of allProducts) {
       if (p.id !== productId) continue;
-      const v = p.variants.find(v => v.id === variantId);
+      const v = p.variants.find(pv => pv.id === variantId);
       if (v) {
-        const newStock = Math.max(0, (v.roadStock ?? v.currentStock) + delta);
-        v.currentStock = newStock;
-        v.roadStock = newStock;
+        if (stockLocation === 'warehouse') {
+          v.warehouseStock = Math.max(0, (v.warehouseStock ?? 0) + delta);
+        } else {
+          const newRoadStock = Math.max(0, (v.roadStock ?? v.currentStock) + delta);
+          v.currentStock = newRoadStock;
+          v.roadStock = newRoadStock;
+        }
         await db.put('products', p);
-        dispatch({ type: 'UPDATE_VARIANT_STOCK', payload: { variantId, productId, delta } });
+        dispatch({ type: 'UPDATE_VARIANT_STOCK', payload: { variantId, productId, delta, stockLocation } });
       }
     }
 
@@ -665,8 +671,8 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       action: 'stock_adjusted',
       entityType: 'product_variant',
       entityId: variantId,
-      description: `Stock adjusted: ${variantName} ${delta > 0 ? '+' : ''}${delta} (${reason})${notes ? ` — ${notes}` : ''}`,
-      actorName: repName || 'Unknown',
+      description: `Stock adjusted (${stockLocation}): ${variantName} ${delta > 0 ? '+' : ''}${delta} (${reason})${notes ? ` — ${notes}` : ''}`,
+      actorName: resolvedAdjusterName,
       reason,
       timestamp: now,
     });

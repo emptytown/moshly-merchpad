@@ -39,8 +39,14 @@ function stockStrokeClass(status: string) {
 }
 
 // ── Tally Card ─────────────────────────────────────────────────────────────
+
+const COUNTER_COLOR_TALLY    = '#4ADE80';
+const COUNTER_COLOR_REGISTER = '#7C6DFF';
+
 interface TallyCardProps {
   variant: ProductVariant;
+  /** Optional product-level subtitle shown below the identity label */
+  subtitle?: string;
   liveStock: number;
   /** Cumulative units sold this session for this variant */
   sessionSoldQty: number;
@@ -48,80 +54,104 @@ interface TallyCardProps {
   basketQty: number;
   stockStatus: string;
   tallyMode: boolean;
-  /** True when remaining road stock (liveStock - sessionSoldQty) <= 0 */
+  /** True when remaining road stock reaches 0 */
   effectivelyEmpty: boolean;
   onIncrement: () => void;
   onDecrement: () => void;
+  /** Tally mode only: subtract one mark from session sold count and restore road stock */
+  onTallyMinus: () => void;
   onInstantSell: () => void;
   allowMidSaleRestock: boolean;
   warehouseStock: number;
   onRestock: (qty: number) => void;
   symbol: string;
 }
+
+/** Returns the font-size class for the identity label based on character length */
+function identityLabelFontClass(label: string): string {
+  if (label.length <= 2) return 'text-4xl';
+  if (label.length <= 4) return 'text-3xl';
+  if (label.length <= 8) return 'text-2xl';
+  return 'text-xl';
+}
+
+/** The distinguishing label shown large on the card.
+ *  Uses attribute values when present (e.g. "M", "Black · L"),
+ *  falls back to the full variant name for attribute-free products. */
+function resolveIdentityLabel(variant: ProductVariant): string {
+  const attributeValues = Object.values(variant.attributes);
+  return attributeValues.length > 0 ? attributeValues.join(' · ') : variant.name;
+}
+
 function TallyCard({
-  variant, liveStock, sessionSoldQty, basketQty, stockStatus,
-  tallyMode, effectivelyEmpty, onIncrement, onDecrement, onInstantSell,
+  variant, subtitle, liveStock, sessionSoldQty, basketQty, stockStatus,
+  tallyMode, effectivelyEmpty, onIncrement, onDecrement, onTallyMinus, onInstantSell,
   allowMidSaleRestock, warehouseStock, onRestock, symbol,
 }: TallyCardProps) {
   const [bumping, setBumping] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showRestockPicker, setShowRestockPicker] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
-  // In Tally mode: effectively empty when currentStock (post-sale) reaches 0
+
   const isEmpty = tallyMode ? (liveStock <= 0) : stockStatus === 'empty';
+  // Tally mode: cumulative session total. Register mode: basket qty only.
+  const displayQty = tallyMode ? sessionSoldQty : basketQty;
+
+  const identityLabel = resolveIdentityLabel(variant);
+  const identityFontClass = identityLabelFontClass(identityLabel);
+
+  // Ring color: green in tally, purple in register, null (muted) when zero
+  const counterRingColor = displayQty > 0
+    ? (tallyMode ? COUNTER_COLOR_TALLY : COUNTER_COLOR_REGISTER)
+    : null;
+
+  const stockColor = { high: '#4ADE80', medium: '#FBBF24', low: '#F87171', empty: '#F87171' }[stockStatus] ?? '#7B7F93';
 
   useEffect(() => {
     if (!showInfo) return;
-    function handleClick(e: MouseEvent) {
+    function handleOutsideClick(e: MouseEvent) {
       if (infoRef.current && !infoRef.current.contains(e.target as Node)) setShowInfo(false);
     }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [showInfo]);
 
-  // Tally mode: cumulative session total. Register mode: basket qty only (0 between sales).
-  const displayQty = tallyMode ? sessionSoldQty : basketQty;
-
-  function handleIncrement(e: React.MouseEvent) {
+  function handleIncrementTap(e: React.MouseEvent) {
     e.stopPropagation();
-    // Allow click even if isEmpty=true so handleInstantSell can show the toast/feedback
     if (tallyMode) {
       onInstantSell();
-      if (!isEmpty) {
-        setBumping(true);
-        setTimeout(() => setBumping(false), 200);
-      }
+      if (!isEmpty) { setBumping(true); setTimeout(() => setBumping(false), 200); }
       return;
     }
-
     if (isEmpty) return;
     setBumping(true);
     setTimeout(() => setBumping(false), 200);
     onIncrement();
   }
 
-  const stockColor = { high: '#4ADE80', medium: '#FBBF24', low: '#F87171', empty: '#F87171' }[stockStatus] ?? '#7B7F93';
-
   return (
     <div className={cn(
-      'mp-card flex flex-col p-3 select-none transition-all min-h-[180px]',
+      'mp-card flex flex-col p-3 select-none transition-all',
       stockStrokeClass(stockStatus),
       isEmpty && 'opacity-50',
     )}>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-black text-foreground uppercase tracking-wide leading-tight truncate">
-            {variant.name.split(' ').slice(0, -1).join(' ') || variant.name}
+
+      {/* Identity headline + info button */}
+      <div className="flex items-start justify-between mb-1">
+        <div className="flex-1 mr-1 min-w-0">
+          <p className={cn('font-black leading-none tracking-tight truncate', identityFontClass)}>
+            {identityLabel}
           </p>
-          <p className="text-xs text-muted-foreground truncate">
-            {Object.values(variant.attributes).join(' · ')}
-          </p>
+          {subtitle && (
+            <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5 leading-tight">
+              {subtitle}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-1.5 ml-2 flex-shrink-0 relative" ref={infoRef}>
+        <div className="flex-shrink-0 relative" ref={infoRef}>
           <button
             onClick={e => { e.stopPropagation(); setShowInfo(v => !v); }}
-            className="w-5 h-5 rounded-full flex items-center justify-center transition-colors"
+            className="w-5 h-5 rounded-full flex items-center justify-center transition-colors mt-0.5"
             style={{ background: showInfo ? 'rgba(107,92,255,0.25)' : 'rgba(107,92,255,0.1)', color: '#7C6DFF' }}>
             <Info size={11} />
           </button>
@@ -162,33 +192,45 @@ function TallyCard({
         </div>
       </div>
 
-      {/* Big number — session cumulative in Tally, basket qty in Register */}
-      <div className="flex-1 flex items-center justify-center py-2">
-        <span
-          className={cn('mp-tally-number', bumping && 'animate-counter-bump')}
-          style={{ color: displayQty > 0 ? 'var(--foreground)' : 'var(--muted-foreground)' }}>
-          {displayQty}
-        </span>
+      {/* Tally counter ring — green (tally) or purple (register), muted at zero */}
+      <div className="flex items-center justify-center py-3">
+        <div
+          className={cn('w-14 h-14 rounded-full flex items-center justify-center transition-all duration-150', bumping && 'animate-counter-bump')}
+          style={{
+            border: `2px solid ${counterRingColor ?? 'var(--border)'}`,
+            background: counterRingColor ? `${counterRingColor}1A` : 'transparent',
+          }}>
+          <span
+            className="text-xl font-black mp-mono leading-none"
+            style={{ color: counterRingColor ?? 'var(--muted-foreground)' }}>
+            {displayQty}
+          </span>
+        </div>
       </div>
 
       {/* +/- controls */}
       <div className="flex items-center gap-1.5 mb-2">
-        <button onClick={e => { e.stopPropagation(); onDecrement(); }} disabled={basketQty === 0 || tallyMode}
+        <button
+          onClick={e => { e.stopPropagation(); tallyMode ? onTallyMinus() : onDecrement(); }}
+          disabled={tallyMode ? sessionSoldQty === 0 : basketQty === 0}
           className="flex-1 flex items-center justify-center h-9 rounded-lg transition-all active:scale-95 disabled:opacity-30"
           style={{ background: '#0E0F14', border: '1px solid #2D3048' }}>
           <Minus size={14} className="text-[#A4A7B5]" />
         </button>
-        <button onClick={handleIncrement}
-          className="flex-[2] flex items-center justify-center h-9 rounded-lg font-bold text-white transition-all active:scale-95 disabled:opacity-30"
-          style={{ background: tallyMode
-            ? 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)'
-            : 'linear-gradient(135deg, #6B5CFF 0%, #C026D3 100%)',
-            opacity: isEmpty ? 0.4 : 1 }}>
+        <button
+          onClick={handleIncrementTap}
+          className="flex-[2] flex items-center justify-center h-9 rounded-lg font-bold text-white transition-all active:scale-95"
+          style={{
+            background: tallyMode
+              ? 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)'
+              : 'linear-gradient(135deg, #6B5CFF 0%, #C026D3 100%)',
+            opacity: isEmpty ? 0.4 : 1,
+          }}>
           <Plus size={16} />
         </button>
       </div>
 
-      {/* Mid-sale restock button (Tally mode only, when enabled) */}
+      {/* Mid-sale restock (Tally mode only, when enabled + warehouse has stock) */}
       {tallyMode && allowMidSaleRestock && warehouseStock > 0 && (
         <div className="mb-1">
           {!showRestockPicker ? (
@@ -218,6 +260,7 @@ function TallyCard({
           )}
         </div>
       )}
+
       {/* Price / running total */}
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground mp-mono">{symbol}{variant.price.toFixed(2)}</span>
@@ -227,16 +270,10 @@ function TallyCard({
           </span>
         ) : tallyMode ? (
           (() => {
-            const displayStock = variant.roadStock ?? liveStock;
-            if (displayStock <= 0) return (
-              <span className="text-xs font-bold mp-mono text-[#F87171]">Out</span>
-            );
-            if (displayStock <= 3) return (
-              <span className="text-xs font-bold mp-mono text-[#FBBF24]">{displayStock} Left</span>
-            );
-            return (
-              <span className="text-xs font-bold mp-mono text-[#4ADE80]">{displayStock} Left</span>
-            );
+            const remainingStock = variant.roadStock ?? liveStock;
+            if (remainingStock <= 0) return <span className="text-xs font-bold mp-mono text-[#F87171]">Out</span>;
+            if (remainingStock <= 3)  return <span className="text-xs font-bold mp-mono text-[#FBBF24]">{remainingStock} Left</span>;
+            return <span className="text-xs font-bold mp-mono text-[#4ADE80]">{remainingStock} Left</span>;
           })()
         ) : (
           <span className="text-xs font-bold mp-mono text-[#2D3048]">—</span>
@@ -745,7 +782,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
 // ── Main Screen ────────────────────────────────────────────────────────────
 export default function TallyCounter() {
   const [, navigate] = useLocation();
-  const { state, dispatch, confirmSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock } = useMerchPad();
+  const { state, dispatch, confirmSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock, adjustStock } = useMerchPad();
   const { products, activeSession, tally, settings, teamMembers, shows } = state;
   const currency = settings.currency ?? 'EUR';
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
@@ -811,18 +848,11 @@ export default function TallyCounter() {
     }
   }, [activeSession?.id]);
 
-  const allVariants: Array<{ variant: ProductVariant; productName: string }> = products
-    .filter(p => p.status !== 'suspended')
-    .flatMap(p =>
-      p.variants.map(v => ({ variant: v, productName: p.name }))
-    );
-  const categories = ['all', ...Array.from(new Set(products.filter(p => p.status !== 'suspended').map(p => p.category ?? 'Other').filter(Boolean)))];
-  const filteredVariants = filterCategory === 'all'
-    ? allVariants
-    : allVariants.filter(({ variant }) => {
-        const product = products.find(p => p.id === variant.productId);
-        return (product?.category ?? 'Other') === filterCategory;
-      });
+  const activeProducts = products.filter(p => p.status !== 'suspended');
+  const categories = ['all', ...Array.from(new Set(activeProducts.map(p => p.category ?? 'Other').filter(Boolean)))];
+  const filteredProductGroups = filterCategory === 'all'
+    ? activeProducts
+    : activeProducts.filter(p => (p.category ?? 'Other') === filterCategory);
 
   const { units: totalUnits, revenue: totalRevenue } = getTallyTotal();
   const hasItems = totalUnits > 0;
@@ -944,6 +974,20 @@ export default function TallyCounter() {
       toast.error(`Failed to record sale: no active session found.`, { duration: 3000 });
     }
   }, [dispatch, confirmSale, state.products, symbol]);
+
+  // Tally mode minus: subtract one mark, restore road stock via counting-error adjustment
+  const handleTallyMinus = useCallback(async (variantId: string, productId: string, variantName: string) => {
+    const currentSold = sessionSold[variantId] ?? 0;
+    if (currentSold <= 0) return;
+    setSessionSold(prev => {
+      const next = { ...prev };
+      const updated = Math.max(0, (next[variantId] ?? 0) - 1);
+      if (updated === 0) { delete next[variantId]; } else { next[variantId] = updated; }
+      return next;
+    });
+    await adjustStock(variantId, productId, variantName, +1, 'counting_error', 'Tally correction (minus tap)');
+    toast.success(`${variantName} — tally corrected`, { duration: 1500 });
+  }, [sessionSold, adjustStock]);
 
   // Mid-sale restock: pull units from warehouse into road stock
   const handleRestock = useCallback(async (variantId: string, productId: string, variantName: string, qty: number) => {
@@ -1126,40 +1170,61 @@ export default function TallyCounter() {
         </div>
       )}
 
-      {/* Tally grid */}
-      <div className="px-4">
-        <div className={cn(
-          'grid gap-3',
-          filteredVariants.length === 1 ? 'grid-cols-1 max-w-xs mx-auto w-full' :
-          filteredVariants.length === 2 ? 'grid-cols-2' :
-          'grid-cols-2 sm:grid-cols-3'
-        )}>
-          {filteredVariants.map(({ variant }) => {
-            const stockStatus = getVariantStockStatus(variant);
-            const basketQty = tally.items[variant.id]?.qty ?? 0;
-            const liveVariant = products.flatMap(p => p.variants).find(v => v.id === variant.id) ?? variant;
-            return (
-              <TallyCard
-                key={variant.id}
-                variant={liveVariant}
-                liveStock={liveVariant.currentStock}
-                sessionSoldQty={sessionSold[variant.id] ?? 0}
-                basketQty={basketQty}
-                stockStatus={stockStatus}
-                tallyMode={tallyMode}
-                effectivelyEmpty={(variant.roadStock ?? liveVariant.currentStock) <= 0}
-                onIncrement={() => dispatch({ type: 'TALLY_INCREMENT', payload: { variantId: variant.id, variantName: variant.name, unitPrice: variant.price } })}
-                onDecrement={() => dispatch({ type: 'TALLY_DECREMENT', payload: { variantId: variant.id, variantName: variant.name } })}
-                onInstantSell={() => handleInstantSell(variant.id, variant.name, variant.price)}
-                allowMidSaleRestock={allowMidSaleRestock}
-                onRestock={(qty) => handleRestock(variant.id, variant.productId ?? '', variant.name, qty)}
-                warehouseStock={liveVariant.warehouseStock ?? 0}
-                symbol={symbol}
-              />
-            );
-          })}
-        </div>
-        {filteredVariants.length === 0 && (
+      {/* Tally grid — grouped by product */}
+      <div className="px-4 space-y-5">
+        {filteredProductGroups.map(product => {
+          const variantCount = product.variants.length;
+          const totalRoadStock = product.variants.reduce((s, v) => s + (v.roadStock ?? v.currentStock), 0);
+          return (
+            <div key={product.id}>
+              {/* Product group header */}
+              <div className="flex items-center gap-2 mb-2.5 px-0.5">
+                <p className="text-[11px] font-bold text-foreground uppercase tracking-widest leading-none truncate flex-1">
+                  {product.name}
+                </p>
+                {product.category && (
+                  <span className="text-[10px] text-muted-foreground flex-shrink-0">· {product.category}</span>
+                )}
+                <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
+                  {totalRoadStock} left
+                </span>
+              </div>
+              {/* Variant cards — 1-col for single variants, 2-col otherwise */}
+              <div className={cn(
+                'grid gap-2.5',
+                variantCount === 1 ? 'grid-cols-1' : 'grid-cols-2'
+              )}>
+                {product.variants.map(variant => {
+                  const stockStatus = getVariantStockStatus(variant);
+                  const basketQty = tally.items[variant.id]?.qty ?? 0;
+                  const liveVariant = products.flatMap(p => p.variants).find(v => v.id === variant.id) ?? variant;
+                  return (
+                    <TallyCard
+                      key={variant.id}
+                      variant={liveVariant}
+                      subtitle={product.subtitle}
+                      liveStock={liveVariant.currentStock}
+                      sessionSoldQty={sessionSold[variant.id] ?? 0}
+                      basketQty={basketQty}
+                      stockStatus={stockStatus}
+                      tallyMode={tallyMode}
+                      effectivelyEmpty={(variant.roadStock ?? liveVariant.currentStock) <= 0}
+                      onIncrement={() => dispatch({ type: 'TALLY_INCREMENT', payload: { variantId: variant.id, variantName: variant.name, unitPrice: variant.price } })}
+                      onDecrement={() => dispatch({ type: 'TALLY_DECREMENT', payload: { variantId: variant.id, variantName: variant.name } })}
+                      onTallyMinus={() => handleTallyMinus(variant.id, product.id, variant.name)}
+                      onInstantSell={() => handleInstantSell(variant.id, variant.name, variant.price)}
+                      allowMidSaleRestock={allowMidSaleRestock}
+                      onRestock={(qty) => handleRestock(variant.id, product.id, variant.name, qty)}
+                      warehouseStock={liveVariant.warehouseStock ?? 0}
+                      symbol={symbol}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+        {filteredProductGroups.length === 0 && (
           <div className="text-center py-12">
             <p className="text-sm text-[#7B7F93]">No items in this category</p>
           </div>
