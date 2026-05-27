@@ -7,7 +7,7 @@ import React, { createContext, useContext, useEffect, useReducer, useCallback, u
 import { v4 as uuidv4 } from 'uuid';
 import {
   getDB, getDeviceId, getSetting, setSetting, enqueueSync, addAuditEntry,
-  getPendingSyncItems, markSyncItemDone,
+  getPendingSyncItems, markSyncItemDone, migrateStockTiers,
   Product, ProductVariant, Show, SaleSession, TallyBatch, StockAdjustment, AuditEntry,
   calcStockStatus, StockStatus, TeamMember,
 } from '../lib/db';
@@ -325,6 +325,14 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // ── One-time DB migration (runs once on mount, not per project) ─────────
+
+  useEffect(() => {
+    migrateStockTiers().catch(err =>
+      console.error('[MerchPad] Stock tier migration failed:', err)
+    );
+  }, []);
+
   // ── Boot ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -334,9 +342,14 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       const db = await getDB();
       const projectId = activeProject.id;
 
-      // If IndexedDB is empty for this project, try to restore from server (new device)
+      // Restore from server only when this device has NO local data at all for this
+      // project (new device / cleared storage). Checking both products AND shows
+      // prevents a false-positive restore after the user intentionally deletes products
+      // via DangerZone, which would overwrite local-only shows with stale server data.
       const existingProducts = await db.getAllFromIndex('products', 'by-project', projectId);
-      if (existingProducts.length === 0 && navigator.onLine) {
+      const existingShows = await db.getAllFromIndex('shows', 'by-project', projectId);
+      const isEmptyProject = existingProducts.length === 0 && existingShows.length === 0;
+      if (isEmptyProject && navigator.onLine) {
         await restoreProjectFromServer(projectId);
       }
 

@@ -119,7 +119,7 @@ function ShowSelector({ shows, selectedShowId, onSelect, onNewShow, onEdit, onDe
 
 // ── New Show Modal ─────────────────────────────────────────────────────────
 
-function NewShowModal({ initialShow, onSave, onClose }: { initialShow?: Show; onSave: (s: Show) => void; onClose: () => void }) {
+function NewShowModal({ projectId, initialShow, onSave, onClose }: { projectId: string; initialShow?: Show; onSave: (s: Show) => void; onClose: () => void }) {
   const [name, setName] = useState(initialShow?.name ?? '');
   const [venue, setVenue] = useState(initialShow?.venue ?? '');
   const [city, setCity] = useState(initialShow?.city ?? '');
@@ -129,6 +129,7 @@ function NewShowModal({ initialShow, onSave, onClose }: { initialShow?: Show; on
     if (!name.trim() || !venue.trim()) { toast.error('Name and venue required'); return; }
     const show: Show = {
       id: initialShow?.id ?? uuidv4(),
+      projectId,
       name: name.trim(),
       venue: venue.trim(),
       city: city.trim() || undefined,
@@ -1174,6 +1175,7 @@ export default function MerchOffice() {
       {/* Modals */}
       {editingShow !== null && (
         <NewShowModal
+          projectId={projectId}
           initialShow={editingShow !== 'new' ? editingShow : undefined}
           onSave={async (s) => {
             await saveShow(s);

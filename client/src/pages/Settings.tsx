@@ -541,7 +541,7 @@ export default function Settings() {
             MerchPad is an offline-first merchandise sales tool for live shows. Part of the Moshly ecosystem.
             All data is stored locally on this device and syncs to the backend when online.
           </p>
-          <p className="text-xs text-[#7B7F93] mt-2">Version 1.0.31</p>
+          <p className="text-xs text-[#7B7F93] mt-2">Version 1.0.34</p>
         </div>
 
         {/* Danger Zone */}
