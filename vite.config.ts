@@ -4,6 +4,23 @@ import react from "@vitejs/plugin-react";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 
+/** Dev-only: intercepts /api/auth/me so the app boots without the Express server.
+ *  Never applied in production (apply: 'serve'). */
+function vitePluginDevAuth(): Plugin {
+  return {
+    name: 'dev-auth-mock',
+    apply: 'serve',
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use('/api/auth/me', (_req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          user: { id: 'dev-local', email: 'dev@local.test', role: 'admin', plan: 'pro' },
+        }));
+      });
+    },
+  };
+}
+
 function vitePluginStorageProxy(): Plugin {
   return {
     name: "storage-proxy",
@@ -57,7 +74,7 @@ function vitePluginStorageProxy(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginStorageProxy()];
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginDevAuth(), vitePluginStorageProxy()];
 
 export default defineConfig({
   plugins,
