@@ -387,6 +387,9 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       const activeSessions = await db.getAllFromIndex('sessions', 'by-status', 'active');
       const projectActiveSessions = activeSessions.filter(s => s.projectId === projectId);
       if (projectActiveSessions.length > 0) {
+        // Pick the most recently started session — IndexedDB index order is by uuid (random),
+        // so [0] could be an old, never-closed session with stale sales.
+        projectActiveSessions.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
         dispatch({ type: 'SET_ACTIVE_SESSION', payload: projectActiveSessions[0] });
       }
 
@@ -437,11 +440,24 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
+  // Close any sessions still marked active for this project, so only one can be active at a time
+  const closeStaleActiveSessions = useCallback(async (projectId: string) => {
+    const db = await getDB();
+    const active = await db.getAllFromIndex('sessions', 'by-status', 'active');
+    const endedAt = new Date().toISOString();
+    for (const s of active.filter(s => s.projectId === projectId)) {
+      const ended: SaleSession = { ...s, status: 'ended', endedAt };
+      await db.put('sessions', ended);
+      await enqueueSync(projectId, 'session_end', ended);
+    }
+  }, []);
+
   const startSession = useCallback(async (showId: string, repName: string, standName?: string): Promise<SaleSession> => {
     if (!activeProject) throw new Error('No active project');
     const db = await getDB();
     const deviceId = getDeviceId();
     const projectId = activeProject.id;
+    await closeStaleActiveSessions(projectId);
 
     // Build stock snapshot from current product state
     const products = await db.getAllFromIndex('products', 'by-project', projectId);
@@ -902,6 +918,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     const db = await getDB();
     const deviceId = getDeviceId();
     const projectId = activeProject.id;
+    await closeStaleActiveSessions(projectId);
     const products = stateRef.current.products;
     const stockSnapshot: Record<string, number> = {};
     for (const p of products) {

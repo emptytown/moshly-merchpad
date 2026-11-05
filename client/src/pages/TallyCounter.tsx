@@ -823,9 +823,12 @@ export default function TallyCounter() {
       setSessionSold({});
       return;
     }
+    let cancelled = false;
+    const sessionId = activeSession.id;
     async function loadSessionTotals() {
       const db = await getDB();
-      const batches = await db.getAllFromIndex('tallyBatches', 'by-session', activeSession!.id);
+      const batches = await db.getAllFromIndex('tallyBatches', 'by-session', sessionId);
+      if (cancelled) return; // session changed while loading — don't overwrite with stale totals
       const totals: Record<string, number> = {};
       batches.forEach(batch => {
         if (batch.status === 'voided') return;
@@ -836,6 +839,7 @@ export default function TallyCounter() {
       setSessionSold(totals);
     }
     loadSessionTotals();
+    return () => { cancelled = true; };
   }, [activeSession?.id]);
 
   // Reset sessionSold when the active session changes (new session started)
