@@ -283,6 +283,160 @@ function TallyCard({
   );
 }
 
+// ── Moshly Radial Menu (mode switch + quick actions, thumb-reachable) ──────
+// Press the orb to fan out options. Either tap an option, or press-drag-release
+// in a single gesture (slide finger onto the option and let go).
+interface RadialItem {
+  key: string;
+  label: string;
+  icon: React.ReactNode;
+  active?: boolean;
+  danger?: boolean;
+  onSelect: () => void;
+}
+
+function MoshlyRadialMenu({ tallyMode, items }: { tallyMode: boolean; items: RadialItem[] }) {
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState<string | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const press = useRef<{ x: number; y: number; wasOpen: boolean; moved: boolean } | null>(null);
+
+  // Close on outside tap
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      // composedPath (not target.contains) — the orb's icon is swapped on open, so the
+      // original target may already be detached from the DOM by the time this runs.
+      if (wrapRef.current && !e.composedPath().includes(wrapRef.current)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [open]);
+
+  const buzz = () => { try { navigator.vibrate?.(8); } catch { /* noop */ } };
+
+  const itemAt = (x: number, y: number): string | null => {
+    let best: string | null = null;
+    let bestD = 40; // px hit radius around each option centre
+    for (const it of items) {
+      const el = itemRefs.current[it.key];
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+      if (d < bestD) { bestD = d; best = it.key; }
+    }
+    return best;
+  };
+
+  const select = (key: string) => {
+    const it = items.find(i => i.key === key);
+    setOpen(false);
+    setHover(null);
+    if (it) { buzz(); it.onSelect(); }
+  };
+
+  // Fan from left (180°) to straight up (90°) — the orb sits bottom-right
+  const n = items.length;
+  const radius = n <= 2 ? 92 : n <= 4 ? 120 : 148;
+  const pos = (i: number) => {
+    const deg = n === 1 ? 135 : 180 - (90 * i) / (n - 1);
+    const rad = (deg * Math.PI) / 180;
+    return { x: Math.cos(rad) * radius, y: -Math.sin(rad) * radius };
+  };
+
+  return (
+    <div ref={wrapRef} className="relative flex-shrink-0" style={{ width: 56, height: 56 }}>
+      {/* Halo — darkens the cards behind the fan so options pop */}
+      <div aria-hidden
+        className="absolute rounded-full pointer-events-none"
+        style={{
+          width: (radius + 46) * 2, height: (radius + 46) * 2,
+          left: 28 - (radius + 46), top: 28 - (radius + 46),
+          background: 'radial-gradient(circle, rgba(8,8,16,0.92) 55%, rgba(8,8,16,0.6) 75%, transparent 100%)',
+          transform: open ? 'scale(1)' : 'scale(0.2)',
+          opacity: open ? 1 : 0,
+          transition: 'transform 220ms ease-out, opacity 180ms',
+          zIndex: 1,
+        }} />
+
+      {/* Fan items */}
+      {items.map((it, i) => {
+        const { x, y } = pos(i);
+        const hot = hover === it.key;
+        return (
+          <button
+            key={it.key}
+            ref={el => { itemRefs.current[it.key] = el; }}
+            onClick={() => select(it.key)}
+            aria-label={it.label}
+            tabIndex={open ? 0 : -1}
+            className="absolute left-0 top-0 w-14 h-14 rounded-full flex flex-col items-center justify-center gap-0.5 text-[8px] font-bold uppercase tracking-wide"
+            style={{
+              transform: open ? `translate(${x}px, ${y}px) scale(${hot ? 1.15 : 1})` : 'translate(0,0) scale(0.3)',
+              opacity: open ? 1 : 0,
+              pointerEvents: open ? 'auto' : 'none',
+              transition: `transform 220ms cubic-bezier(0.34,1.56,0.64,1) ${open ? i * 25 : 0}ms, opacity 150ms`,
+              background: it.active
+                ? 'linear-gradient(135deg, #6B5CFF, #C026D3)'
+                : hot ? 'var(--muted)' : 'var(--card)',
+              color: it.active ? '#fff' : it.danger ? '#F87171' : 'var(--foreground)',
+              border: `1px solid ${it.danger ? 'rgba(248,113,113,0.35)' : hot || it.active ? 'rgba(124,109,255,0.7)' : 'var(--border)'}`,
+              boxShadow: '0 6px 20px rgba(0,0,0,0.45)',
+              zIndex: 2,
+            }}>
+            {it.icon}
+            <span className="leading-none">{it.label}</span>
+          </button>
+        );
+      })}
+
+      {/* Orb */}
+      <button
+        aria-label={`Mode: ${tallyMode ? 'Tally' : 'Register'} — open menu`}
+        aria-expanded={open}
+        onPointerDown={e => {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          press.current = { x: e.clientX, y: e.clientY, wasOpen: open, moved: false };
+          if (!open) { buzz(); setOpen(true); }
+        }}
+        onPointerMove={e => {
+          const p = press.current;
+          if (!p) return;
+          if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > 12) p.moved = true;
+          if (p.moved) setHover(itemAt(e.clientX, e.clientY));
+        }}
+        onPointerUp={e => {
+          const p = press.current;
+          press.current = null;
+          if (!p) return;
+          if (p.moved) {
+            const k = itemAt(e.clientX, e.clientY);
+            if (k) select(k); else { setOpen(false); setHover(null); }
+          } else if (p.wasOpen) {
+            setOpen(false);
+          }
+        }}
+        onPointerCancel={() => { press.current = null; setHover(null); }}
+        className="relative w-14 h-14 rounded-full flex flex-col items-center justify-center text-white select-none touch-none transition-transform active:scale-95"
+        style={{
+          background: 'linear-gradient(135deg, #6B5CFF 0%, #C026D3 100%)',
+          boxShadow: open
+            ? '0 0 0 4px rgba(124,109,255,0.25), 0 0 28px rgba(192,38,211,0.45)'
+            : '0 0 18px rgba(107,92,255,0.35)',
+          zIndex: 3,
+        }}>
+        {open
+          ? <X size={20} />
+          : tallyMode ? <Zap size={20} /> : <ShoppingBag size={20} />}
+        <span className="text-[9px] font-black uppercase tracking-wider leading-none mt-0.5">
+          {open ? 'close' : tallyMode ? 'Tally' : 'Register'}
+        </span>
+      </button>
+    </div>
+  );
+}
+
 // ── Basket Preview Sheet (Register mode — expand button) ───────────────────
 interface BasketPreviewProps {
   items: Array<{ variantId: string; name: string; qty: number; unitPrice: number }>;
@@ -823,9 +977,12 @@ export default function TallyCounter() {
       setSessionSold({});
       return;
     }
+    let cancelled = false;
+    const sessionId = activeSession.id;
     async function loadSessionTotals() {
       const db = await getDB();
-      const batches = await db.getAllFromIndex('tallyBatches', 'by-session', activeSession!.id);
+      const batches = await db.getAllFromIndex('tallyBatches', 'by-session', sessionId);
+      if (cancelled) return; // session changed while loading — don't overwrite with stale totals
       const totals: Record<string, number> = {};
       batches.forEach(batch => {
         if (batch.status === 'voided') return;
@@ -836,6 +993,7 @@ export default function TallyCounter() {
       setSessionSold(totals);
     }
     loadSessionTotals();
+    return () => { cancelled = true; };
   }, [activeSession?.id]);
 
   // Reset sessionSold when the active session changes (new session started)
@@ -1076,27 +1234,6 @@ export default function TallyCounter() {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* TALLY / REGISTER pill toggle */}
-          <div className="flex items-center rounded-xl overflow-hidden"
-            style={{ border: '1px solid var(--pill-border)', background: 'var(--pill-bg)' }}>
-            <button
-              onClick={() => { setMode('tally'); localStorage.setItem('mp_tallyMode', 'tally'); }}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold transition-all"
-              style={tallyMode
-                ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)', color: '#fff' }
-                : { color: 'var(--pill-text)' }}>
-              <Zap size={11} /> Tally
-            </button>
-            <button
-              onClick={() => { setMode('register'); localStorage.setItem('mp_tallyMode', 'register'); }}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold transition-all"
-              style={!tallyMode
-                ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)', color: '#fff' }
-                : { color: 'var(--pill-text)' }}>
-              <ShoppingBag size={11} /> Register
-            </button>
-          </div>
-
           {/* LIVE indicator + Stop Sale */}
           <div className="flex items-center rounded-xl overflow-hidden"
             style={{ border: '1px solid rgba(248,113,113,0.25)' }}>
@@ -1241,7 +1378,7 @@ export default function TallyCounter() {
         )}
           style={{ background: 'var(--card)', backdropFilter: 'blur(20px)', border: '1px solid var(--border)' }}>
           {/* Totals row */}
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3">
               <div>
                 <p className="text-xs text-muted-foreground">{tallyMode ? 'Sold' : 'Units'}</p>
@@ -1257,23 +1394,27 @@ export default function TallyCounter() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {settings.undoEnabled && tally.lastAction && (
-                <button
-                  onClick={() => dispatch({ type: 'TALLY_UNDO_LAST' })}
-                  className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-                  style={{ border: '1px solid var(--border)' }}>
-                  <RotateCcw size={13} /> Undo
-                </button>
-              )}
-              <button
-                onClick={() => dispatch({ type: 'TALLY_CLEAR' })}
-                disabled={!hasItems}
-                className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold text-[#F87171] disabled:opacity-30 transition-colors"
-                style={{ border: '1px solid rgba(248,113,113,0.2)' }}>
-                <Trash2 size={13} /> Clear
-              </button>
-            </div>
+            <MoshlyRadialMenu
+              tallyMode={tallyMode}
+              items={[
+                { key: 'tally', label: 'Tally', icon: <Zap size={17} />, active: tallyMode,
+                  onSelect: () => { setMode('tally'); localStorage.setItem('mp_tallyMode', 'tally'); } },
+                { key: 'register', label: 'Register', icon: <ShoppingBag size={17} />, active: !tallyMode,
+                  onSelect: () => { setMode('register'); localStorage.setItem('mp_tallyMode', 'register'); } },
+                ...(settings.undoEnabled && tally.lastAction ? [{
+                  key: 'undo', label: 'Undo', icon: <RotateCcw size={17} />,
+                  onSelect: () => dispatch({ type: 'TALLY_UNDO_LAST' }),
+                }] : []),
+                ...(hasItems ? [{
+                  key: 'clear', label: 'Clear', icon: <Trash2 size={17} />, danger: true,
+                  onSelect: () => dispatch({ type: 'TALLY_CLEAR' }),
+                }] : []),
+                // Always last → sits at the top of the fan, away from the mode switches.
+                // Opens the existing Stop Sale confirmation (no instant end).
+                { key: 'end', label: 'End', icon: <StopCircle size={17} />, danger: true,
+                  onSelect: () => setShowStopConfirm(true) },
+              ]}
+            />
           </div>
 
           {/* Action button — context-aware */}
