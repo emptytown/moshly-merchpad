@@ -338,7 +338,7 @@ function MoshlyRadialMenu({ tallyMode, items }: { tallyMode: boolean; items: Rad
 
   // Fan from left (180°) to straight up (90°) — the orb sits bottom-right
   const n = items.length;
-  const radius = n <= 2 ? 92 : 120;
+  const radius = n <= 2 ? 92 : n <= 4 ? 120 : 148;
   const pos = (i: number) => {
     const deg = n === 1 ? 135 : 180 - (90 * i) / (n - 1);
     const rad = (deg * Math.PI) / 180;
@@ -1409,6 +1409,10 @@ export default function TallyCounter() {
                   key: 'clear', label: 'Clear', icon: <Trash2 size={17} />, danger: true,
                   onSelect: () => dispatch({ type: 'TALLY_CLEAR' }),
                 }] : []),
+                // Always last → sits at the top of the fan, away from the mode switches.
+                // Opens the existing Stop Sale confirmation (no instant end).
+                { key: 'end', label: 'End', icon: <StopCircle size={17} />, danger: true,
+                  onSelect: () => setShowStopConfirm(true) },
               ]}
             />
           </div>
