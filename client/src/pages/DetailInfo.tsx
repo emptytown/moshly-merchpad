@@ -326,6 +326,12 @@ export default function DetailInfo() {
 
   // ── Filtered sale entries ──────────────────────────────────────────────
 
+  // Every variant of this project's products (suspended included). Sale lines for variants
+  // outside this set belong to another project (legacy mis-tagged data) and are ignored.
+  const projectVariantIds = useMemo(
+    () => new Set(products.flatMap(p => p.variants.map(v => v.id))),
+    [products]);
+
   const filteredSaleEntries = useMemo(() => {
     // A sale can be undone (tally_voided) and redone (tally_confirmed again) — keep each sale
     // once, at its original time, and only if its latest event is a confirm.
@@ -343,6 +349,15 @@ export default function DetailInfo() {
     let entries = Array.from(byBatch.values())
       .filter(b => b.lastAction === 'tally_confirmed' && b.first.action === 'tally_confirmed')
       .map(b => b.first);
+
+    // Project guard: keep only sale lines for this project's variants
+    entries = entries.flatMap(e => {
+      const items = e.newValue as Array<{ variantId: string }> | undefined;
+      if (!Array.isArray(items)) return [];
+      const own = items.filter(i => projectVariantIds.has(i.variantId));
+      if (own.length === 0) return [];
+      return own.length === items.length ? [e] : [{ ...e, newValue: own }];
+    });
 
     // Time filter
     entries = entries.filter(e => inTimeRange(e.timestamp));
@@ -364,7 +379,7 @@ export default function DetailInfo() {
     }
 
     return entries;
-  }, [auditEntries, inTimeRange, filterProduct, filterCategory, variantProductMap]);
+  }, [auditEntries, inTimeRange, filterProduct, filterCategory, variantProductMap, projectVariantIds]);
 
   // ── KPI metrics ────────────────────────────────────────────────────────
 
@@ -804,7 +819,11 @@ export default function DetailInfo() {
 
       {/* ── Activity (audit log) — follows the time filter above ─────────── */}
       {(() => {
-        const visible = auditEntries.filter(e => inTimeRange(e.timestamp));
+        const visible = auditEntries.filter(e => {
+          if (!inTimeRange(e.timestamp)) return false;
+          const items = auditItems(e);
+          return items.length === 0 || items.some(i => projectVariantIds.has(i.variantId));
+        });
         return (
           <div className="px-4 pb-6">
             <div className="flex items-center gap-2 mb-3">
