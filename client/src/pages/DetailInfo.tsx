@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { AuditEntry, getDB } from '../lib/db';
+import { AuditEntry } from '../lib/db';
 import { cn } from '../lib/utils';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -257,7 +257,7 @@ type TimeRange = 'today' | 'session' | 'all';
 type Tab = 'analytics' | 'stock' | 'audit';
 
 export default function DetailInfo() {
-  const { state, adjustStock, getVariantStockStatus } = useMerchPad();
+  const { state, adjustStock, getVariantStockStatus, getAuditLog } = useMerchPad();
   const productOf = useCallback((variantId: string) =>
     state.products.find(p => p.variants.some(v => v.id === variantId))?.name, [state.products]);
   const { products, activeSession, settings } = state;
@@ -285,12 +285,12 @@ export default function DetailInfo() {
 
   useEffect(() => {
     async function load() {
-      const db = await getDB();
-      const all = await db.getAll('auditLog');
-      setAuditEntries(all.sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
+      // Scoped to the active project — stats must never mix projects
+      const all = await getAuditLog();
+      setAuditEntries([...all].sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
     }
     load();
-  }, [activeSession, products]);
+  }, [activeSession, products, getAuditLog]);
 
   // variant → product lookup for filters
   const variantProductMap = useMemo(() => {
@@ -429,10 +429,9 @@ export default function DetailInfo() {
     await adjustStock(adjustingVariant.variantId, adjustingVariant.productId, adjustingVariant.variantName, delta, reason, notes, adjusterName);
     setAdjustingVariant(null);
     toast.success('Stock adjusted');
-    const db = await getDB();
-    const all = await db.getAll('auditLog');
-    setAuditEntries(all.sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
-  }, [adjustingVariant, adjustStock]);
+    const all = await getAuditLog();
+    setAuditEntries([...all].sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
+  }, [adjustingVariant, adjustStock, getAuditLog]);
 
   function exportCSV() {
     const rows = [

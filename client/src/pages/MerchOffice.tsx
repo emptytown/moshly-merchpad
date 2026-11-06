@@ -225,7 +225,7 @@ interface PastShowsSectionProps {
 
 async function downloadShowReport(show: Show) {
   const db = await getDB();
-  const batches = await db.getAll('tallyBatches');
+  const batches = await db.getAllFromIndex('tallyBatches', 'by-project', show.projectId);
   const showBatches = batches.filter(b => b.showId === show.id && b.status !== 'voided');
   const rows: string[][] = [['Date', 'Rep', 'Item', 'Qty', 'Unit Price', 'Subtotal', 'Sale Total', 'Shortfall Type']];
   for (const batch of showBatches) {
