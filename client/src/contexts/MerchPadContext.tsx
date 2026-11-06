@@ -265,6 +265,7 @@ interface MerchPadContextValue {
   }) => Promise<TallyBatch | null>;
   recordSellerDebt: (memberId: string, amount: number) => Promise<void>;
   voidLastSale: () => Promise<TallyBatch | null>;
+  restoreVoidedSale: (batchId: string) => Promise<TallyBatch | null>;
   adjustStock: (variantId: string, productId: string, variantName: string, delta: number, reason: StockAdjustment['reason'], notes?: string, adjusterName?: string, stockLocation?: 'road' | 'warehouse') => Promise<void>;
   saveProduct: (product: Product) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
@@ -689,6 +690,47 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     return voided;
   }, []);
 
+  // Redo: bring a voided sale back (status pending again) and take its items out of road stock again
+  const restoreVoidedSale = useCallback(async (batchId: string): Promise<TallyBatch | null> => {
+    const { activeSession, repName, products: stateProducts } = stateRef.current;
+    const db = await getDB();
+    const batch = await db.get('tallyBatches', batchId);
+    if (!batch || batch.status !== 'voided') return null;
+    const restored: TallyBatch = { ...batch, status: 'pending' };
+    await db.put('tallyBatches', restored);
+
+    const updated = new Map<string, Product>();
+    for (const item of batch.items) {
+      for (const p of stateProducts) {
+        const v = p.variants.find(pv => pv.id === item.variantId);
+        if (!v) continue;
+        const cur = updated.get(p.id) || p;
+        const ev = cur.variants.find(pv => pv.id === v.id)!;
+        const newRoad = Math.max(0, (ev.roadStock ?? ev.currentStock) - item.qty);
+        updated.set(p.id, { ...cur, variants: cur.variants.map(pv => pv.id === v.id ? { ...pv, currentStock: newRoad, roadStock: newRoad } : pv) });
+        dispatch({ type: 'UPDATE_VARIANT_STOCK', payload: { variantId: v.id, productId: p.id, delta: -item.qty } });
+      }
+    }
+    for (const p of Array.from(updated.values())) await db.put('products', p);
+
+    await addAuditEntry(batch.projectId, {
+      sessionId: batch.sessionId,
+      showId: batch.showId,
+      deviceId: batch.deviceId,
+      action: 'tally_confirmed',
+      entityType: 'tally_batch',
+      entityId: batch.id,
+      description: `Sale restored (redo): ${batch.totalItems} items · €${batch.totalPrice.toFixed(2)}`,
+      actorName: repName || activeSession?.repName || 'Unknown',
+      newValue: batch.items,
+      timestamp: new Date().toISOString(),
+    });
+    await enqueueSync(batch.projectId, 'tally_batch', restored);
+    const pending = await getPendingSyncItems(batch.projectId);
+    dispatch({ type: 'SET_PENDING_SYNC_COUNT', payload: pending.length });
+    return restored;
+  }, []);
+
   const adjustStock = useCallback(async (
     variantId: string,
     productId: string,
@@ -1010,6 +1052,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       endSession,
       confirmSale,
       voidLastSale,
+      restoreVoidedSale,
       adjustStock,
       saveProduct,
       deleteProduct,
