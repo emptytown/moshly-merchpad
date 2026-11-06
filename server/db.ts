@@ -50,7 +50,9 @@ export async function upsertSession(
 
   const { error } = await supabase.from("sale_sessions").upsert(
     {
-      id: item.id,
+      // Use the record's own id so later updates (session end, voided sale) update the
+      // same row instead of inserting a duplicate keyed by the sync-queue item id.
+      id: (p.id as string | undefined) ?? item.id,
       user_id: userId,
       project_id: item.projectId,
       show_id: p.showId,
@@ -81,7 +83,9 @@ export async function upsertTallyBatch(
 
   const { error } = await supabase.from("tally_batches").upsert(
     {
-      id: item.id,
+      // Use the record's own id so later updates (session end, voided sale) update the
+      // same row instead of inserting a duplicate keyed by the sync-queue item id.
+      id: (p.id as string | undefined) ?? item.id,
       user_id: userId,
       project_id: item.projectId,
       session_id: p.sessionId,
@@ -116,7 +120,9 @@ export async function upsertStockAdjustment(
 
   const { error } = await supabase.from("stock_adjustments").upsert(
     {
-      id: item.id,
+      // Use the record's own id so later updates (session end, voided sale) update the
+      // same row instead of inserting a duplicate keyed by the sync-queue item id.
+      id: (p.id as string | undefined) ?? item.id,
       user_id: userId,
       project_id: item.projectId,
       variant_id: p.variantId,

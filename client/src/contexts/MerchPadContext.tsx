@@ -264,6 +264,7 @@ interface MerchPadContextValue {
     tallyOverride?: TallyState;
   }) => Promise<TallyBatch | null>;
   recordSellerDebt: (memberId: string, amount: number) => Promise<void>;
+  voidLastSale: () => Promise<TallyBatch | null>;
   adjustStock: (variantId: string, productId: string, variantName: string, delta: number, reason: StockAdjustment['reason'], notes?: string, adjusterName?: string, stockLocation?: 'road' | 'warehouse') => Promise<void>;
   saveProduct: (product: Product) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
@@ -641,6 +642,53 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     return batch;
   }, []);
 
+  // Undo the most recent non-voided sale of the active session: mark it voided and put its items back in road stock
+  const voidLastSale = useCallback(async (): Promise<TallyBatch | null> => {
+    const { activeSession, repName, products: stateProducts } = stateRef.current;
+    if (!activeSession) return null;
+    const db = await getDB();
+    const batches = await db.getAllFromIndex('tallyBatches', 'by-session', activeSession.id);
+    const last = batches
+      .filter(b => b.status !== 'voided')
+      .sort((a, b) => b.confirmedAt.localeCompare(a.confirmedAt))[0];
+    if (!last) return null;
+
+    const voided: TallyBatch = { ...last, status: 'voided' };
+    await db.put('tallyBatches', voided);
+
+    const projectId = activeSession.projectId;
+    const updated = new Map<string, Product>();
+    for (const item of last.items) {
+      for (const p of stateProducts) {
+        const v = p.variants.find(pv => pv.id === item.variantId);
+        if (!v) continue;
+        const cur = updated.get(p.id) || p;
+        const ev = cur.variants.find(pv => pv.id === v.id)!;
+        const newRoad = (ev.roadStock ?? ev.currentStock) + item.qty;
+        updated.set(p.id, { ...cur, variants: cur.variants.map(pv => pv.id === v.id ? { ...pv, currentStock: newRoad, roadStock: newRoad } : pv) });
+        dispatch({ type: 'UPDATE_VARIANT_STOCK', payload: { variantId: v.id, productId: p.id, delta: item.qty } });
+      }
+    }
+    for (const p of Array.from(updated.values())) await db.put('products', p);
+
+    await addAuditEntry(projectId, {
+      sessionId: activeSession.id,
+      showId: activeSession.showId,
+      deviceId: activeSession.deviceId,
+      action: 'tally_voided',
+      entityType: 'tally_batch',
+      entityId: last.id,
+      description: `Sale undone: ${last.totalItems} items · €${last.totalPrice.toFixed(2)} by ${repName}`,
+      actorName: repName,
+      oldValue: last.items,
+      timestamp: new Date().toISOString(),
+    });
+    await enqueueSync(projectId, 'tally_batch', voided);
+    const pending = await getPendingSyncItems(projectId);
+    dispatch({ type: 'SET_PENDING_SYNC_COUNT', payload: pending.length });
+    return voided;
+  }, []);
+
   const adjustStock = useCallback(async (
     variantId: string,
     productId: string,
@@ -961,6 +1009,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       startSession,
       endSession,
       confirmSale,
+      voidLastSale,
       adjustStock,
       saveProduct,
       deleteProduct,
