@@ -242,7 +242,7 @@ function AuditTimeline({ entries, productOf }: { entries: AuditEntry[]; productO
                 </div>
                 <span className="text-xs text-[#7B7F93] flex-shrink-0">{formatTime(entry.timestamp)}</span>
               </div>
-              <p className="text-xs text-[#7B7F93] mt-0.5">by {entry.actorName}</p>
+              {entry.actorName && <p className="text-xs text-[#7B7F93] mt-0.5">by {entry.actorName}</p>}
             </div>
           </div>
         );
@@ -253,8 +253,14 @@ function AuditTimeline({ entries, productOf }: { entries: AuditEntry[]; productO
 
 // ── Main Screen ────────────────────────────────────────────────────────────
 
-type TimeRange = 'today' | 'session' | 'all';
-type Tab = 'analytics' | 'stock' | 'audit';
+type TimeRange = 'session' | 'all' | 'range';
+type Tab = 'analytics' | 'stock';
+
+// Local date (not UTC) so "today" matches the phone's clock after midnight
+const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 export default function DetailInfo() {
   const { state, adjustStock, getVariantStockStatus, getAuditLog } = useMerchPad();
@@ -272,6 +278,21 @@ export default function DetailInfo() {
 
   // Filters
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
+  const [rangeFrom, setRangeFrom] = useState(todayISO);
+  const [rangeTo, setRangeTo] = useState(todayISO);
+  const [auditLimit, setAuditLimit] = useState(20);
+
+  // Shared time filter (sales stats + activity log)
+  const inTimeRange = useCallback((ts: string) => {
+    if (timeRange === 'session') return !!activeSession && ts >= activeSession.startedAt;
+    if (timeRange === 'range') {
+      const t = new Date(ts).getTime();
+      const from = new Date(`${rangeFrom}T00:00:00`).getTime();
+      const to = new Date(`${rangeTo}T23:59:59.999`).getTime();
+      return t >= from && t <= to;
+    }
+    return true;
+  }, [timeRange, activeSession, rangeFrom, rangeTo]);
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterProduct, setFilterProduct] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -324,12 +345,7 @@ export default function DetailInfo() {
       .map(b => b.first);
 
     // Time filter
-    if (timeRange === 'today') {
-      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-      entries = entries.filter(e => new Date(e.timestamp) >= todayStart);
-    } else if (timeRange === 'session' && activeSession) {
-      entries = entries.filter(e => new Date(e.timestamp) >= new Date(activeSession.startedAt));
-    }
+    entries = entries.filter(e => inTimeRange(e.timestamp));
 
     // Product filter
     if (filterProduct !== 'all') {
@@ -348,7 +364,7 @@ export default function DetailInfo() {
     }
 
     return entries;
-  }, [auditEntries, timeRange, activeSession, filterProduct, filterCategory, variantProductMap]);
+  }, [auditEntries, inTimeRange, filterProduct, filterCategory, variantProductMap]);
 
   // ── KPI metrics ────────────────────────────────────────────────────────
 
@@ -459,7 +475,7 @@ export default function DetailInfo() {
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-start justify-between">
         <div>
-          <p className="text-xs font-semibold text-[#7C6DFF] uppercase tracking-widest mb-1">Detail Info</p>
+          <p className="text-xs font-semibold text-[#7C6DFF] uppercase tracking-widest mb-1">Stats</p>
           <h1 className="text-2xl font-black text-[#E6E7EB] leading-tight" style={{ letterSpacing: '-0.03em' }}>
             Analytics
           </h1>
@@ -473,12 +489,12 @@ export default function DetailInfo() {
       <div className="px-4 mb-3">
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
           {/* Time range pills */}
-          {(['today', 'session', 'all'] as TimeRange[]).map(t => (
+          {(['session', 'all', 'range'] as TimeRange[]).map(t => (
             <button key={t} onClick={() => setTimeRange(t)}
               className={cn('flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all capitalize',
                 timeRange === t ? 'text-white' : 'text-[var(--pill-text)] hover:text-[#A4A7B5]')}
               style={pillStyle(timeRange === t)}>
-              {t === 'session' ? 'This Session' : t === 'today' ? 'Today' : 'All Time'}
+              {t === 'session' ? 'Session' : t === 'range' ? 'Range' : 'All Time'}
             </button>
           ))}
 
@@ -488,7 +504,7 @@ export default function DetailInfo() {
           {categories.length > 0 && (
             <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
               className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-[var(--pill-text)] bg-[var(--pill-bg)] border border-[var(--pill-border)] focus:outline-none appearance-none cursor-pointer">
-              <option value="all">All Categories</option>
+              <option value="all">Tags</option>
               {categories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
@@ -508,6 +524,15 @@ export default function DetailInfo() {
             </button>
           )}
         </div>
+        {timeRange === 'range' && (
+          <div className="flex items-center gap-2 mt-2 animate-fade-in">
+            <input type="date" value={rangeFrom} max={rangeTo} onChange={e => setRangeFrom(e.target.value || todayISO())}
+              className="flex-1 min-w-0 h-11 px-3 rounded-xl text-sm font-semibold text-foreground bg-[var(--pill-bg)] border border-[var(--pill-border)] focus:outline-none" />
+            <span className="text-xs text-[#7B7F93] flex-shrink-0">to</span>
+            <input type="date" value={rangeTo} min={rangeFrom} onChange={e => setRangeTo(e.target.value || todayISO())}
+              className="flex-1 min-w-0 h-11 px-3 rounded-xl text-sm font-semibold text-foreground bg-[var(--pill-bg)] border border-[var(--pill-border)] focus:outline-none" />
+          </div>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -537,7 +562,6 @@ export default function DetailInfo() {
           {([
             { id: 'analytics', label: 'Charts', icon: BarChart2 },
             { id: 'stock', label: 'Stock', icon: Package },
-            { id: 'audit', label: 'Audit', icon: Clock },
           ] as { id: Tab; label: string; icon: any }[]).map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setActiveTab(id)}
               className={cn('flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5',
@@ -776,11 +800,29 @@ export default function DetailInfo() {
           </div>
         )}
 
-        {/* ── Audit Tab ─────────────────────────────────────────────────── */}
-        {activeTab === 'audit' && (
-          <AuditTimeline entries={auditEntries} productOf={productOf} />
-        )}
       </div>
+
+      {/* ── Activity (audit log) — follows the time filter above ─────────── */}
+      {(() => {
+        const visible = auditEntries.filter(e => inTimeRange(e.timestamp));
+        return (
+          <div className="px-4 pb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Clock size={14} className="text-[#7B7F93]" />
+              <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider">Activity</p>
+              <span className="text-xs text-[#4A4D5E]">· {visible.length}</span>
+            </div>
+            <AuditTimeline entries={visible.slice(0, auditLimit)} productOf={productOf} />
+            {visible.length > auditLimit && (
+              <button onClick={() => setAuditLimit(n => n + 30)}
+                className="w-full mt-1 py-3 rounded-xl text-sm font-semibold text-[var(--pill-text)]"
+                style={{ border: '1px solid var(--pill-border)', background: 'var(--pill-bg)' }}>
+                Show more ({visible.length - auditLimit})
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Adjustment modal */}
       {adjustingVariant && (
