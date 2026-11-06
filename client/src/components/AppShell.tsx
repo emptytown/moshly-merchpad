@@ -13,7 +13,7 @@ const HUB_URL = import.meta.env.VITE_MOSHLY_HUB_URL ?? 'https://moshly.io';
 const NAV_ITEMS = [
   { path: '/', label: 'Office', icon: ShoppingBag },
   { path: '/tally', label: 'Tally', icon: Zap },
-  { path: '/detail', label: 'Detail', icon: BarChart3 },
+  { path: '/detail', label: 'Stats', icon: BarChart3 },
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
