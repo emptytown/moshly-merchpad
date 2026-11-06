@@ -265,6 +265,8 @@ interface MerchPadContextValue {
   }) => Promise<TallyBatch | null>;
   recordSellerDebt: (memberId: string, amount: number) => Promise<void>;
   voidLastSale: () => Promise<TallyBatch | null>;
+  /** Void a specific sale of the active session (no-op if already voided) */
+  voidSale: (batchId: string) => Promise<TallyBatch | null>;
   restoreVoidedSale: (batchId: string) => Promise<TallyBatch | null>;
   adjustStock: (variantId: string, productId: string, variantName: string, delta: number, reason: StockAdjustment['reason'], notes?: string, adjusterName?: string, stockLocation?: 'road' | 'warehouse') => Promise<void>;
   saveProduct: (product: Product) => Promise<void>;
@@ -647,16 +649,13 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     return batch;
   }, []);
 
-  // Undo the most recent non-voided sale of the active session: mark it voided and put its items back in road stock
-  const voidLastSale = useCallback(async (): Promise<TallyBatch | null> => {
+  // Void one sale of the active session: mark it voided and put its items back in road stock
+  const voidSale = useCallback(async (batchId: string): Promise<TallyBatch | null> => {
     const { activeSession, repName, products: stateProducts } = stateRef.current;
     if (!activeSession) return null;
     const db = await getDB();
-    const batches = await db.getAllFromIndex('tallyBatches', 'by-session', activeSession.id);
-    const last = batches
-      .filter(b => b.status !== 'voided')
-      .sort((a, b) => b.confirmedAt.localeCompare(a.confirmedAt))[0];
-    if (!last) return null;
+    const last = await db.get('tallyBatches', batchId);
+    if (!last || last.status === 'voided' || last.sessionId !== activeSession.id) return null;
 
     const voided: TallyBatch = { ...last, status: 'voided' };
     await db.put('tallyBatches', voided);
@@ -693,6 +692,18 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_PENDING_SYNC_COUNT', payload: pending.length });
     return voided;
   }, []);
+
+  // Undo the most recent non-voided sale of the active session
+  const voidLastSale = useCallback(async (): Promise<TallyBatch | null> => {
+    const { activeSession } = stateRef.current;
+    if (!activeSession) return null;
+    const db = await getDB();
+    const batches = await db.getAllFromIndex('tallyBatches', 'by-session', activeSession.id);
+    const last = batches
+      .filter(b => b.status !== 'voided')
+      .sort((a, b) => b.confirmedAt.localeCompare(a.confirmedAt))[0];
+    return last ? voidSale(last.id) : null;
+  }, [voidSale]);
 
   // Redo: bring a voided sale back (status pending again) and take its items out of road stock again
   const restoreVoidedSale = useCallback(async (batchId: string): Promise<TallyBatch | null> => {
@@ -1056,6 +1067,7 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       endSession,
       confirmSale,
       voidLastSale,
+      voidSale,
       restoreVoidedSale,
       adjustStock,
       saveProduct,

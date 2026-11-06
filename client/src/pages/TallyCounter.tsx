@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { getDB, ProductVariant, TeamMember, projectTags } from '../lib/db';
+import { getDB, ProductVariant, TeamMember, TallyBatch, projectTags } from '../lib/db';
 import { cn } from '../lib/utils';
 
 // ── Euro denominations for quick-amount buttons ────────────────────────────
@@ -58,8 +58,8 @@ interface TallyCardProps {
   effectivelyEmpty: boolean;
   onIncrement: () => void;
   onDecrement: () => void;
-  /** Tally mode only: subtract one mark from session sold count and restore road stock */
-  onTallyMinus: () => void;
+  /** Tally mode: void this variant's latest sale. (Register mode uses onDecrement: last basket tap) */
+  onUndo: () => void;
   onInstantSell: () => void;
   allowMidSaleRestock: boolean;
   warehouseStock: number;
@@ -85,7 +85,7 @@ function resolveIdentityLabel(variant: ProductVariant): string {
 
 function TallyCard({
   variant, subtitle, liveStock, sessionSoldQty, basketQty, stockStatus,
-  tallyMode, effectivelyEmpty, onIncrement, onDecrement, onTallyMinus, onInstantSell,
+  tallyMode, effectivelyEmpty, onIncrement, onDecrement, onUndo, onInstantSell,
   allowMidSaleRestock, warehouseStock, onRestock, symbol,
 }: TallyCardProps) {
   const [bumping, setBumping] = useState(false);
@@ -212,18 +212,20 @@ function TallyCard({
         </div>
       </div>
 
-      {/* +/- controls */}
+      {/* Undo / + controls — undo: Tally voids this variant's last sale, Register takes the last tap back out of the basket */}
       <div className="flex items-center gap-1.5 mb-2">
         <button
-          onClick={e => { e.stopPropagation(); tallyMode ? onTallyMinus() : onDecrement(); }}
+          onClick={e => { e.stopPropagation(); tallyMode ? onUndo() : onDecrement(); }}
           disabled={tallyMode ? sessionSoldQty === 0 : basketQty === 0}
-          className="flex-1 flex items-center justify-center h-9 rounded-lg transition-all active:scale-95 disabled:opacity-30"
+          aria-label={tallyMode ? `Undo last ${identityLabel} sale` : `Remove one ${identityLabel} from basket`}
+          className="flex-1 flex items-center justify-center h-11 rounded-lg transition-all active:scale-95 disabled:opacity-30"
           style={{ background: '#0E0F14', border: '1px solid #2D3048' }}>
-          <Minus size={14} className="text-[#A4A7B5]" />
+          <RotateCcw size={16} className="text-[#A4A7B5]" />
         </button>
         <button
           onClick={handleIncrementTap}
-          className="flex-[2] flex items-center justify-center h-9 rounded-lg font-bold text-white transition-all active:scale-95"
+          aria-label={tallyMode ? `Sell one ${identityLabel}` : `Add one ${identityLabel} to basket`}
+          className="flex-[2] flex items-center justify-center h-11 rounded-lg font-bold text-white transition-all active:scale-95"
           style={{
             background: tallyMode
               ? 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)'
@@ -940,7 +942,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
 // ── Main Screen ────────────────────────────────────────────────────────────
 export default function TallyCounter() {
   const [, navigate] = useLocation();
-  const { state, dispatch, confirmSale, voidLastSale, restoreVoidedSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock, adjustStock } = useMerchPad();
+  const { state, dispatch, confirmSale, voidLastSale, voidSale, restoreVoidedSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock } = useMerchPad();
   const { products, activeSession, tally, settings, teamMembers, shows } = state;
   const currency = settings.currency ?? 'EUR';
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
@@ -1161,19 +1163,61 @@ export default function TallyCounter() {
     }
   }, [dispatch, confirmSale, state.products, symbol]);
 
-  // Tally mode minus: subtract one mark, restore road stock via counting-error adjustment
-  const handleTallyMinus = useCallback(async (variantId: string, productId: string, variantName: string) => {
-    const currentSold = sessionSold[variantId] ?? 0;
-    if (currentSold <= 0) return;
+  // Keep the per-card session counters in step with sales that are voided / restored
+  const applySoldDelta = useCallback((batch: TallyBatch, sign: 1 | -1) => {
     setSessionSold(prev => {
       const next = { ...prev };
-      const updated = Math.max(0, (next[variantId] ?? 0) - 1);
-      if (updated === 0) { delete next[variantId]; } else { next[variantId] = updated; }
+      batch.items.forEach(i => {
+        const n = (next[i.variantId] ?? 0) + sign * i.qty;
+        if (n > 0) next[i.variantId] = n; else delete next[i.variantId];
+      });
       return next;
     });
-    await adjustStock(variantId, productId, variantName, +1, 'counting_error', 'Tally correction (minus tap)');
-    toast.success(`${variantName} — tally corrected`, { duration: 1500 });
-  }, [sessionSold, adjustStock]);
+  }, []);
+
+  // "Undone: …" toast with a Redo action that brings the sale back
+  const announceVoided = useCallback((voided: TallyBatch) => {
+    const label = voided.items.map(i => {
+      const product = state.products.find(p => p.variants.some(v => v.id === i.variantId))?.name;
+      return `${product && product !== i.variantName ? `${product} · ` : ''}${i.variantName} ×${i.qty}`;
+    }).join(', ');
+    toast.success(`Undone: ${label} · ${symbol}${voided.totalPrice.toFixed(2)}`, {
+      duration: 6000,
+      action: {
+        label: 'Redo',
+        onClick: async () => {
+          const back = await restoreVoidedSale(voided.id);
+          if (!back) return;
+          applySoldDelta(back, 1);
+          toast.success(`Redone: ${label}`, { duration: 2000 });
+        },
+      },
+    });
+  }, [state.products, symbol, restoreVoidedSale, applySoldDelta]);
+
+  // Card undo (Tally mode): void the latest sale of this variant in the session.
+  // Sales that also hold other items, or that carry a discount / seller debt, are left
+  // alone — splitting them would change what was paid or owed; the menu Undo voids them whole.
+  const handleCardUndo = useCallback(async (variantId: string, variantName: string) => {
+    if (!activeSession) return;
+    const db = await getDB();
+    const sessionBatches = await db.getAllFromIndex('tallyBatches', 'by-session', activeSession.id);
+    const latest = sessionBatches
+      .filter(b => b.status !== 'voided' && b.items.some(i => i.variantId === variantId))
+      .sort((a, b) => b.confirmedAt.localeCompare(a.confirmedAt))[0];
+    if (!latest) {
+      toast('Nothing to undo', { duration: 1500 });
+      return;
+    }
+    if (latest.items.length > 1 || latest.shortfallType) {
+      toast.error(`${variantName}: last sale has other items or a discount/debt — use Undo in the menu to void it whole`, { duration: 4000 });
+      return;
+    }
+    const voided = await voidSale(latest.id);
+    if (!voided) return;
+    applySoldDelta(voided, -1);
+    announceVoided(voided);
+  }, [activeSession, voidSale, applySoldDelta, announceVoided]);
 
   // Undo (radial menu): in Register mode with a basket, undo the last basket tap;
   // otherwise undo the last confirmed sale of this session (voids it, restores stock).
@@ -1187,35 +1231,9 @@ export default function TallyCounter() {
       toast('Nothing to undo', { duration: 1500 });
       return;
     }
-    setSessionSold(prev => {
-      const next = { ...prev };
-      voided.items.forEach(i => {
-        const n = (next[i.variantId] ?? 0) - i.qty;
-        if (n > 0) next[i.variantId] = n; else delete next[i.variantId];
-      });
-      return next;
-    });
-    const label = voided.items.map(i => {
-      const product = state.products.find(p => p.variants.some(v => v.id === i.variantId))?.name;
-      return `${product && product !== i.variantName ? `${product} · ` : ''}${i.variantName} ×${i.qty}`;
-    }).join(', ');
-    toast.success(`Undone: ${label} · ${symbol}${voided.totalPrice.toFixed(2)}`, {
-      duration: 6000,
-      action: {
-        label: 'Redo',
-        onClick: async () => {
-          const back = await restoreVoidedSale(voided.id);
-          if (!back) return;
-          setSessionSold(prev => {
-            const next = { ...prev };
-            back.items.forEach(i => { next[i.variantId] = (next[i.variantId] ?? 0) + i.qty; });
-            return next;
-          });
-          toast.success(`Redone: ${label}`, { duration: 2000 });
-        },
-      },
-    });
-  }, [tallyMode, tally.lastAction, hasItems, dispatch, voidLastSale, restoreVoidedSale, symbol, state.products]);
+    applySoldDelta(voided, -1);
+    announceVoided(voided);
+  }, [tallyMode, tally.lastAction, hasItems, dispatch, voidLastSale, applySoldDelta, announceVoided]);
 
   // Mid-sale restock: pull units from warehouse into road stock
   const handleRestock = useCallback(async (variantId: string, productId: string, variantName: string, qty: number) => {
@@ -1418,7 +1436,7 @@ export default function TallyCounter() {
                       effectivelyEmpty={(variant.roadStock ?? liveVariant.currentStock) <= 0}
                       onIncrement={() => handleAdjust(variant.id, variant.name, variant.price, 1)}
                       onDecrement={() => dispatch({ type: 'TALLY_DECREMENT', payload: { variantId: variant.id, variantName: variant.name } })}
-                      onTallyMinus={() => handleTallyMinus(variant.id, product.id, variant.name)}
+                      onUndo={() => handleCardUndo(variant.id, variant.name)}
                       onInstantSell={() => handleInstantSell(variant.id, variant.name, variant.price)}
                       allowMidSaleRestock={allowMidSaleRestock}
                       onRestock={(qty) => handleRestock(variant.id, product.id, variant.name, qty)}
