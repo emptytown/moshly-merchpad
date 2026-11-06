@@ -811,9 +811,9 @@ export default function MerchOffice() {
                                 <button
                                   onClick={() => adjustTransferDelta(variant.id, warehouseStock, roadStock, -1)}
                                   disabled={delta <= -roadStock}
-                                  className="w-6 h-6 rounded flex items-center justify-center disabled:opacity-30 transition-colors"
+                                  className="w-10 h-10 rounded-lg flex items-center justify-center disabled:opacity-30 transition-colors active:scale-95"
                                   style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
-                                  <Minus size={10} className="text-muted-foreground" />
+                                  <Minus size={16} className="text-muted-foreground" />
                                 </button>
                                 <span className={cn('text-sm font-black mp-mono w-8 text-center',
                                   delta > 0 ? 'text-green-400' : delta < 0 ? 'text-amber-400' : 'text-muted-foreground')}>
@@ -822,9 +822,9 @@ export default function MerchOffice() {
                                 <button
                                   onClick={() => adjustTransferDelta(variant.id, warehouseStock, roadStock, 1)}
                                   disabled={delta >= warehouseStock}
-                                  className="w-6 h-6 rounded flex items-center justify-center disabled:opacity-30 transition-colors"
+                                  className="w-10 h-10 rounded-lg flex items-center justify-center disabled:opacity-30 transition-colors active:scale-95"
                                   style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
-                                  <Plus size={10} className="text-muted-foreground" />
+                                  <Plus size={16} className="text-muted-foreground" />
                                 </button>
                               </div>
                               <span className="text-xs font-bold mp-mono text-green-500 w-12 text-right flex-shrink-0">Road {roadStock}</span>
@@ -858,28 +858,28 @@ export default function MerchOffice() {
                                 <span className="text-xs font-semibold text-foreground truncate block">{variant.name}</span>
                               </div>
                               {/* WH + Road controls */}
-                              <div className="flex items-center divide-x divide-border">
+                              <div className="flex flex-col divide-y divide-border">
                                 {/* Warehouse column */}
                                 <div className="flex-1 flex items-center gap-1.5 px-2 py-1.5">
                                   <Warehouse size={15} className="text-primary flex-shrink-0" />
                                   <span className="text-[15px] font-bold mp-mono text-primary flex-shrink-0">{warehouseStock}</span>
-                                  <div className="flex items-center gap-0.5 ml-auto">
+                                  <div className="flex items-center gap-1.5 ml-auto">
                                     <button
                                       onClick={() => changeWHAdjustDelta(variant.id, warehouseStock, -1)}
                                       disabled={whDelta <= -warehouseStock}
-                                      className="w-6 h-6 rounded flex items-center justify-center disabled:opacity-30 transition-colors"
+                                      className="w-10 h-10 rounded-lg flex items-center justify-center disabled:opacity-30 transition-colors active:scale-95"
                                       style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
-                                      <Minus size={9} className="text-muted-foreground" />
+                                      <Minus size={16} className="text-muted-foreground" />
                                     </button>
-                                    <span className={cn('text-xs font-black mp-mono w-7 text-center',
+                                    <span className={cn('text-sm font-black mp-mono w-9 text-center',
                                       whDelta > 0 ? 'text-primary' : whDelta < 0 ? 'text-red-400' : 'text-muted-foreground/40')}>
                                       {whDelta > 0 ? `+${whDelta}` : whDelta === 0 ? '·' : whDelta}
                                     </span>
                                     <button
                                       onClick={() => changeWHAdjustDelta(variant.id, warehouseStock, 1)}
-                                      className="w-6 h-6 rounded flex items-center justify-center transition-colors"
+                                      className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors active:scale-95"
                                       style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
-                                      <Plus size={9} className="text-muted-foreground" />
+                                      <Plus size={16} className="text-muted-foreground" />
                                     </button>
                                   </div>
                                 </div>
@@ -887,23 +887,23 @@ export default function MerchOffice() {
                                 <div className="flex-1 flex items-center gap-1.5 px-2 py-1.5">
                                   <Truck size={15} className="text-green-500 flex-shrink-0" />
                                   <span className="text-[15px] font-bold mp-mono text-green-500 flex-shrink-0">{roadStock}</span>
-                                  <div className="flex items-center gap-0.5 ml-auto">
+                                  <div className="flex items-center gap-1.5 ml-auto">
                                     <button
                                       onClick={() => changeRoadAdjustDelta(variant.id, roadStock, -1)}
                                       disabled={roadDelta <= -roadStock}
-                                      className="w-6 h-6 rounded flex items-center justify-center disabled:opacity-30 transition-colors"
+                                      className="w-10 h-10 rounded-lg flex items-center justify-center disabled:opacity-30 transition-colors active:scale-95"
                                       style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
-                                      <Minus size={9} className="text-muted-foreground" />
+                                      <Minus size={16} className="text-muted-foreground" />
                                     </button>
-                                    <span className={cn('text-xs font-black mp-mono w-7 text-center',
+                                    <span className={cn('text-sm font-black mp-mono w-9 text-center',
                                       roadDelta > 0 ? 'text-green-400' : roadDelta < 0 ? 'text-red-400' : 'text-muted-foreground/40')}>
                                       {roadDelta > 0 ? `+${roadDelta}` : roadDelta === 0 ? '·' : roadDelta}
                                     </span>
                                     <button
                                       onClick={() => changeRoadAdjustDelta(variant.id, roadStock, 1)}
-                                      className="w-6 h-6 rounded flex items-center justify-center transition-colors"
+                                      className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors active:scale-95"
                                       style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
-                                      <Plus size={9} className="text-muted-foreground" />
+                                      <Plus size={16} className="text-muted-foreground" />
                                     </button>
                                   </div>
                                 </div>
