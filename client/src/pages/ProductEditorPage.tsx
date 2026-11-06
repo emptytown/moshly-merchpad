@@ -327,9 +327,6 @@ export default function ProductEditorPage() {
             />
           </div>
 
-          {/* Tags — multi-select, only tags created in this project */}
-          <TagPicker value={tags} onChange={setTags} projectTags={availableTags} />
-
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
               Description
@@ -550,6 +547,9 @@ export default function ProductEditorPage() {
             )}
           </div>
         </div>
+
+        {/* Tags — last item; multi-select, only tags created in this project */}
+        <TagPicker value={tags} onChange={setTags} projectTags={availableTags} />
 
       </div>
 
