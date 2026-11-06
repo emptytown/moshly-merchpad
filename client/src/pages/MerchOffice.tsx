@@ -54,6 +54,12 @@ interface ShowSelectorProps {
 function ShowSelector({ shows, selectedShowId, onSelect, onNewShow, onEdit, onDelete, liveShowId }: ShowSelectorProps) {
   const [open, setOpen] = useState(false);
   const selected = shows.find(s => s.id === selectedShowId);
+  // Active/selected show first, then the rest from most recent to oldest
+  const ordered = useMemo(() => [...shows].sort((a, b) => {
+    if (a.id === selectedShowId) return -1;
+    if (b.id === selectedShowId) return 1;
+    return (b.date ?? '').localeCompare(a.date ?? '');
+  }), [shows, selectedShowId]);
 
   return (
     <div className="relative">
@@ -85,7 +91,7 @@ function ShowSelector({ shows, selectedShowId, onSelect, onNewShow, onEdit, onDe
         <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-10 shadow-2xl"
           style={{ background: 'var(--popover)', border: '1px solid var(--border)' }}>
           <div className="max-h-60 overflow-y-auto">
-            {shows.map(s => (
+            {ordered.map(s => (
               <div key={s.id} onClick={() => {
                   if (liveShowId && s.id !== liveShowId) { toast.error('End the current sale to switch show'); return; }
                   onSelect(s.id); setOpen(false);
