@@ -94,6 +94,8 @@ function TallyCard({
   const infoRef = useRef<HTMLDivElement>(null);
 
   const isEmpty = tallyMode ? (liveStock <= 0) : stockStatus === 'empty';
+  // Register mode: basket already holds every unit left on the road
+  const atBasketLimit = !tallyMode && basketQty >= (variant.roadStock ?? liveStock);
   // Tally mode: cumulative session total. Register mode: basket qty only.
   const displayQty = tallyMode ? sessionSoldQty : basketQty;
 
@@ -124,9 +126,11 @@ function TallyCard({
       return;
     }
     if (isEmpty) return;
-    setBumping(true);
-    setTimeout(() => setBumping(false), 200);
-    onIncrement();
+    if (!atBasketLimit) {
+      setBumping(true);
+      setTimeout(() => setBumping(false), 200);
+    }
+    onIncrement(); // parent refuses (with a toast) when the basket is at the stock limit
   }
 
   return (
@@ -224,7 +228,7 @@ function TallyCard({
             background: tallyMode
               ? 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)'
               : 'linear-gradient(135deg, #6B5CFF 0%, #C026D3 100%)',
-            opacity: isEmpty ? 0.4 : 1,
+            opacity: isEmpty || atBasketLimit ? 0.4 : 1,
           }}>
           <Plus size={16} />
         </button>
@@ -1035,14 +1039,24 @@ export default function TallyCounter() {
       return { variantId: i.variantId, name, variantName: i.variantName, qty: i.qty, unitPrice: i.unitPrice };
     });
 
+  // Register mode: the basket may never hold more units than are left in road stock
+  const basketHasRoom = useCallback((variantId: string, variantName: string) => {
+    const v = state.products.flatMap(p => p.variants).find(vv => vv.id === variantId);
+    const road = v ? (v.roadStock ?? v.currentStock) : 0;
+    if ((tally.items[variantId]?.qty ?? 0) < road) return true;
+    toast.error(road > 0 ? `${variantName} — only ${road} left` : `${variantName} — no stock left!`, { duration: 2000 });
+    return false;
+  }, [state.products, tally.items]);
+
   // Adjust basket qty (used in both preview and modal)
   const handleAdjust = useCallback((variantId: string, variantName: string, unitPrice: number, delta: number) => {
     if (delta > 0) {
+      if (!basketHasRoom(variantId, variantName)) return;
       dispatch({ type: 'TALLY_INCREMENT', payload: { variantId, variantName, unitPrice } });
     } else {
       dispatch({ type: 'TALLY_DECREMENT', payload: { variantId, variantName } });
     }
-  }, [dispatch]);
+  }, [dispatch, basketHasRoom]);
 
   const finishSale = useCallback(async (
     moneyIn: number,
@@ -1402,7 +1416,7 @@ export default function TallyCounter() {
                       stockStatus={stockStatus}
                       tallyMode={tallyMode}
                       effectivelyEmpty={(variant.roadStock ?? liveVariant.currentStock) <= 0}
-                      onIncrement={() => dispatch({ type: 'TALLY_INCREMENT', payload: { variantId: variant.id, variantName: variant.name, unitPrice: variant.price } })}
+                      onIncrement={() => handleAdjust(variant.id, variant.name, variant.price, 1)}
                       onDecrement={() => dispatch({ type: 'TALLY_DECREMENT', payload: { variantId: variant.id, variantName: variant.name } })}
                       onTallyMinus={() => handleTallyMinus(variant.id, product.id, variant.name)}
                       onInstantSell={() => handleInstantSell(variant.id, variant.name, variant.price)}
