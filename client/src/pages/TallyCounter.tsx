@@ -936,7 +936,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
 // ── Main Screen ────────────────────────────────────────────────────────────
 export default function TallyCounter() {
   const [, navigate] = useLocation();
-  const { state, dispatch, confirmSale, voidLastSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock, adjustStock } = useMerchPad();
+  const { state, dispatch, confirmSale, voidLastSale, restoreVoidedSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock, adjustStock } = useMerchPad();
   const { products, activeSession, tally, settings, teamMembers, shows } = state;
   const currency = settings.currency ?? 'EUR';
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
@@ -1167,11 +1167,27 @@ export default function TallyCounter() {
       });
       return next;
     });
-    const label = voided.items.length === 1
-      ? `${voided.items[0].variantName} ×${voided.items[0].qty}`
-      : `${voided.totalItems} items`;
-    toast.success(`Undone: ${label} · ${symbol}${voided.totalPrice.toFixed(2)}`, { duration: 2500 });
-  }, [tallyMode, tally.lastAction, hasItems, dispatch, voidLastSale, symbol]);
+    const label = voided.items.map(i => {
+      const product = state.products.find(p => p.variants.some(v => v.id === i.variantId))?.name;
+      return `${product && product !== i.variantName ? `${product} · ` : ''}${i.variantName} ×${i.qty}`;
+    }).join(', ');
+    toast.success(`Undone: ${label} · ${symbol}${voided.totalPrice.toFixed(2)}`, {
+      duration: 6000,
+      action: {
+        label: 'Redo',
+        onClick: async () => {
+          const back = await restoreVoidedSale(voided.id);
+          if (!back) return;
+          setSessionSold(prev => {
+            const next = { ...prev };
+            back.items.forEach(i => { next[i.variantId] = (next[i.variantId] ?? 0) + i.qty; });
+            return next;
+          });
+          toast.success(`Redone: ${label}`, { duration: 2000 });
+        },
+      },
+    });
+  }, [tallyMode, tally.lastAction, hasItems, dispatch, voidLastSale, restoreVoidedSale, symbol, state.products]);
 
   // Mid-sale restock: pull units from warehouse into road stock
   const handleRestock = useCallback(async (variantId: string, productId: string, variantName: string, qty: number) => {

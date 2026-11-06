@@ -187,7 +187,24 @@ export function AdjustmentModal({ variantName, currentStock, defaultAdjusterName
 
 // ── Audit Timeline ─────────────────────────────────────────────────────────
 
-function AuditTimeline({ entries }: { entries: AuditEntry[] }) {
+type AuditItem = { variantId: string; variantName: string; qty: number };
+
+// Sale / void entries carry their line items in newValue / oldValue — use them to name what was sold
+function auditItems(entry: AuditEntry): AuditItem[] {
+  const v = (entry.newValue ?? entry.oldValue) as unknown;
+  if (!Array.isArray(v)) return [];
+  return v.filter((i): i is AuditItem => !!i && typeof i === 'object' && 'variantName' in i && 'qty' in i);
+}
+
+function auditItemLabel(items: AuditItem[], productOf: (variantId: string) => string | undefined): string {
+  return items.map(i => {
+    const product = productOf(i.variantId);
+    const name = product && product !== i.variantName ? `${product} · ${i.variantName}` : i.variantName;
+    return `${name} ×${i.qty}`;
+  }).join(', ');
+}
+
+function AuditTimeline({ entries, productOf }: { entries: AuditEntry[]; productOf: (variantId: string) => string | undefined }) {
   if (entries.length === 0) return (
     <div className="text-center py-8">
       <Clock size={24} className="text-[#7B7F93] mx-auto mb-2" />
@@ -209,7 +226,18 @@ function AuditTimeline({ entries }: { entries: AuditEntry[] }) {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <span className="text-xs font-bold" style={{ color: meta.color }}>{meta.label}</span>
-                  <p className="text-sm text-[#A4A7B5] leading-snug mt-0.5">{entry.description}</p>
+                  {(() => {
+                    const items = auditItems(entry);
+                    // "by X" is already shown below — drop it from the description
+                    const suffix = ` by ${entry.actorName}`;
+                    const desc = entry.description.endsWith(suffix) ? entry.description.slice(0, -suffix.length) : entry.description;
+                    return (<>
+                      {items.length > 0 && (
+                        <p className="text-base font-bold text-foreground leading-snug mt-0.5">{auditItemLabel(items, productOf)}</p>
+                      )}
+                      <p className="text-sm text-[#A4A7B5] leading-snug mt-0.5">{desc}</p>
+                    </>);
+                  })()}
                   {entry.reason && <span className="text-xs text-[#7B7F93] capitalize">Reason: {entry.reason.replace('_', ' ')}</span>}
                 </div>
                 <span className="text-xs text-[#7B7F93] flex-shrink-0">{formatTime(entry.timestamp)}</span>
@@ -230,6 +258,8 @@ type Tab = 'analytics' | 'stock' | 'audit';
 
 export default function DetailInfo() {
   const { state, adjustStock, getVariantStockStatus } = useMerchPad();
+  const productOf = useCallback((variantId: string) =>
+    state.products.find(p => p.variants.some(v => v.id === variantId))?.name, [state.products]);
   const { products, activeSession, settings } = state;
   const currency = settings.currency ?? 'EUR';
 
@@ -276,7 +306,22 @@ export default function DetailInfo() {
   // ── Filtered sale entries ──────────────────────────────────────────────
 
   const filteredSaleEntries = useMemo(() => {
-    let entries = auditEntries.filter(e => e.action === 'tally_confirmed');
+    // A sale can be undone (tally_voided) and redone (tally_confirmed again) — keep each sale
+    // once, at its original time, and only if its latest event is a confirm.
+    const byBatch = new Map<string, { first: AuditEntry; lastAction: string; lastTs: string }>();
+    for (const e of auditEntries) {
+      if (e.action !== 'tally_confirmed' && e.action !== 'tally_voided') continue;
+      const cur = byBatch.get(e.entityId);
+      if (!cur) {
+        byBatch.set(e.entityId, { first: e, lastAction: e.action, lastTs: e.timestamp });
+        continue;
+      }
+      if (e.action === 'tally_confirmed' && e.timestamp < cur.first.timestamp) cur.first = e;
+      if (e.timestamp >= cur.lastTs) { cur.lastAction = e.action; cur.lastTs = e.timestamp; }
+    }
+    let entries = Array.from(byBatch.values())
+      .filter(b => b.lastAction === 'tally_confirmed' && b.first.action === 'tally_confirmed')
+      .map(b => b.first);
 
     // Time filter
     if (timeRange === 'today') {
@@ -391,8 +436,8 @@ export default function DetailInfo() {
 
   function exportCSV() {
     const rows = [
-      ['Timestamp', 'Action', 'Description', 'Actor', 'Reason'],
-      ...auditEntries.map(e => [e.timestamp, e.action, e.description, e.actorName, e.reason ?? '']),
+      ['Timestamp', 'Action', 'Items', 'Description', 'Actor', 'Reason'],
+      ...auditEntries.map(e => [e.timestamp, e.action, auditItemLabel(auditItems(e), productOf), e.description, e.actorName, e.reason ?? '']),
     ];
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -731,7 +776,7 @@ export default function DetailInfo() {
 
         {/* ── Audit Tab ─────────────────────────────────────────────────── */}
         {activeTab === 'audit' && (
-          <AuditTimeline entries={auditEntries} />
+          <AuditTimeline entries={auditEntries} productOf={productOf} />
         )}
       </div>
 
