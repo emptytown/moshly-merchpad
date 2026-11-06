@@ -194,10 +194,10 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
                   <button
                     onClick={() => setQty(v.id, qty - 1)}
                     disabled={qty === 0}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors flex-shrink-0"
+                    className="w-11 h-11 rounded-xl flex items-center justify-center active:scale-95 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors flex-shrink-0"
                     style={{ border: '1px solid var(--border)', background: 'var(--background)' }}
                   >
-                    <Minus size={13} />
+                    <Minus size={18} />
                   </button>
 
                   <input
@@ -208,23 +208,23 @@ export default function StockTransferModal({ product, open, onClose }: Props) {
                     placeholder="0"
                     disabled={exhausted}
                     onChange={e => setQty(v.id, parseInt(e.target.value) || 0)}
-                    className="flex-1 h-8 text-center text-sm font-bold rounded-lg outline-none focus:ring-1 ring-primary bg-transparent text-foreground"
+                    className="flex-1 h-11 text-center text-base font-bold rounded-lg outline-none focus:ring-1 ring-primary bg-transparent text-foreground"
                     style={{ border: '1px solid var(--border)', background: 'var(--background)' }}
                   />
 
                   <button
                     onClick={() => setQty(v.id, qty + 1)}
                     disabled={qty >= src || exhausted}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors flex-shrink-0"
+                    className="w-11 h-11 rounded-xl flex items-center justify-center active:scale-95 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors flex-shrink-0"
                     style={{ border: '1px solid var(--border)', background: 'var(--background)' }}
                   >
-                    <Plus size={13} />
+                    <Plus size={18} />
                   </button>
 
                   <button
                     onClick={() => setMax(v.id)}
                     disabled={exhausted || qty === src}
-                    className="px-2 h-8 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-30 flex-shrink-0"
+                    className="px-3 h-11 rounded-xl text-xs font-bold transition-colors disabled:opacity-30 flex-shrink-0"
                     style={{
                       border: '1px solid var(--border)',
                       background: 'var(--background)',

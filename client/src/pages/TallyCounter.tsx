@@ -479,15 +479,15 @@ function BasketPreview({ items, totalRevenue, symbol, onClose, onAdjust }: Baske
                   </span>
                   <button
                     onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, -1)}
-                    className="w-6 h-6 rounded-full flex items-center justify-center transition-all active:scale-90"
+                    className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
                     style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}>
-                    <Minus size={10} className="text-[#F87171]" />
+                    <Minus size={15} className="text-[#F87171]" />
                   </button>
                   <button
                     onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, 1)}
-                    className="w-6 h-6 rounded-full flex items-center justify-center transition-all active:scale-90"
+                    className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
                     style={{ background: 'rgba(107,92,255,0.12)', border: '1px solid rgba(107,92,255,0.2)' }}>
-                    <Plus size={10} className="text-[#7C6DFF]" />
+                    <Plus size={15} className="text-[#7C6DFF]" />
                   </button>
                 </div>
               </div>
@@ -810,15 +810,15 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
                 </span>
                 <button
                   onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, -1)}
-                  className="w-6 h-6 rounded-full flex items-center justify-center transition-all active:scale-90"
+                  className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
                   style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}>
-                  <Minus size={10} className="text-[#F87171]" />
+                  <Minus size={15} className="text-[#F87171]" />
                 </button>
                 <button
                   onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, 1)}
-                  className="w-6 h-6 rounded-full flex items-center justify-center transition-all active:scale-90"
+                  className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
                   style={{ background: 'rgba(107,92,255,0.12)', border: '1px solid rgba(107,92,255,0.2)' }}>
-                  <Plus size={10} className="text-[#7C6DFF]" />
+                  <Plus size={15} className="text-[#7C6DFF]" />
                 </button>
               </div>
             </div>
