@@ -21,8 +21,17 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { getDB, ProductVariant, TeamMember, TallyBatch, projectTags } from '../lib/db';
+import { getDB, getSetting, setSetting, ProductVariant, TeamMember, TallyBatch, projectTags } from '../lib/db';
 import { cn } from '../lib/utils';
+
+// ── Undo stack entries (menu Undo) ─────────────────────────────────────────
+interface UndoEntry {
+  /** 'sale': a confirmed sale (undo voids it) · 'void': a card undo (undo restores the sale) */
+  kind: 'sale' | 'void';
+  batchId: string;
+  sessionId: string;
+}
+const UNDO_STACK_LIMIT = 200;
 
 // ── Euro denominations for quick-amount buttons ────────────────────────────
 const EURO_DENOMS = [1, 2, 5, 10, 20, 50, 100];
@@ -1012,6 +1021,36 @@ export default function TallyCounter() {
     }
   }, [activeSession?.id]);
 
+  // ── Undo stack (menu Undo) ────────────────────────────────────────────
+  // Every confirmed sale and every card undo is pushed here; the menu Undo pops the
+  // most recent one and reverses it (sale → void it, card undo → restore the sale).
+  // Device-local, kept in IndexedDB per project + session so it survives a reload.
+  const undoStack = useRef<UndoEntry[]>([]);
+  const undoStackKey = activeSession ? `undoStack:${activeSession.id}` : null;
+  useEffect(() => {
+    if (!activeSession || !undoStackKey) { undoStack.current = []; return; }
+    let cancelled = false;
+    const sessionId = activeSession.id;
+    getSetting<UndoEntry[]>(activeSession.projectId, undoStackKey, []).then(saved => {
+      if (cancelled) return;
+      // Keep anything pushed while loading (same session) on top of what was saved
+      undoStack.current = [...saved, ...undoStack.current.filter(e => e.sessionId === sessionId)];
+    });
+    return () => { cancelled = true; };
+  }, [activeSession?.id]);
+
+  const persistUndoStack = useCallback(() => {
+    if (!activeSession || !undoStackKey) return;
+    undoStack.current = undoStack.current.slice(-UNDO_STACK_LIMIT);
+    setSetting(activeSession.projectId, undoStackKey, undoStack.current).catch(() => { /* best effort */ });
+  }, [activeSession, undoStackKey]);
+
+  const pushUndo = useCallback((kind: UndoEntry['kind'], batchId: string) => {
+    if (!activeSession) return;
+    undoStack.current = [...undoStack.current, { kind, batchId, sessionId: activeSession.id }];
+    persistUndoStack();
+  }, [activeSession, persistUndoStack]);
+
   const activeProducts = products.filter(p => p.status !== 'suspended');
   const categories = ['all', ...projectTags(activeProducts)];
   // A saved tag filter that no longer exists falls back to All
@@ -1067,6 +1106,7 @@ export default function TallyCounter() {
     const snapshot = Object.values(tally.items).filter(i => i.qty > 0);
     const batch = await confirmSale(opts);
     if (batch) {
+      pushUndo('sale', batch.id);
       setSessionSold(prev => {
         const next = { ...prev };
         snapshot.forEach(item => { next[item.variantId] = (next[item.variantId] ?? 0) + item.qty; });
@@ -1089,7 +1129,7 @@ export default function TallyCounter() {
       );
       setTimeout(() => setJustConfirmed(false), 2000);
     }
-  }, [confirmSale, tally.items, dispatch, symbol]);
+  }, [confirmSale, tally.items, dispatch, symbol, pushUndo]);
 
   // Register confirm (with cash amount)
   const requireMoneyInput = settings.requireMoneyInput ?? false;
@@ -1146,6 +1186,7 @@ export default function TallyCounter() {
     inFlightDebits.current[variantId] = Math.max(0, (inFlightDebits.current[variantId] ?? 0) - 1);
 
     if (batch) {
+      pushUndo('sale', batch.id);
       dispatch({ type: 'TALLY_REMOVE_VARIANT', payload: { variantId } });
       setJustConfirmed(true);
       toast.success(`${variantName} · ${symbol}${unitPrice.toFixed(2)}`, { duration: 1500 });
@@ -1161,7 +1202,7 @@ export default function TallyCounter() {
       });
       toast.error(`Failed to record sale: no active session found.`, { duration: 3000 });
     }
-  }, [dispatch, confirmSale, state.products, symbol]);
+  }, [dispatch, confirmSale, state.products, symbol, pushUndo]);
 
   // Keep the per-card session counters in step with sales that are voided / restored
   const applySoldDelta = useCallback((batch: TallyBatch, sign: 1 | -1) => {
@@ -1176,11 +1217,13 @@ export default function TallyCounter() {
   }, []);
 
   // "Undone: …" toast with a Redo action that brings the sale back
+  const saleLabel = useCallback((batch: TallyBatch) => batch.items.map(i => {
+    const product = state.products.find(p => p.variants.some(v => v.id === i.variantId))?.name;
+    return `${product && product !== i.variantName ? `${product} · ` : ''}${i.variantName} ×${i.qty}`;
+  }).join(', '), [state.products]);
+
   const announceVoided = useCallback((voided: TallyBatch) => {
-    const label = voided.items.map(i => {
-      const product = state.products.find(p => p.variants.some(v => v.id === i.variantId))?.name;
-      return `${product && product !== i.variantName ? `${product} · ` : ''}${i.variantName} ×${i.qty}`;
-    }).join(', ');
+    const label = saleLabel(voided);
     toast.success(`Undone: ${label} · ${symbol}${voided.totalPrice.toFixed(2)}`, {
       duration: 6000,
       action: {
@@ -1188,12 +1231,13 @@ export default function TallyCounter() {
         onClick: async () => {
           const back = await restoreVoidedSale(voided.id);
           if (!back) return;
+          pushUndo('sale', back.id);
           applySoldDelta(back, 1);
           toast.success(`Redone: ${label}`, { duration: 2000 });
         },
       },
     });
-  }, [state.products, symbol, restoreVoidedSale, applySoldDelta]);
+  }, [saleLabel, symbol, restoreVoidedSale, applySoldDelta, pushUndo]);
 
   // Card undo (Tally mode): void the latest sale of this variant in the session.
   // Sales that also hold other items, or that carry a discount / seller debt, are left
@@ -1215,16 +1259,55 @@ export default function TallyCounter() {
     }
     const voided = await voidSale(latest.id);
     if (!voided) return;
+    pushUndo('void', voided.id);
     applySoldDelta(voided, -1);
     announceVoided(voided);
-  }, [activeSession, voidSale, applySoldDelta, announceVoided]);
+  }, [activeSession, voidSale, applySoldDelta, announceVoided, pushUndo]);
 
-  // Undo (radial menu): in Register mode with a basket, undo the last basket tap;
-  // otherwise undo the last confirmed sale of this session (voids it, restores stock).
+  // Undo (radial menu): in Register mode with a basket, undo the last basket tap.
+  // Otherwise reverse the most recent action on the undo stack — a sale is voided, a
+  // card undo is reversed by restoring that sale. Entries that no longer match the
+  // sale's status (e.g. changed elsewhere) are skipped. Empty stack: fall back to
+  // voiding the session's latest sale (sales made before the stack existed).
   const handleUndo = useCallback(async () => {
     if (!tallyMode && tally.lastAction && hasItems) {
       dispatch({ type: 'TALLY_UNDO_LAST' });
       return;
+    }
+    const db = await getDB();
+    while (undoStack.current.length > 0) {
+      const entry = undoStack.current[undoStack.current.length - 1];
+      undoStack.current = undoStack.current.slice(0, -1);
+      persistUndoStack();
+      const batch = await db.get('tallyBatches', entry.batchId);
+      if (!batch) continue;
+      if (entry.kind === 'sale' && batch.status !== 'voided') {
+        const voided = await voidSale(batch.id);
+        if (!voided) continue;
+        applySoldDelta(voided, -1);
+        announceVoided(voided);
+        return;
+      }
+      if (entry.kind === 'void' && batch.status === 'voided') {
+        const back = await restoreVoidedSale(batch.id);
+        if (!back) continue;
+        applySoldDelta(back, 1);
+        const label = saleLabel(back);
+        toast.success(`Undo reversed: ${label} sold again · ${symbol}${back.totalPrice.toFixed(2)}`, {
+          duration: 6000,
+          action: {
+            label: 'Redo',
+            onClick: async () => {
+              const again = await voidSale(back.id);
+              if (!again) return;
+              pushUndo('void', again.id);
+              applySoldDelta(again, -1);
+              toast.success(`Redone: ${label} undone`, { duration: 2000 });
+            },
+          },
+        });
+        return;
+      }
     }
     const voided = await voidLastSale();
     if (!voided) {
@@ -1233,7 +1316,8 @@ export default function TallyCounter() {
     }
     applySoldDelta(voided, -1);
     announceVoided(voided);
-  }, [tallyMode, tally.lastAction, hasItems, dispatch, voidLastSale, applySoldDelta, announceVoided]);
+  }, [tallyMode, tally.lastAction, hasItems, dispatch, persistUndoStack, voidSale, restoreVoidedSale,
+      voidLastSale, applySoldDelta, announceVoided, saleLabel, symbol, pushUndo]);
 
   // Mid-sale restock: pull units from warehouse into road stock
   const handleRestock = useCallback(async (variantId: string, productId: string, variantName: string, qty: number) => {
