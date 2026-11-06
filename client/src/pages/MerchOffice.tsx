@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Minus, Trash2, Edit2, Play, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign, Pencil, Download, AlertTriangle } from 'lucide-react';
+import { Plus, Minus, Trash2, Edit2, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign, Pencil, Download, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
@@ -47,10 +47,11 @@ interface ShowSelectorProps {
   onNewShow: () => void;
   onEdit: (s: Show) => void;
   onDelete: (id: string) => void;
-  onActivate: (id: string) => void;
+  /** Show linked to the running sale session, if any — selection is locked to it */
+  liveShowId?: string;
 }
 
-function ShowSelector({ shows, selectedShowId, onSelect, onNewShow, onEdit, onDelete, onActivate }: ShowSelectorProps) {
+function ShowSelector({ shows, selectedShowId, onSelect, onNewShow, onEdit, onDelete, liveShowId }: ShowSelectorProps) {
   const [open, setOpen] = useState(false);
   const selected = shows.find(s => s.id === selectedShowId);
 
@@ -67,9 +68,11 @@ function ShowSelector({ shows, selectedShowId, onSelect, onNewShow, onEdit, onDe
                 <p className="text-sm font-semibold text-foreground">{selected.name}</p>
                 <p className="text-xs text-muted-foreground">{selected.venue} · {formatDate(selected.date)}</p>
               </div>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 uppercase tracking-tighter mr-2">
-                Active Sale
-              </span>
+              {liveShowId === selected.id && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 uppercase tracking-tighter mr-2">
+                  Active Sale
+                </span>
+              )}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">Select a show</p>
@@ -83,18 +86,20 @@ function ShowSelector({ shows, selectedShowId, onSelect, onNewShow, onEdit, onDe
           style={{ background: 'var(--popover)', border: '1px solid var(--border)' }}>
           <div className="max-h-60 overflow-y-auto">
             {shows.map(s => (
-              <div key={s.id} onClick={() => { onSelect(s.id); setOpen(false); }}
+              <div key={s.id} onClick={() => {
+                  if (liveShowId && s.id !== liveShowId) { toast.error('End the current sale to switch show'); return; }
+                  onSelect(s.id); setOpen(false);
+                }}
                 className={cn('w-full flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/10 transition-colors',
                   s.id === selectedShowId && 'bg-primary/10')}>
-                <div className="flex-1 min-w-0 mr-2">
+                <div className="flex-1 min-w-0 mr-2 flex items-center gap-2">
+                  <Check size={14} className={cn('flex-shrink-0 text-primary', s.id !== selectedShowId && 'invisible')} />
+                  <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground truncate">{s.name}</p>
                   <p className="text-xs text-muted-foreground">{s.venue} · {formatDate(s.date)}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={(e) => { e.stopPropagation(); onActivate(s.id); }} 
-                    className="p-1.5 rounded-lg text-primary hover:bg-primary/20 transition-colors" title="Activate">
-                    <Play size={14} fill="currentColor" />
-                  </button>
                   <button onClick={(e) => { e.stopPropagation(); onEdit(s); }} 
                     className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Edit">
                     <Pencil size={14} />
@@ -377,12 +382,25 @@ export default function MerchOffice() {
   const currency = settings.currency ?? 'EUR';
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
 
-  const [selectedShowId, setSelectedShowId] = useState(shows.find(s => s.status === 'upcoming')?.id ?? shows[0]?.id ?? '');
+  // Selected show survives navigation (persisted per project); a running session always wins
+  const showKey = `mp_selected_show_${projectId}`;
+  const [pickedShowId, setPickedShowId] = useState<string>(() => {
+    try { return localStorage.getItem(`mp_selected_show_${projectId}`) ?? ''; } catch { return ''; }
+  });
+  const liveShowId = activeSession && activeSession.showId !== 'oneoff' ? activeSession.showId : undefined;
+  const selectedShowId = liveShowId
+    ?? (shows.some(s => s.id === pickedShowId) ? pickedShowId : (shows.find(s => s.status === 'upcoming')?.id ?? shows[0]?.id ?? ''));
+  useEffect(() => {
+    try { setPickedShowId(localStorage.getItem(showKey) ?? ''); } catch { setPickedShowId(''); }
+  }, [showKey]);
+  function setSelectedShowId(id: string) {
+    setPickedShowId(id);
+    try { if (id) localStorage.setItem(showKey, id); else localStorage.removeItem(showKey); } catch { /* ignore */ }
+  }
   const [editingShow, setEditingShow] = useState<Show | 'new' | null>(null);
   const [confirmDeleteShowId, setConfirmDeleteShowId] = useState<string | null>(null);
   const [confirmDeleteProductId, setConfirmDeleteProductId] = useState<string | null>(null);
   const [confirmSuspendProductId, setConfirmSuspendProductId] = useState<string | null>(null);
-  const [confirmActivateShowId, setConfirmActivateShowId] = useState<string | null>(null);
   const [showStartSale, setShowStartSale] = useState(false);
   const [showOneOff, setShowOneOff] = useState(false);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
@@ -499,11 +517,6 @@ export default function MerchOffice() {
     closeTransferPanel();
   }
 
-  useEffect(() => {
-    if (!selectedShowId && shows.length > 0) {
-      setSelectedShowId(shows.find(s => s.status === 'upcoming')?.id ?? shows[0].id);
-    }
-  }, [shows, selectedShowId]);
 
 
   if (isLoading) {
@@ -546,7 +559,7 @@ export default function MerchOffice() {
         </div>
       </div>
 
-      <div className="px-4 space-y-[34px] -mt-2">
+      <div className="relative z-10 px-4 space-y-[34px] -mt-2">
         {/* Show selector */}
         <div>
           <button onClick={() => setSecShow(v => !v)} className="flex items-center justify-between w-full mb-1 group">
@@ -560,7 +573,7 @@ export default function MerchOffice() {
             onNewShow={() => setEditingShow('new')}
             onEdit={setEditingShow}
             onDelete={setConfirmDeleteShowId}
-            onActivate={setConfirmActivateShowId}
+            liveShowId={liveShowId}
           />}
         </div>
 
@@ -1237,32 +1250,6 @@ export default function MerchOffice() {
               }}
                 className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-destructive hover:bg-destructive/90 transition-colors">
                 Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {confirmActivateShowId && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in">
-          <div className="mp-card w-full max-w-xs p-6 shadow-2xl border-primary/20 text-center">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4 mx-auto">
-              <Play size={24} className="text-primary" fill="currentColor" />
-            </div>
-            <p className="text-sm font-bold text-foreground mb-1">Activate this show?</p>
-            <p className="text-xs text-muted-foreground mb-6">All subsequent sales will be linked to this show's account.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmActivateShowId(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground border border-border hover:bg-muted transition-colors">
-                Cancel
-              </button>
-              <button onClick={() => {
-                setSelectedShowId(confirmActivateShowId);
-                setConfirmActivateShowId(null);
-                toast.success('Show activated');
-              }}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary">
-                Confirm
               </button>
             </div>
           </div>
