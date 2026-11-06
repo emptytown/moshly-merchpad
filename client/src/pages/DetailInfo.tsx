@@ -517,8 +517,11 @@ export default function DetailInfo() {
           { label: 'Avg Batch', value: formatCurrency(avgBatchValue), sub: `${totalBatches} batches`, color: '#7C6DFF', trend: null },
           { label: 'Units Sold', value: totalUnitsSold.toString(), sub: 'items sold', color: '#00E5FF', trend: null },
           { label: 'Stock Alerts', value: lowStockVariants.length.toString(), sub: 'variants low/empty', color: lowStockVariants.length > 0 ? '#F87171' : '#4ADE80', trend: null },
-        ].map(({ label, value, sub, color }) => (
-          <div key={label} className="mp-card p-3.5 relative overflow-hidden">
+          // Placeholders — need product unit cost, not tracked yet
+          { label: 'Total Cost', value: '—', sub: 'coming soon', color: '#F59E0B', trend: null, placeholder: true },
+          { label: 'Total Profit', value: '—', sub: 'coming soon', color: '#C026D3', trend: null, placeholder: true },
+        ].map(({ label, value, sub, color, placeholder }) => (
+          <div key={label} className={cn('mp-card p-3.5 relative overflow-hidden', placeholder && 'opacity-50 border-dashed')}>
             <div className="absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 -translate-y-4 translate-x-4"
               style={{ background: color }} />
             <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1">{label}</p>
