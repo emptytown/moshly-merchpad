@@ -1,9 +1,13 @@
 /**
- * Master Catalogue — global product templates
- * Stored in localStorage (global, not per-project).
+ * Master Catalogue — product templates
+ * Stored in localStorage PER PROJECT (key suffixed with the active project id),
+ * so one project's templates/categories never show up in another.
+ * The old global keys are legacy and intentionally not migrated.
  * Templates define reusable product names, categories, variant axes, and default prices.
  * Used by the Product Editor in Merch Office to pre-fill and constrain inputs.
  */
+
+import { getActiveProjectId } from './projects';
 
 export interface VariantAxis {
   key: string;       // e.g. "size", "colour", "format"
@@ -21,12 +25,13 @@ export interface CatalogueTemplate {
   updatedAt: string;
 }
 
-const STORAGE_KEY = 'moshly_master_catalogue';
-const CATEGORIES_STORAGE_KEY = 'moshly_catalogue_categories';
+const projectKey = (base: string) => `${base}:${getActiveProjectId() ?? 'default'}`;
+const storageKey = () => projectKey('moshly_master_catalogue');
+const categoriesKey = () => projectKey('moshly_catalogue_categories');
 
 export function loadCustomCategories(): string[] {
   try {
-    const raw = localStorage.getItem(CATEGORIES_STORAGE_KEY);
+    const raw = localStorage.getItem(categoriesKey());
     return raw ? JSON.parse(raw) as string[] : [];
   } catch {
     return [];
@@ -34,7 +39,7 @@ export function loadCustomCategories(): string[] {
 }
 
 export function saveCustomCategories(categories: string[]): void {
-  localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
+  localStorage.setItem(categoriesKey(), JSON.stringify(categories));
 }
 
 export function addCustomCategory(category: string): void {
@@ -51,7 +56,7 @@ export function deleteCustomCategory(category: string): void {
 
 export function loadCatalogue(): CatalogueTemplate[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey());
     return raw ? (JSON.parse(raw) as CatalogueTemplate[]) : defaultCatalogue();
   } catch {
     return defaultCatalogue();
@@ -59,7 +64,7 @@ export function loadCatalogue(): CatalogueTemplate[] {
 }
 
 export function saveCatalogue(templates: CatalogueTemplate[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
+  localStorage.setItem(storageKey(), JSON.stringify(templates));
 }
 
 export function addTemplate(template: Omit<CatalogueTemplate, 'id' | 'createdAt' | 'updatedAt'>): CatalogueTemplate {
