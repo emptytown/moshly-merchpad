@@ -1,19 +1,17 @@
 /**
- * MasterCatalogue — global product template manager
- * Accessible from Settings. Templates are global (not per-project).
- * Each template defines: name, category, variant axes (key + suggested values), default price.
+ * MasterCatalogue — product template manager (per project)
+ * Accessible from Settings.
+ * Each template defines: name, variant axes (key + suggested values), default price.
  */
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, ChevronRight, X, Tag, Layers, BookOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronRight, X, Layers, BookOpen } from 'lucide-react';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import {
   CatalogueTemplate, VariantAxis,
   loadCatalogue, addTemplate, updateTemplate, deleteTemplate,
-  getAllCategories,
 } from '../lib/catalogue';
-import { cn } from '../lib/utils';
 
 // ── Axis Editor ────────────────────────────────────────────────────────────
 
@@ -120,25 +118,16 @@ function TemplateEditor({ initial, onSave, onCancel }: TemplateEditorProps) {
   const currency = settings.currency ?? 'EUR';
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
   const [name, setName] = useState(initial?.name ?? '');
-  const [category, setCategory] = useState(initial?.category ?? '');
   const [price, setPrice] = useState(String(initial?.defaultPrice ?? ''));
   const [axes, setAxes] = useState<VariantAxis[]>(initial?.variantAxes ?? []);
   const [notes, setNotes] = useState(initial?.notes ?? '');
 
-  const [templates, setTemplates] = useState<CatalogueTemplate[]>([]);
-  useEffect(() => { setTemplates(loadCatalogue()); }, []);
-
-  const allCategories = getAllCategories(templates);
-  const [showCatSuggestions, setShowCatSuggestions] = useState(false);
-
   function handleSave() {
     const trimmedName = name.trim();
-    const trimmedCat = category.trim();
     if (!trimmedName) { toast.error('Template name is required'); return; }
-    if (!trimmedCat) { toast.error('Category is required'); return; }
     const parsedPrice = parseFloat(price);
     if (isNaN(parsedPrice) || parsedPrice < 0) { toast.error('Enter a valid price'); return; }
-    onSave({ name: trimmedName, category: trimmedCat, variantAxes: axes, defaultPrice: parsedPrice, notes: notes.trim() || undefined });
+    onSave({ name: trimmedName, variantAxes: axes, defaultPrice: parsedPrice, notes: notes.trim() || undefined });
   }
 
   return (
@@ -152,41 +141,6 @@ function TemplateEditor({ initial, onSave, onCancel }: TemplateEditorProps) {
           placeholder="e.g. T-Shirt"
           className="w-full px-3 py-2 rounded-lg text-sm bg-muted border border-border focus:border-primary focus:outline-none"
         />
-      </div>
-
-      {/* Category */}
-      <div className="relative">
-        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Category</label>
-        <div className="relative">
-          <input
-            value={category}
-            onChange={e => { setCategory(e.target.value); setShowCatSuggestions(true); }}
-            onFocus={() => setShowCatSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowCatSuggestions(false), 200)}
-            placeholder="e.g. Apparel"
-            className="w-full px-3 py-2 rounded-lg text-sm bg-muted border border-border focus:border-primary focus:outline-none"
-          />
-          {showCatSuggestions && (
-            <div className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-popover border border-border rounded-xl shadow-xl animate-in fade-in slide-in-from-top-1">
-              {allCategories
-                .filter(c => c.toLowerCase().includes(category.toLowerCase()))
-                .map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => { setCategory(c); setShowCatSuggestions(false); }}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors first:rounded-t-xl last:rounded-b-xl"
-                  >
-                    {c}
-                  </button>
-                ))}
-              {allCategories.filter(c => c.toLowerCase().includes(category.toLowerCase())).length === 0 && (
-                <div className="px-3 py-2 text-xs text-muted-foreground italic">New category will be created</div>
-              )}
-            </div>
-          )}
-        </div>
-        <p className="text-[10px] text-muted-foreground mt-1">Type or pick from suggestions</p>
       </div>
 
       {/* Default price */}
@@ -252,9 +206,6 @@ function TemplateCard({ template, onEdit, onDelete }: TemplateCardProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1.5">
             <p className="text-sm font-bold text-foreground truncate">{template.name}</p>
-            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 uppercase tracking-tighter">
-              {template.category}
-            </span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {template.variantAxes.map(axis => (
@@ -298,12 +249,10 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
   const [templates, setTemplates] = useState<CatalogueTemplate[]>([]);
   const [view, setView] = useState<View>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [filterCat, setFilterCat] = useState('all');
 
   useEffect(() => { setTemplates(loadCatalogue()); }, []);
 
-  const categories = ['all', ...getAllCategories(templates)];
-  const filtered = filterCat === 'all' ? templates : templates.filter(t => t.category === filterCat);
+  const filtered = templates;
   const editingTemplate = editingId ? templates.find(t => t.id === editingId) : undefined;
 
   function handleCreate(data: Omit<CatalogueTemplate, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -354,10 +303,9 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
         {view === 'list' && (
           <>
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { label: 'Templates', value: templates.length, icon: Layers },
-                { label: 'Categories', value: categories.length - 1, icon: Tag },
                 { label: 'Axes', value: Array.from(new Set(templates.flatMap(t => t.variantAxes.map(a => a.key)))).length, icon: ChevronRight },
               ].map(({ label, value, icon: Icon }) => (
                 <div key={label} className="mp-card p-3 text-center border-border/40">
@@ -367,22 +315,6 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
                 </div>
               ))}
             </div>
-
-            {/* Category filter */}
-            {categories.length > 2 && (
-              <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
-                {categories.map(cat => (
-                  <button key={cat} onClick={() => setFilterCat(cat)}
-                    className={cn('flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all border',
-                      filterCat === cat
-                        ? 'text-white bg-gradient-to-r from-primary to-magenta border-transparent shadow-md shadow-primary/20'
-                        : 'text-muted-foreground bg-muted border-border hover:border-primary/50'
-                    )}>
-                    {cat === 'all' ? 'All' : cat}
-                  </button>
-                ))}
-              </div>
-            )}
 
             {/* Template list */}
             <div className="space-y-2">
@@ -397,8 +329,8 @@ export default function MasterCatalogue({ onBack }: { onBack: () => void }) {
               {filtered.length === 0 && (
                 <div className="text-center py-12 bg-muted/30 rounded-3xl border border-dashed border-border/60">
                   <BookOpen size={32} className="text-muted/60 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-muted-foreground">No templates found in this category</p>
-                  <button onClick={() => { setFilterCat('all'); setView('create'); }}
+                  <p className="text-sm font-medium text-muted-foreground">No templates yet</p>
+                  <button onClick={() => setView('create')}
                     className="mt-4 px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-br from-primary to-magenta shadow-lg shadow-primary/20">
                     Create First Template
                   </button>

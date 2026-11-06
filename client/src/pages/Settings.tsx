@@ -14,7 +14,7 @@ import { Switch } from '../components/ui/switch';
 import { Slider } from '../components/ui/slider';
 import ProjectsSettings from './ProjectsSettings';
 import MasterCatalogue from './MasterCatalogue';
-import CategoryManager from './CategoryManager';
+import TagManager from './TagManager';
 import DangerZone from '../components/DangerZone';
 import TeamEditor from '../components/TeamEditor';
 import { useTheme, type Skin, type Mode } from '../contexts/ThemeContext';
@@ -84,7 +84,7 @@ export default function Settings() {
   }
 
   if (view === 'categories') {
-    return <CategoryManager onBack={() => setView('main')} />;
+    return <TagManager onBack={() => setView('main')} />;
   }
 
   return (
@@ -117,7 +117,7 @@ export default function Settings() {
           <ChevronRight size={16} className="text-[#7B7F93] flex-shrink-0" />
         </button>
 
-        {/* Categories entry point */}
+        {/* Tags entry point */}
         <button onClick={() => setView('categories')}
           className="w-full mp-card p-4 flex items-center gap-3 text-left hover:border-[#6B5CFF] transition-colors">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -125,8 +125,8 @@ export default function Settings() {
             <Tag size={18} className="text-[#7C6DFF]" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-[#E6E7EB]">Categories</p>
-            <p className="text-xs text-[#7B7F93]">Manage product categories</p>
+            <p className="text-sm font-bold text-[#E6E7EB]">Tags</p>
+            <p className="text-xs text-[#7B7F93]">Manage product tags</p>
           </div>
           <ChevronRight size={16} className="text-[#7B7F93] flex-shrink-0" />
         </button>

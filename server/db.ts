@@ -156,7 +156,9 @@ export async function upsertProduct(
       project_id: item.projectId,
       name: p.name,
       description: p.description ?? null,
-      category: p.category ?? null,
+      // Tags travel in the existing `category` text column as a JSON array
+      // (no schema change). Legacy plain-text categories are dropped.
+      category: Array.isArray(p.tags) ? JSON.stringify(p.tags) : null,
       status: p.status ?? "active",
       variants: p.variants ?? [],
       created_at: p.createdAt,

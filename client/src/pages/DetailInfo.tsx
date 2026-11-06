@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { AuditEntry } from '../lib/db';
+import { AuditEntry, productTags } from '../lib/db';
 import { cn } from '../lib/utils';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -299,10 +299,10 @@ export default function DetailInfo() {
 
   const activeProducts = useMemo(() => products.filter(p => p.status !== 'suspended'), [products]);
 
-  const categories = useMemo(() => {
-    const cats = new Set(activeProducts.map(p => p.category).filter(Boolean));
-    return Array.from(cats) as string[];
-  }, [activeProducts]);
+  // Tags used on this project's products (feeds the Tags filter)
+  const categories = useMemo(
+    () => Array.from(new Set(products.flatMap(p => productTags(p)))).sort((a, b) => a.localeCompare(b)),
+    [products]);
 
   useEffect(() => {
     async function load() {
@@ -315,14 +315,14 @@ export default function DetailInfo() {
 
   // variant → product lookup for filters
   const variantProductMap = useMemo(() => {
-    const map = new Map<string, { productId: string; category?: string }>();
-    for (const p of activeProducts) {
+    const map = new Map<string, { productId: string; tags: string[] }>();
+    for (const p of products) {
       for (const v of p.variants) {
-        map.set(v.id, { productId: p.id, category: p.category });
+        map.set(v.id, { productId: p.id, tags: productTags(p) });
       }
     }
     return map;
-  }, [activeProducts]);
+  }, [products]);
 
   // ── Filtered sale entries ──────────────────────────────────────────────
 
@@ -374,7 +374,7 @@ export default function DetailInfo() {
     if (filterCategory !== 'all') {
       entries = entries.filter(e => {
         const items = e.newValue as Array<{ variantId: string }> | undefined;
-        return items?.some(i => variantProductMap.get(i.variantId)?.category === filterCategory);
+        return items?.some(i => variantProductMap.get(i.variantId)?.tags.includes(filterCategory));
       });
     }
 

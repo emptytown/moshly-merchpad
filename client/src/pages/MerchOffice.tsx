@@ -11,7 +11,7 @@ import { Plus, Minus, Trash2, Edit2, ChevronDown, ChevronUp, Package, Calendar, 
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
-import { Product, Show, TeamMember, StockAdjustment, getDB } from '../lib/db';
+import { Product, Show, TeamMember, StockAdjustment, getDB, productTags } from '../lib/db';
 import { cn } from '../lib/utils';
 import { RightDrawer } from '../components/RightDrawer';
 import TeamSection from '../components/TeamSection';
@@ -659,7 +659,7 @@ export default function MerchOffice() {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-[#7B7F93]">{product.variants.length} variants · {product.category ?? 'Uncategorised'}</p>
+                      <p className="text-xs text-[#7B7F93]">{product.variants.length} variants{productTags(product).length > 0 ? ` · ${productTags(product).join(', ')}` : ''}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

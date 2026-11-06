@@ -10,127 +10,90 @@ import { Plus, Trash2, X, BookOpen, Info, ChevronDown, ChevronUp, AlertCircle } 
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
-import { Product, ProductVariant } from '../lib/db';
+import { Product, ProductVariant, productTags } from '../lib/db';
 import { cn } from '../lib/utils';
-import { loadCatalogue, CatalogueTemplate } from '../lib/catalogue';
+import { loadCatalogue, CatalogueTemplate, loadTags, addTag } from '../lib/catalogue';
 
 function formatCurrency(n: number, currency = 'EUR') {
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
   return `${symbol}${n.toFixed(2)}`;
 }
 
-// ── Category Picker ────────────────────────────────────────────────────────
+// ── Tag Picker (multi-select; tags exist only once the user creates them) ──
 
-interface CategoryPickerProps {
-  value: string;
-  onChange: (category: string) => void;
-  availableCategories: string[];
+interface TagPickerProps {
+  value: string[];
+  onChange: (tags: string[]) => void;
+  availableTags: string[];
 }
 
-function CategoryPicker({ value, onChange, availableCategories }: CategoryPickerProps) {
-  const [isAddingCustom, setIsAddingCustom] = useState(false);
-  const [customInput, setCustomInput] = useState('');
+function TagPicker({ value, onChange, availableTags }: TagPickerProps) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [input, setInput] = useState('');
+  const all = Array.from(new Set([...availableTags, ...value])).sort((a, b) => a.localeCompare(b));
 
-  function handlePillSelect(cat: string) {
-    onChange(cat === value ? '' : cat);
-    setIsAddingCustom(false);
+  function toggle(tag: string) {
+    onChange(value.includes(tag) ? value.filter(t => t !== tag) : [...value, tag]);
   }
 
-  function handleCustomConfirm() {
-    const trimmed = customInput.trim();
-    if (trimmed) onChange(trimmed);
-    setIsAddingCustom(false);
-    setCustomInput('');
+  function confirmNew() {
+    const stored = addTag(input);
+    if (stored && !value.includes(stored)) onChange([...value, stored]);
+    setIsAdding(false);
+    setInput('');
   }
 
   return (
     <div>
       <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-        Category
+        Tags
       </label>
-      <div className="flex flex-wrap gap-1.5">
-        {availableCategories.map(cat => (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => handlePillSelect(cat)}
-            className={cn(
-              'px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
-              value === cat
-                ? 'text-white'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            style={value === cat
-              ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)', border: '1px solid transparent' }
-              : { background: 'var(--muted)', border: '1px solid var(--border)' }
-            }
-          >
-            {cat}
-          </button>
-        ))}
+      <div className="flex flex-wrap gap-2">
+        {all.map(tag => {
+          const on = value.includes(tag);
+          return (
+            <button key={tag} type="button" onClick={() => toggle(tag)}
+              className={cn('px-3.5 py-2 rounded-full text-sm font-semibold transition-all',
+                on ? 'text-white' : 'text-muted-foreground hover:text-foreground')}
+              style={on
+                ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)', border: '1px solid transparent' }
+                : { background: 'var(--muted)', border: '1px solid var(--border)' }}>
+              {tag}
+            </button>
+          );
+        })}
 
-        {/* Custom category input */}
-        {isAddingCustom ? (
-          <div className="flex items-center gap-1">
+        {isAdding ? (
+          <div className="flex items-center gap-1.5">
             <input
               autoFocus
-              value={customInput}
-              onChange={e => setCustomInput(e.target.value)}
+              value={input}
+              onChange={e => setInput(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter') handleCustomConfirm();
-                if (e.key === 'Escape') { setIsAddingCustom(false); setCustomInput(''); }
+                if (e.key === 'Enter') { e.preventDefault(); confirmNew(); }
+                if (e.key === 'Escape') { setIsAdding(false); setInput(''); }
               }}
-              placeholder="New category…"
-              className="px-3 py-1.5 rounded-full text-xs text-foreground bg-background border border-primary focus:outline-none w-32"
+              placeholder="New tag…"
+              className="px-3.5 py-2 rounded-full text-sm text-foreground bg-background border border-primary focus:outline-none w-36"
             />
-            <button
-              type="button"
-              onClick={handleCustomConfirm}
-              className="px-2 py-1.5 rounded-full text-xs font-bold text-white"
-              style={{ background: 'var(--primary)' }}
-            >
+            <button type="button" onClick={confirmNew}
+              className="px-3 py-2 rounded-full text-sm font-bold text-white" style={{ background: 'var(--primary)' }}>
               Add
             </button>
-            <button
-              type="button"
-              onClick={() => { setIsAddingCustom(false); setCustomInput(''); }}
-              className="px-2 py-1.5 rounded-full text-xs text-muted-foreground hover:text-foreground"
-              style={{ border: '1px solid var(--border)' }}
-            >
-              <X size={11} />
+            <button type="button" onClick={() => { setIsAdding(false); setInput(''); }} aria-label="Cancel"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-muted-foreground"
+              style={{ border: '1px solid var(--border)' }}>
+              <X size={14} />
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => setIsAddingCustom(true)}
-            className="px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
-            style={{ border: '1px dashed rgba(107,92,255,0.4)', background: 'rgba(107,92,255,0.05)' }}
-          >
-            + New
+          <button type="button" onClick={() => setIsAdding(true)}
+            className="px-3.5 py-2 rounded-full text-sm font-semibold text-primary"
+            style={{ border: '1px dashed rgba(107,92,255,0.4)', background: 'rgba(107,92,255,0.05)' }}>
+            + New tag
           </button>
         )}
       </div>
-
-      {/* Show selected value if it's a custom one not in the pill list */}
-      {value && !availableCategories.includes(value) && (
-        <div className="flex items-center gap-1.5 mt-1.5">
-          <span className="text-xs text-muted-foreground">Custom:</span>
-          <span
-            className="px-2 py-0.5 rounded-full text-xs font-semibold text-white"
-            style={{ background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }}
-          >
-            {value}
-          </span>
-          <button
-            type="button"
-            onClick={() => onChange('')}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <X size={11} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -157,7 +120,7 @@ export default function ProductEditorPage() {
   const [name, setName] = useState(product?.name ?? '');
   const [subtitle, setSubtitle] = useState(product?.subtitle ?? '');
   const [description, setDescription] = useState(product?.description ?? '');
-  const [category, setCategory] = useState(product?.category ?? '');
+  const [tags, setTags] = useState<string[]>(product ? productTags(product) : []);
   const [variants, setVariants] = useState<ProductVariant[]>(product?.variants ?? []);
   const [quickPrice, setQuickPrice] = useState(
     product?.variants.length === 1 && !Object.keys(product.variants[0].attributes).length
@@ -185,12 +148,10 @@ export default function ProductEditorPage() {
   const catalogue = useMemo(() => loadCatalogue(), []);
   const catalogueNames = useMemo(() => catalogue.map(t => t.name), [catalogue]);
 
-  /** Categories from catalogue templates + already-used categories in this project */
-  const availableCategories = useMemo(() => {
-    const fromCatalogue = catalogue.map(t => t.category);
-    const fromProducts = products.map(p => p.category).filter((c): c is string => Boolean(c));
-    return Array.from(new Set([...fromCatalogue, ...fromProducts])).sort();
-  }, [catalogue, products]);
+  /** Tags created in this project + tags already used on its products */
+  const availableTags = useMemo(
+    () => Array.from(new Set([...loadTags(), ...products.flatMap(p => productTags(p))])),
+    [products]);
 
   const MIN_NAME_LENGTH_FOR_FUZZY_WARNING = 4;
 
@@ -213,7 +174,6 @@ export default function ProductEditorPage() {
 
   function applyTemplate(t: CatalogueTemplate) {
     setName(t.name);
-    setCategory(t.category);
     setNameWarning(null);
     if (t.variantAxes.length > 0) {
       const axis = t.variantAxes[0];
@@ -313,7 +273,8 @@ export default function ProductEditorPage() {
       name: name.trim(),
       description: description.trim() || undefined,
       subtitle: subtitle.trim() || undefined,
-      category: category.trim() || undefined,
+      tags,
+      category: undefined,
       variants: finalVariants.map(v => ({ ...v, productId: pid })),
       createdAt: product?.createdAt ?? now,
       updatedAt: now,
@@ -376,7 +337,7 @@ export default function ProductEditorPage() {
                   <div>
                     <p className="text-sm font-semibold text-[#E6E7EB]">{t.name}</p>
                     <p className="text-[10px] text-[#7B7F93]">
-                      {t.category} · {t.variantAxes.map(a => a.key).join(', ') || 'no axes'}
+                      {t.variantAxes.map(a => a.key).join(', ') || 'no axes'}
                     </p>
                   </div>
                   <span className="text-xs font-bold text-[#7B7F93]">
@@ -432,12 +393,8 @@ export default function ProductEditorPage() {
             />
           </div>
 
-          {/* Category — pill selector */}
-          <CategoryPicker
-            value={category}
-            onChange={setCategory}
-            availableCategories={availableCategories}
-          />
+          {/* Tags — multi-select pills */}
+          <TagPicker value={tags} onChange={setTags} availableTags={availableTags} />
 
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">

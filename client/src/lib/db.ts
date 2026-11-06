@@ -38,7 +38,10 @@ export interface Product {
   name: string;
   description?: string;
   subtitle?: string;  // optional display subtitle shown on TallyCard below the variant label
+  /** @deprecated legacy single category — ignored; use tags */
   category?: string;
+  /** User-created tags (none pre-created). */
+  tags?: string[];
   variants: ProductVariant[];
   createdAt: string;
   updatedAt: string;
@@ -268,6 +271,11 @@ export async function getDB(): Promise<IDBPDatabase<MerchPadDB>> {
 }
 
 // ── Device ID ──────────────────────────────────────────────────────────────
+
+/** A product's tags. Legacy `category` is intentionally ignored. */
+export function productTags(p: Pick<Product, 'tags'>): string[] {
+  return Array.isArray(p.tags) ? p.tags : [];
+}
 
 export function getDeviceId(): string {
   const key = 'mp_device_id';

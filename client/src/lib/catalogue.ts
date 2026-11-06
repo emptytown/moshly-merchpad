@@ -1,9 +1,9 @@
 /**
  * Master Catalogue — product templates
  * Stored in localStorage PER PROJECT (key suffixed with the active project id),
- * so one project's templates/categories never show up in another.
+ * so one project's templates/tags never show up in another.
  * The old global keys are legacy and intentionally not migrated.
- * Templates define reusable product names, categories, variant axes, and default prices.
+ * Templates define reusable product names, variant axes, and default prices.
  * Used by the Product Editor in Merch Office to pre-fill and constrain inputs.
  */
 
@@ -17,7 +17,8 @@ export interface VariantAxis {
 export interface CatalogueTemplate {
   id: string;
   name: string;           // e.g. "T-Shirt"
-  category: string;       // e.g. "Apparel"
+  /** @deprecated legacy — templates no longer carry a category */
+  category?: string;
   variantAxes: VariantAxis[];
   defaultPrice: number;
   notes?: string;
@@ -27,31 +28,36 @@ export interface CatalogueTemplate {
 
 const projectKey = (base: string) => `${base}:${getActiveProjectId() ?? 'default'}`;
 const storageKey = () => projectKey('moshly_master_catalogue');
-const categoriesKey = () => projectKey('moshly_catalogue_categories');
+const tagsKey = () => projectKey('moshly_tags');
 
-export function loadCustomCategories(): string[] {
+// ── Tags (per project, user-created only — nothing pre-created) ────────────
+
+export function loadTags(): string[] {
   try {
-    const raw = localStorage.getItem(categoriesKey());
-    return raw ? JSON.parse(raw) as string[] : [];
+    const raw = localStorage.getItem(tagsKey());
+    return raw ? (JSON.parse(raw) as string[]) : [];
   } catch {
     return [];
   }
 }
 
-export function saveCustomCategories(categories: string[]): void {
-  localStorage.setItem(categoriesKey(), JSON.stringify(categories));
+export function saveTags(tags: string[]): void {
+  localStorage.setItem(tagsKey(), JSON.stringify(tags));
 }
 
-export function addCustomCategory(category: string): void {
-  const cats = loadCustomCategories();
-  const trimmed = category.trim();
-  if (trimmed && !cats.includes(trimmed)) {
-    saveCustomCategories([...cats, trimmed].sort());
-  }
+/** Adds a tag (case-insensitive dedupe) and returns the stored spelling. */
+export function addTag(tag: string): string | null {
+  const t = tag.trim();
+  if (!t) return null;
+  const tags = loadTags();
+  const existing = tags.find(x => x.toLowerCase() === t.toLowerCase());
+  if (existing) return existing;
+  saveTags([...tags, t].sort((x, y) => x.localeCompare(y)));
+  return t;
 }
 
-export function deleteCustomCategory(category: string): void {
-  saveCustomCategories(loadCustomCategories().filter(c => c !== category));
+export function deleteTag(tag: string): void {
+  saveTags(loadTags().filter(t => t !== tag));
 }
 
 export function loadCatalogue(): CatalogueTemplate[] {
@@ -91,15 +97,6 @@ export function deleteTemplate(id: string): void {
   saveCatalogue(loadCatalogue().filter(t => t.id !== id));
 }
 
-const COMMON_CATEGORIES = ['Apparel', 'Accessories', 'Print', 'Music', 'Digital', 'Other'];
-
-/** All unique categories across the catalogue + custom + common */
-export function getAllCategories(templates: CatalogueTemplate[]): string[] {
-  const custom = loadCustomCategories();
-  const fromTemplates = templates.map(t => t.category).filter(Boolean);
-  return Array.from(new Set([...COMMON_CATEGORIES, ...fromTemplates, ...custom])).sort();
-}
-
 /** All unique axis keys across the catalogue */
 export function getCatalogueAxisKeys(templates: CatalogueTemplate[]): string[] {
   const keys = new Set<string>();
@@ -112,13 +109,12 @@ function defaultCatalogue(): CatalogueTemplate[] {
   const now = new Date().toISOString();
   const make = (
     name: string,
-    category: string,
+    _legacyCategory: string,
     axes: VariantAxis[],
     price: number
   ): CatalogueTemplate => ({
     id: crypto.randomUUID(),
     name,
-    category,
     variantAxes: axes,
     defaultPrice: price,
     createdAt: now,
