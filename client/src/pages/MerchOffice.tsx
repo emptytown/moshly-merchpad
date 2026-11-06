@@ -659,7 +659,7 @@ export default function MerchOffice() {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-[#7B7F93]">{product.variants.length} variants · {product.category ?? 'Uncategorised'}</p>
+                      <p className="text-xs text-[#7B7F93]">{product.variants.length} variants{product.tags?.length ? ` · ${product.tags.join(', ')}` : ''}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

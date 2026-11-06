@@ -3,84 +3,90 @@
  * Routes: /new-product  |  /edit-product?id=<productId>
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, X, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
-import { Product, ProductVariant } from '../lib/db';
+import { Product, ProductVariant, cleanTags, normalizeProduct, projectTags } from '../lib/db';
 import { cn } from '../lib/utils';
-import { getAllCategories } from '../lib/categories';
 
-// ── Category Picker ────────────────────────────────────────────────────────
+// ── Tag Picker ─────────────────────────────────────────────────────────────
 
-interface CategoryPickerProps {
-  value: string;
-  onChange: (category: string) => void;
-  availableCategories: string[];
+interface TagPickerProps {
+  value: string[];
+  onChange: (tags: string[]) => void;
+  /** Tags already used in this project */
+  projectTags: string[];
 }
 
-function CategoryPicker({ value, onChange, availableCategories }: CategoryPickerProps) {
-  const [isAddingCustom, setIsAddingCustom] = useState(false);
-  const [customInput, setCustomInput] = useState('');
+function TagPicker({ value, onChange, projectTags }: TagPickerProps) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [input, setInput] = useState('');
 
-  function handlePillSelect(cat: string) {
-    onChange(cat === value ? '' : cat);
-    setIsAddingCustom(false);
+  const selected = new Set(value.map(t => t.toLowerCase()));
+  // Project tags + new ones added on this product (not saved yet)
+  const shown = cleanTags([...projectTags, ...value]);
+
+  function toggle(tag: string) {
+    onChange(selected.has(tag.toLowerCase())
+      ? value.filter(t => t.toLowerCase() !== tag.toLowerCase())
+      : [...value, tag]);
   }
 
-  function handleCustomConfirm() {
-    const trimmed = customInput.trim();
-    if (trimmed) onChange(trimmed);
-    setIsAddingCustom(false);
-    setCustomInput('');
+  function confirmAdd() {
+    const t = input.trim();
+    if (t) {
+      const existing = shown.find(s => s.toLowerCase() === t.toLowerCase());
+      if (!existing) onChange([...value, t]);
+      else if (!selected.has(existing.toLowerCase())) onChange([...value, existing]);
+    }
+    setIsAdding(false);
+    setInput('');
   }
 
   return (
     <div>
       <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-        Category
+        Tags
       </label>
       <div className="flex flex-wrap gap-1.5">
-        {availableCategories.map(cat => (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => handlePillSelect(cat)}
-            className={cn(
-              'px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
-              value === cat
-                ? 'text-white'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            style={value === cat
-              ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)', border: '1px solid transparent' }
-              : { background: 'var(--muted)', border: '1px solid var(--border)' }
-            }
-          >
-            {cat}
-          </button>
-        ))}
+        {shown.map(tag => {
+          const on = selected.has(tag.toLowerCase());
+          return (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => toggle(tag)}
+              className={cn('px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
+                on ? 'text-white' : 'text-muted-foreground hover:text-foreground')}
+              style={on
+                ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)', border: '1px solid transparent' }
+                : { background: 'var(--muted)', border: '1px solid var(--border)' }}
+            >
+              {tag}
+            </button>
+          );
+        })}
 
-        {/* Custom category input */}
-        {isAddingCustom ? (
+        {isAdding ? (
           <div className="flex items-center gap-1">
             <input
               autoFocus
-              value={customInput}
-              onChange={e => setCustomInput(e.target.value)}
+              value={input}
+              onChange={e => setInput(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter') handleCustomConfirm();
-                if (e.key === 'Escape') { setIsAddingCustom(false); setCustomInput(''); }
+                if (e.key === 'Enter') confirmAdd();
+                if (e.key === 'Escape') { setIsAdding(false); setInput(''); }
               }}
-              placeholder="New category…"
+              placeholder="New tag…"
               className="px-3 py-1.5 rounded-full text-xs text-foreground bg-background border border-primary focus:outline-none w-32"
             />
             <button
               type="button"
-              onClick={handleCustomConfirm}
+              onClick={confirmAdd}
               className="px-2 py-1.5 rounded-full text-xs font-bold text-white"
               style={{ background: 'var(--primary)' }}
             >
@@ -88,9 +94,10 @@ function CategoryPicker({ value, onChange, availableCategories }: CategoryPicker
             </button>
             <button
               type="button"
-              onClick={() => { setIsAddingCustom(false); setCustomInput(''); }}
+              onClick={() => { setIsAdding(false); setInput(''); }}
               className="px-2 py-1.5 rounded-full text-xs text-muted-foreground hover:text-foreground"
               style={{ border: '1px solid var(--border)' }}
+              aria-label="Cancel"
             >
               <X size={11} />
             </button>
@@ -98,34 +105,14 @@ function CategoryPicker({ value, onChange, availableCategories }: CategoryPicker
         ) : (
           <button
             type="button"
-            onClick={() => setIsAddingCustom(true)}
+            onClick={() => setIsAdding(true)}
             className="px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
             style={{ border: '1px dashed rgba(107,92,255,0.4)', background: 'rgba(107,92,255,0.05)' }}
           >
-            + New
+            + Add Tag
           </button>
         )}
       </div>
-
-      {/* Show selected value if it's a custom one not in the pill list */}
-      {value && !availableCategories.includes(value) && (
-        <div className="flex items-center gap-1.5 mt-1.5">
-          <span className="text-xs text-muted-foreground">Custom:</span>
-          <span
-            className="px-2 py-0.5 rounded-full text-xs font-semibold text-white"
-            style={{ background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }}
-          >
-            {value}
-          </span>
-          <button
-            type="button"
-            onClick={() => onChange('')}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <X size={11} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -152,7 +139,7 @@ export default function ProductEditorPage() {
   const [name, setName] = useState(product?.name ?? '');
   const [subtitle, setSubtitle] = useState(product?.subtitle ?? '');
   const [description, setDescription] = useState(product?.description ?? '');
-  const [category, setCategory] = useState(product?.category ?? '');
+  const [tags, setTags] = useState<string[]>(product ? (normalizeProduct(product).tags ?? []) : []);
   const [variants, setVariants] = useState<ProductVariant[]>(product?.variants ?? []);
   const [quickPrice, setQuickPrice] = useState(
     product?.variants.length === 1 && !Object.keys(product.variants[0].attributes).length
@@ -164,6 +151,18 @@ export default function ProductEditorPage() {
       ? String(product.variants[0].currentStock)
       : ''
   );
+
+  // Opened by URL / after reload: products load after first render — fill the form once they arrive
+  const filledFor = useRef<string | null>(product?.id ?? null);
+  useEffect(() => {
+    if (!product || filledFor.current === product.id) return;
+    filledFor.current = product.id;
+    setName(product.name);
+    setSubtitle(product.subtitle ?? '');
+    setDescription(product.description ?? '');
+    setTags(normalizeProduct(product).tags ?? []);
+    setVariants(product.variants);
+  }, [product]);
   const [bulkBase, setBulkBase] = useState('');
   const [bulkAttr, setBulkAttr] = useState('');
   const [bulkValues, setBulkValues] = useState('');
@@ -175,11 +174,7 @@ export default function ProductEditorPage() {
     return localStorage.getItem('mp_hide_bulk_note') !== 'true';
   });
 
-  /** Common + custom categories + already-used categories in this project */
-  const availableCategories = useMemo(() => {
-    const fromProducts = products.map(p => p.category).filter((c): c is string => Boolean(c));
-    return Array.from(new Set([...getAllCategories(), ...fromProducts])).sort();
-  }, [products]);
+  const availableTags = useMemo(() => projectTags(products), [products]);
 
   function addVariant() {
     const v: ProductVariant = {
@@ -269,7 +264,7 @@ export default function ProductEditorPage() {
       name: name.trim(),
       description: description.trim() || undefined,
       subtitle: subtitle.trim() || undefined,
-      category: category.trim() || undefined,
+      tags: cleanTags(tags),
       variants: finalVariants.map(v => ({ ...v, productId: pid })),
       createdAt: product?.createdAt ?? now,
       updatedAt: now,
@@ -332,12 +327,8 @@ export default function ProductEditorPage() {
             />
           </div>
 
-          {/* Category — pill selector */}
-          <CategoryPicker
-            value={category}
-            onChange={setCategory}
-            availableCategories={availableCategories}
-          />
+          {/* Tags — multi-select, only tags created in this project */}
+          <TagPicker value={tags} onChange={setTags} projectTags={availableTags} />
 
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">

@@ -6,19 +6,18 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight, Package, Palette, Sun, Moon, DollarSign, Tag, TrendingUp, AlertTriangle, X } from 'lucide-react';
+import { Smartphone, User, RotateCcw, BarChart3, Info, Layers, ChevronRight, Package, Palette, Sun, Moon, DollarSign, TrendingUp, AlertTriangle, X } from 'lucide-react';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { setSetting, resetProjectSalesData } from '../lib/db';
 import { Switch } from '../components/ui/switch';
 import { Slider } from '../components/ui/slider';
 import ProjectsSettings from './ProjectsSettings';
-import CategoryManager from './CategoryManager';
 import DangerZone from '../components/DangerZone';
 import TeamEditor from '../components/TeamEditor';
 import { useTheme, type Skin, type Mode } from '../contexts/ThemeContext';
 
-type SettingsView = 'main' | 'projects' | 'categories';
+type SettingsView = 'main' | 'projects';
 
 export default function Settings() {
   const { skin, mode, setSkin, setMode } = useTheme();
@@ -78,10 +77,6 @@ export default function Settings() {
     );
   }
 
-  if (view === 'categories') {
-    return <CategoryManager onBack={() => setView('main')} />;
-  }
-
   return (
     <div className="mp-settings min-h-full animate-fade-in">
       {/* Header */}
@@ -108,20 +103,6 @@ export default function Settings() {
                 ? <><span style={{ color: activeProject.color }}>{activeProject.name}</span> · {localProjects.length}/3 slots used</>
                 : 'No project selected'}
             </p>
-          </div>
-          <ChevronRight size={16} className="text-[#7B7F93] flex-shrink-0" />
-        </button>
-
-        {/* Categories entry point */}
-        <button onClick={() => setView('categories')}
-          className="w-full mp-card p-4 flex items-center gap-3 text-left hover:border-[#6B5CFF] transition-colors">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'rgba(124,109,255,0.1)' }}>
-            <Tag size={18} className="text-[#7C6DFF]" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-[#E6E7EB]">Categories</p>
-            <p className="text-xs text-[#7B7F93]">Manage product categories</p>
           </div>
           <ChevronRight size={16} className="text-[#7B7F93] flex-shrink-0" />
         </button>

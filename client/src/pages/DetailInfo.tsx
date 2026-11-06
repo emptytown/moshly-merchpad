@@ -2,7 +2,7 @@
  * Detail Info — analytics dashboard
  * Design: "Neon Ledger" — KPI cards, Recharts charts, filters, audit trail
  * Tabs: Analytics | Stock | Audit Trail
- * Filters: time range (today / session / all), category, product
+ * Filters: time range (session / all / range), tag, product
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { AuditEntry } from '../lib/db';
+import { AuditEntry, projectTags } from '../lib/db';
 import { cn } from '../lib/utils';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -300,8 +300,7 @@ export default function DetailInfo() {
   const activeProducts = useMemo(() => products.filter(p => p.status !== 'suspended'), [products]);
 
   const categories = useMemo(() => {
-    const cats = new Set(activeProducts.map(p => p.category).filter(Boolean));
-    return Array.from(cats) as string[];
+    return projectTags(activeProducts);
   }, [activeProducts]);
 
   useEffect(() => {
@@ -315,10 +314,10 @@ export default function DetailInfo() {
 
   // variant → product lookup for filters
   const variantProductMap = useMemo(() => {
-    const map = new Map<string, { productId: string; category?: string }>();
+    const map = new Map<string, { productId: string; tags: string[] }>();
     for (const p of activeProducts) {
       for (const v of p.variants) {
-        map.set(v.id, { productId: p.id, category: p.category });
+        map.set(v.id, { productId: p.id, tags: p.tags ?? [] });
       }
     }
     return map;
@@ -370,11 +369,11 @@ export default function DetailInfo() {
       });
     }
 
-    // Category filter
+    // Tag filter
     if (filterCategory !== 'all') {
       entries = entries.filter(e => {
         const items = e.newValue as Array<{ variantId: string }> | undefined;
-        return items?.some(i => variantProductMap.get(i.variantId)?.category === filterCategory);
+        return items?.some(i => variantProductMap.get(i.variantId)?.tags.includes(filterCategory));
       });
     }
 
@@ -515,7 +514,7 @@ export default function DetailInfo() {
 
           <div className="w-px h-4 bg-[#2D3048] flex-shrink-0" />
 
-          {/* Category filter */}
+          {/* Tag filter */}
           {categories.length > 0 && (
             <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
               className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-[var(--pill-text)] bg-[var(--pill-bg)] border border-[var(--pill-border)] focus:outline-none appearance-none cursor-pointer">

@@ -100,13 +100,25 @@ export async function restoreProjectFromServer(projectId: string): Promise<boole
 // Mappers — snake_case DB → camelCase client interfaces
 // ---------------------------------------------------------------------------
 
+/** `category` column holds a JSON array of tags, or a legacy single category */
+function decodeTags(raw?: string | null): string[] {
+  if (!raw) return [];
+  if (raw.startsWith('[')) {
+    try {
+      const v = JSON.parse(raw);
+      if (Array.isArray(v)) return v.filter((t): t is string => typeof t === 'string');
+    } catch { /* fall through */ }
+  }
+  return [raw];
+}
+
 function mapProduct(r: DbProduct): Product {
   return {
     id: r.id,
     projectId: r.project_id,
     name: r.name,
     description: r.description,
-    category: r.category,
+    tags: decodeTags(r.category),
     status: (r.status ?? 'active') as Product['status'],
     variants: r.variants,
     createdAt: r.created_at,
