@@ -76,12 +76,13 @@ interface TallyCardProps {
   symbol: string;
 }
 
-/** Returns the font-size class for the identity label based on character length */
+/** Returns the font-size class for the identity label based on character length.
+ *  Sizes are 80% of the original 36/30/24/20px scale, so longer names stay readable. */
 function identityLabelFontClass(label: string): string {
-  if (label.length <= 2) return 'text-4xl';
-  if (label.length <= 4) return 'text-3xl';
-  if (label.length <= 8) return 'text-2xl';
-  return 'text-xl';
+  if (label.length <= 2) return 'text-[29px]';
+  if (label.length <= 4) return 'text-2xl';
+  if (label.length <= 8) return 'text-[19px]';
+  return 'text-base';
 }
 
 /** The distinguishing label shown large on the card.
@@ -1488,7 +1489,7 @@ export default function TallyCounter() {
             <div key={product.id}>
               {/* Product group header */}
               <div className="flex items-center gap-2 mb-2.5 px-0.5">
-                <p className="text-[11px] font-bold text-foreground uppercase tracking-widest leading-none truncate flex-1">
+                <p className="text-[22px] font-bold text-foreground uppercase tracking-widest leading-none truncate flex-1">
                   {product.name}
                 </p>
                 {(product.tags?.length ?? 0) > 0 && (
