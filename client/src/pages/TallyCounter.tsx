@@ -567,7 +567,7 @@ function ShortfallModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
       style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
-      <div className="mp-register-modal w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-hidden"
+      <div className="mp-register-modal w-full sm:max-w-sm max-h-[100dvh] rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-y-auto overscroll-contain"
         style={{ background: '#141624', border: '1px solid rgba(248,113,113,0.3)' }}>
 
         {/* Header */}
@@ -774,7 +774,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
-      <div className="mp-register-modal w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-hidden"
+      <div className="mp-register-modal w-full sm:max-w-sm max-h-[100dvh] rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-y-auto overscroll-contain"
         style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}>
 
         {/* Header */}
