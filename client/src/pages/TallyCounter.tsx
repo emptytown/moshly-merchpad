@@ -1071,14 +1071,21 @@ export default function TallyCounter() {
   }, [confirmSale, tally.items]);
 
   // Register confirm (with cash amount)
+  const requireMoneyInput = settings.requireMoneyInput ?? false;
   const handleRegisterConfirm = useCallback(async (moneyIn: number) => {
+    // No cash entered and cash entry is optional → record as paid in full.
+    // Only an amount actually typed in and below the total counts as a shortfall.
+    if (moneyIn === 0 && !requireMoneyInput) {
+      await finishSale(0);
+      return;
+    }
     if (moneyIn < totalRevenue) {
       setPendingMoneyIn(moneyIn);
       setShowShortfallModal(true);
       return;
     }
     await finishSale(moneyIn);
-  }, [finishSale, totalRevenue]);
+  }, [finishSale, totalRevenue, requireMoneyInput]);
 
   const handleShortfallDiscount = useCallback(async (reason?: string) => {
     const shortfall = totalRevenue - pendingMoneyIn;
@@ -1525,7 +1532,7 @@ export default function TallyCounter() {
           items={basketItems}
           totalRevenue={totalRevenue}
           symbol={symbol}
-          requireMoneyInput={settings.requireMoneyInput ?? false}
+          requireMoneyInput={requireMoneyInput}
           onConfirm={handleRegisterConfirm}
           onCancel={() => setShowRegisterModal(false)}
           onAdjust={handleAdjust}
