@@ -1087,7 +1087,7 @@ export default function TallyCounter() {
       );
       setTimeout(() => setJustConfirmed(false), 2000);
     }
-  }, [confirmSale, tally.items]);
+  }, [confirmSale, tally.items, dispatch, symbol]);
 
   // Register confirm (with cash amount)
   const requireMoneyInput = settings.requireMoneyInput ?? false;
@@ -1116,7 +1116,7 @@ export default function TallyCounter() {
     await finishSale(pendingMoneyIn, { shortfallType: 'seller_debt', shortfallAmount: shortfall, shortfallReason: reason, shortfallMemberId: memberId });
     await recordSellerDebt(memberId, shortfall);
     toast(`${memberName} owes ${symbol}${shortfall.toFixed(2)}`, { duration: 3000 });
-  }, [finishSale, recordSellerDebt, totalRevenue, pendingMoneyIn]);
+  }, [finishSale, recordSellerDebt, totalRevenue, pendingMoneyIn, symbol]);
 
   // Instant sell (Tally mode — single variant, qty=1, immediate confirm)
   const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number) => {
