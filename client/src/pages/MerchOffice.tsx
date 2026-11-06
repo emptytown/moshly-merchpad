@@ -505,32 +505,6 @@ export default function MerchOffice() {
     }
   }, [shows, selectedShowId]);
 
-  // Stats
-  const totalStockValue = products.reduce((s, p) => s + p.variants.reduce((vs, v) => vs + ((v.warehouseStock ?? 0) + (v.roadStock ?? v.currentStock)) * v.price, 0), 0);
-
-  const [allTimeSales, setAllTimeSales] = useState<number | null>(null);
-  const [lastGigRevenue, setLastGigRevenue] = useState<number | null>(null);
-
-  useEffect(() => {
-    async function loadSalesStats() {
-      const db = await getDB();
-      const batches = await db.getAllFromIndex('tallyBatches', 'by-project', projectId);
-      const active = batches.filter(b => b.status !== 'voided');
-      setAllTimeSales(active.reduce((s, b) => s + b.totalPrice, 0));
-
-      const completedShows = shows
-        .filter(s => s.status === 'completed' || s.status === 'archived')
-        .sort((a, b) => b.date.localeCompare(a.date));
-      if (completedShows.length > 0) {
-        const lastShow = completedShows[0];
-        const showBatches = active.filter(b => b.showId === lastShow.id);
-        setLastGigRevenue(showBatches.reduce((s, b) => s + b.totalPrice, 0));
-      } else {
-        setLastGigRevenue(0);
-      }
-    }
-    loadSalesStats();
-  }, [shows, projectId]);
 
   if (isLoading) {
     return (
@@ -573,21 +547,6 @@ export default function MerchOffice() {
       </div>
 
       <div className="px-4 space-y-[34px] -mt-2">
-        {/* Quick stats */}
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: 'All-time Sales', value: allTimeSales !== null ? formatCurrency(allTimeSales, currency) : '—', sub: 'total revenue' },
-            { label: 'Last Gig', value: lastGigRevenue !== null ? formatCurrency(lastGigRevenue, currency) : '—', sub: shows.some(s => s.status === 'completed' || s.status === 'archived') ? 'prev show' : 'no shows yet' },
-            { label: 'In Stock', value: formatCurrency(totalStockValue, currency), sub: 'at retail' },
-          ].map(({ label, value, sub }) => (
-            <div key={label} className="mp-card p-3 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 leading-tight">{label}</p>
-              <p className="text-lg font-black text-foreground leading-none mp-mono">{value}</p>
-              <p className="text-[10px] text-muted-foreground mt-1">{sub}</p>
-            </div>
-          ))}
-        </div>
-
         {/* Show selector */}
         <div>
           <button onClick={() => setSecShow(v => !v)} className="flex items-center justify-between w-full mb-1 group">
