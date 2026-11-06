@@ -25,6 +25,8 @@ export interface ProductVariant {
   sku?: string;
   attributes: Record<string, string>;
   price: number;
+  /** Unit cost (what one unit cost you) — optional, used for Cost / Profit stats */
+  unitCost?: number;
   initialStock: number;   // set at "Start Sale" snapshot
   currentStock: number;   // alias for roadStock — decremented as sales happen
   warehouseStock: number; // master inventory (transfer → road to use)
@@ -102,7 +104,7 @@ export interface TallyBatch {
   showId: string;
   deviceId: string;
   repName: string;
-  items: Array<{ variantId: string; variantName: string; qty: number; unitPrice: number }>;
+  items: Array<{ variantId: string; variantName: string; qty: number; unitPrice: number; unitCost?: number }>;
   totalItems: number;
   totalPrice: number;
   confirmedAt: string;

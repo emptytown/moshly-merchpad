@@ -382,15 +382,31 @@ export default function DetailInfo() {
 
   // ── KPI metrics ────────────────────────────────────────────────────────
 
-  const { totalRevenue, totalUnitsSold, totalBatches, avgBatchValue } = useMemo(() => {
-    let rev = 0, units = 0, batches = filteredSaleEntries.length;
+  // Current unit cost per variant — fallback for sales recorded before costs were snapshotted
+  const currentCost = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of products) for (const v of p.variants) if (v.unitCost !== undefined) m.set(v.id, v.unitCost);
+    return m;
+  }, [products]);
+
+  const { totalRevenue, totalUnitsSold, totalBatches, avgBatchValue, totalCost, unitsWithoutCost } = useMemo(() => {
+    let rev = 0, units = 0, cost = 0, noCost = 0;
+    const batches = filteredSaleEntries.length;
     for (const e of filteredSaleEntries) {
-      const items = e.newValue as Array<{ qty: number; unitPrice: number }> | undefined;
+      const items = e.newValue as Array<{ variantId: string; qty: number; unitPrice: number; unitCost?: number }> | undefined;
       if (!items) continue;
-      for (const i of items) { rev += i.qty * i.unitPrice; units += i.qty; }
+      for (const i of items) {
+        rev += i.qty * i.unitPrice; units += i.qty;
+        const c = i.unitCost ?? currentCost.get(i.variantId);
+        if (c === undefined) noCost += i.qty; else cost += i.qty * c;
+      }
     }
-    return { totalRevenue: rev, totalUnitsSold: units, totalBatches: batches, avgBatchValue: batches > 0 ? rev / batches : 0 };
-  }, [filteredSaleEntries]);
+    return {
+      totalRevenue: rev, totalUnitsSold: units, totalBatches: batches,
+      avgBatchValue: batches > 0 ? rev / batches : 0, totalCost: cost, unitsWithoutCost: noCost,
+    };
+  }, [filteredSaleEntries, currentCost]);
+  const totalProfit = totalRevenue - totalCost;
 
   // ── Sales over time (15-min buckets) ──────────────────────────────────
 
@@ -556,16 +572,19 @@ export default function DetailInfo() {
           { label: 'Avg Batch', value: formatCurrency(avgBatchValue), sub: `${totalBatches} batches`, color: '#7C6DFF', trend: null },
           { label: 'Units Sold', value: totalUnitsSold.toString(), sub: 'items sold', color: '#00E5FF', trend: null },
           { label: 'Stock Alerts', value: lowStockVariants.length.toString(), sub: 'variants low/empty', color: lowStockVariants.length > 0 ? '#F87171' : '#4ADE80', trend: null },
-          // Placeholders — need product unit cost, not tracked yet
-          { label: 'Total Cost', value: '—', sub: 'coming soon', color: '#F59E0B', trend: null, placeholder: true },
-          { label: 'Total Profit', value: '—', sub: 'coming soon', color: '#C026D3', trend: null, placeholder: true },
-        ].map(({ label, value, sub, color, placeholder }) => (
-          <div key={label} className={cn('mp-card p-3.5 relative overflow-hidden', placeholder && 'opacity-50 border-dashed')}>
+          { label: 'Total Cost', value: formatCurrency(totalCost),
+            sub: unitsWithoutCost > 0 ? `${unitsWithoutCost} unit${unitsWithoutCost !== 1 ? 's' : ''} without cost` : 'unit cost × sold',
+            subWarn: unitsWithoutCost > 0, color: '#F59E0B', trend: null },
+          { label: 'Total Profit', value: formatCurrency(totalProfit),
+            sub: totalRevenue > 0 ? `${Math.round((totalProfit / totalRevenue) * 100)}% margin` : 'revenue − cost',
+            color: totalProfit < 0 ? '#F87171' : '#C026D3', trend: null },
+        ].map(({ label, value, sub, color, subWarn }: { label: string; value: string; sub: string; color: string; subWarn?: boolean }) => (
+          <div key={label} className="mp-card p-3.5 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 -translate-y-4 translate-x-4"
               style={{ background: color }} />
             <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1">{label}</p>
             <p className="text-2xl font-black leading-none mb-1" style={{ color, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
-            <p className="text-xs text-[#7B7F93]">{sub}</p>
+            <p className={cn('text-xs', subWarn ? 'text-[#F59E0B]' : 'text-[#7B7F93]')}>{sub}</p>
           </div>
         ))}
       </div>

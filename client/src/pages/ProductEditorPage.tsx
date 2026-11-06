@@ -6,7 +6,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, X, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, X, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
@@ -49,9 +49,6 @@ function TagPicker({ value, onChange, projectTags }: TagPickerProps) {
 
   return (
     <div>
-      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-        Tags
-      </label>
       <div className="flex flex-wrap gap-1.5">
         {shown.map(tag => {
           const on = selected.has(tag.toLowerCase());
@@ -60,7 +57,7 @@ function TagPicker({ value, onChange, projectTags }: TagPickerProps) {
               key={tag}
               type="button"
               onClick={() => toggle(tag)}
-              className={cn('px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
+              className={cn('h-9 px-3.5 rounded-full text-sm font-semibold transition-all',
                 on ? 'text-white' : 'text-muted-foreground hover:text-foreground')}
               style={on
                 ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)', border: '1px solid transparent' }
@@ -82,12 +79,12 @@ function TagPicker({ value, onChange, projectTags }: TagPickerProps) {
                 if (e.key === 'Escape') { setIsAdding(false); setInput(''); }
               }}
               placeholder="New tag…"
-              className="px-3 py-1.5 rounded-full text-xs text-foreground bg-background border border-primary focus:outline-none w-32"
+              className="h-9 px-3 rounded-full text-sm text-foreground bg-background border border-primary focus:outline-none w-36"
             />
             <button
               type="button"
               onClick={confirmAdd}
-              className="px-2 py-1.5 rounded-full text-xs font-bold text-white"
+              className="h-9 px-3 rounded-full text-sm font-bold text-white"
               style={{ background: 'var(--primary)' }}
             >
               Add
@@ -95,7 +92,7 @@ function TagPicker({ value, onChange, projectTags }: TagPickerProps) {
             <button
               type="button"
               onClick={() => { setIsAdding(false); setInput(''); }}
-              className="px-2 py-1.5 rounded-full text-xs text-muted-foreground hover:text-foreground"
+              className="h-9 px-2.5 rounded-full text-sm text-muted-foreground hover:text-foreground"
               style={{ border: '1px solid var(--border)' }}
               aria-label="Cancel"
             >
@@ -106,7 +103,7 @@ function TagPicker({ value, onChange, projectTags }: TagPickerProps) {
           <button
             type="button"
             onClick={() => setIsAdding(true)}
-            className="px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+            className="h-9 px-3.5 rounded-full text-sm font-semibold text-primary hover:text-primary/80 transition-colors"
             style={{ border: '1px dashed rgba(107,92,255,0.4)', background: 'rgba(107,92,255,0.05)' }}
           >
             + Add Tag
@@ -117,16 +114,84 @@ function TagPicker({ value, onChange, projectTags }: TagPickerProps) {
   );
 }
 
+// ── Layout helpers ─────────────────────────────────────────────────────────
+
+const inputCls = 'w-full h-11 px-3 rounded-xl text-[15px] text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors';
+
+function Section({ title, right, children }: { title: string; right?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl p-3.5" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{title}</h2>
+        {right}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <label className="block text-xs text-muted-foreground mb-1.5">{children}</label>;
+}
+
+/** Money / number box with optional currency prefix */
+function NumBox({ label, value, onChange, prefix, placeholder = '0', decimal = true }: {
+  label: string; value: string; onChange: (v: string) => void; prefix?: string; placeholder?: string; decimal?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
+      <div className="relative">
+        {prefix && (
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">{prefix}</span>
+        )}
+        <input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onFocus={e => e.target.select()}
+          type="number"
+          inputMode={decimal ? 'decimal' : 'numeric'}
+          min="0"
+          step={decimal ? '0.01' : '1'}
+          placeholder={placeholder}
+          className={cn(inputCls, 'text-right', prefix && 'pl-7')}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Margin({ price, cost, symbol }: { price: number; cost?: number; symbol: string }) {
+  if (cost === undefined || !(price > 0)) return null;
+  const m = price - cost;
+  const pct = Math.round((m / price) * 100);
+  return (
+    <p className={cn('text-xs mt-1.5', m >= 0 ? 'text-[#4ADE80]' : 'text-[#F87171]')}>
+      Margin {m < 0 ? '−' : ''}{symbol}{Math.abs(m).toFixed(2)} ({pct}%)
+    </p>
+  );
+}
+
+const numStr = (n: number | undefined) => (n === undefined || n === null ? '' : String(n));
+const parseMoney = (s: string) => { const n = parseFloat(s); return isNaN(n) || n < 0 ? 0 : n; };
+const parseCost = (s: string) => { if (s.trim() === '') return undefined; const n = parseFloat(s); return isNaN(n) || n < 0 ? undefined : n; };
+const parseQty = (s: string) => { const n = parseInt(s); return isNaN(n) || n < 0 ? 0 : n; };
+
+/** A variant is "simple" when it is the product's only variant and has no attributes */
+function isSimpleProduct(vs: ProductVariant[]) {
+  return vs.length <= 1 && (vs.length === 0 || Object.keys(vs[0].attributes).length === 0);
+}
+
 export default function ProductEditorPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const productId = new URLSearchParams(search).get('id');
-
   const { state, saveProduct } = useMerchPad();
   const { activeProject } = useProjects();
   const { settings, products } = state;
   const currency = settings.currency ?? 'EUR';
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
+  const isWarehouse = settings.defaultStockLocation === 'warehouse';
 
   const product = productId ? products.find(p => p.id === productId) : undefined;
 
@@ -139,18 +204,10 @@ export default function ProductEditorPage() {
   const [name, setName] = useState(product?.name ?? '');
   const [subtitle, setSubtitle] = useState(product?.subtitle ?? '');
   const [description, setDescription] = useState(product?.description ?? '');
+  const [showDescription, setShowDescription] = useState(Boolean(product?.description));
   const [tags, setTags] = useState<string[]>(product ? (normalizeProduct(product).tags ?? []) : []);
   const [variants, setVariants] = useState<ProductVariant[]>(product?.variants ?? []);
-  const [quickPrice, setQuickPrice] = useState(
-    product?.variants.length === 1 && !Object.keys(product.variants[0].attributes).length
-      ? String(product.variants[0].price)
-      : ''
-  );
-  const [quickStock, setQuickStock] = useState(
-    product?.variants.length === 1 && !Object.keys(product.variants[0].attributes).length
-      ? String(product.variants[0].currentStock)
-      : ''
-  );
+  const [hasVariants, setHasVariants] = useState(product ? !isSimpleProduct(product.variants) : false);
 
   // Opened by URL / after reload: products load after first render — fill the form once they arrive
   const filledFor = useRef<string | null>(product?.id ?? null);
@@ -160,67 +217,105 @@ export default function ProductEditorPage() {
     setName(product.name);
     setSubtitle(product.subtitle ?? '');
     setDescription(product.description ?? '');
+    setShowDescription(Boolean(product.description));
     setTags(normalizeProduct(product).tags ?? []);
     setVariants(product.variants);
+    setHasVariants(!isSimpleProduct(product.variants));
   }, [product]);
-  const [bulkBase, setBulkBase] = useState('');
+
+  // Bulk generator ("Generate several")
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [bulkAttr, setBulkAttr] = useState('');
   const [bulkValues, setBulkValues] = useState('');
   const [bulkPrice, setBulkPrice] = useState('');
+  const [bulkCost, setBulkCost] = useState('');
   const [bulkStock, setBulkStock] = useState('');
   const [showSuspensionConfirm, setShowSuspensionConfirm] = useState(false);
-  const [isBulkOpen, setIsBulkOpen] = useState(false);
-  const [showBulkNote, setShowBulkNote] = useState(() => {
-    return localStorage.getItem('mp_hide_bulk_note') !== 'true';
-  });
 
   const availableTags = useMemo(() => projectTags(products), [products]);
 
-  function addVariant() {
-    const v: ProductVariant = {
-      id: uuidv4(),
-      productId: product?.id ?? '',
-      name: `${name || 'Product'} Variant`,
-      attributes: {},
-      price: 0,
-      initialStock: 0,
-      currentStock: 0,
-      warehouseStock: 0,
-      roadStock: 0,
+  // Raw text of number fields while typing (so "2." or "" are not lost)
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const fieldKey = (id: string, f: string) => `${id}:${f}`;
+  function fieldValue(v: ProductVariant, f: 'price' | 'unitCost' | 'stock') {
+    const k = fieldKey(v.id, f);
+    if (k in draft) return draft[k];
+    if (f === 'price') return v.price ? String(v.price) : '';
+    if (f === 'unitCost') return numStr(v.unitCost);
+    return v.currentStock || v.warehouseStock ? String(isWarehouse ? v.warehouseStock : v.currentStock) : '';
+  }
+
+  function newVariant(partial: Partial<ProductVariant> = {}): ProductVariant {
+    return {
+      id: uuidv4(), productId: product?.id ?? '', name: '', attributes: {}, price: 0,
+      initialStock: 0, currentStock: 0, warehouseStock: 0, roadStock: 0, ...partial,
     };
-    setVariants(prev => [...prev, v]);
+  }
+
+  function stockFields(n: number) {
+    return {
+      initialStock: n,
+      currentStock: isWarehouse ? 0 : n,
+      warehouseStock: isWarehouse ? n : 0,
+      roadStock: isWarehouse ? 0 : n,
+    };
+  }
+
+  function setField(id: string, f: 'price' | 'unitCost' | 'stock', raw: string) {
+    setDraft(d => ({ ...d, [fieldKey(id, f)]: raw }));
+    setVariants(prev => prev.map(v => {
+      if (v.id !== id) return v;
+      if (f === 'price') return { ...v, price: parseMoney(raw) };
+      if (f === 'unitCost') return { ...v, unitCost: parseCost(raw) };
+      return { ...v, ...stockFields(parseQty(raw)) };
+    }));
+  }
+
+  // Simple product: edit its single variant in place (keeps its id, so sales history stays linked)
+  const simple = variants[0];
+  function setSimpleField(f: 'price' | 'unitCost' | 'stock', raw: string) {
+    if (simple) { setField(simple.id, f, raw); return; }
+    const v = newVariant();
+    setDraft(d => ({ ...d, [fieldKey(v.id, f)]: raw }));
+    setVariants([f === 'price' ? { ...v, price: parseMoney(raw) }
+      : f === 'unitCost' ? { ...v, unitCost: parseCost(raw) }
+      : { ...v, ...stockFields(parseQty(raw)) }]);
+  }
+
+  function toggleVariants(on: boolean) {
+    if (!on && variants.length > 1) {
+      toast.error('Remove the extra variants first');
+      return;
+    }
+    if (on && variants.length === 1 && !variants[0].name) {
+      setVariants([{ ...variants[0], name: name.trim() }]);
+    }
+    if (!on && variants.length === 1) {
+      setVariants([{ ...variants[0], attributes: {} }]);
+    }
+    setHasVariants(on);
+  }
+
+  function addVariant() {
+    setVariants(prev => [...prev, newVariant({ name: name.trim() ? `${name.trim()} ` : '' })]);
   }
 
   function bulkGenerate() {
-    if (!bulkBase || !bulkAttr || !bulkValues) {
-      toast.error('Fill in base name, attribute key, and values before generating');
-      return;
-    }
     const vals = bulkValues.split(',').map(v => v.trim()).filter(Boolean);
-    if (vals.length === 0) { toast.error('Enter at least one value'); return; }
-    const price = parseFloat(bulkPrice);
-    if (isNaN(price) || price < 0) { toast.error('Enter a valid price'); return; }
-    const stock = parseInt(bulkStock);
-    if (isNaN(stock) || stock < 0) { toast.error('Enter a valid stock quantity'); return; }
-    const isWarehouse = settings.defaultStockLocation === 'warehouse';
-    const newVariants: ProductVariant[] = vals.map(val => ({
-      id: uuidv4(),
-      productId: product?.id ?? '',
-      name: `${bulkBase} ${val}`,
-      attributes: { [bulkAttr.trim().toLowerCase()]: val },
-      price,
-      initialStock: stock,
-      currentStock: isWarehouse ? 0 : stock,
-      warehouseStock: isWarehouse ? stock : 0,
-      roadStock: isWarehouse ? 0 : stock,
+    if (vals.length === 0) { toast.error('Enter the values, separated by commas'); return; }
+    const attr = bulkAttr.trim().toLowerCase() || 'option';
+    const base = name.trim();
+    const created = vals.map(val => newVariant({
+      name: base ? `${base} ${val}` : val,
+      attributes: { [attr]: val },
+      price: parseMoney(bulkPrice),
+      unitCost: parseCost(bulkCost),
+      ...stockFields(parseQty(bulkStock)),
     }));
-    setVariants(prev => [...prev, ...newVariants]);
-    setBulkBase(''); setBulkAttr(''); setBulkValues(''); setBulkPrice(''); setBulkStock('');
-    toast.success(`Generated ${newVariants.length} variants`);
-  }
-
-  function updateVariant(id: string, field: keyof ProductVariant, value: unknown) {
-    setVariants(prev => prev.map(v => v.id === id ? { ...v, [field]: value } : v));
+    setVariants(prev => [...prev, ...created]);
+    setBulkAttr(''); setBulkValues(''); setBulkPrice(''); setBulkCost(''); setBulkStock('');
+    setIsBulkOpen(false);
+    toast.success(`Added ${created.length} variants`);
   }
 
   function removeVariant(id: string) {
@@ -238,30 +333,16 @@ export default function ProductEditorPage() {
 
   async function performSave(forcedStatus?: 'active' | 'suspended') {
     const pid = product?.id ?? uuidv4();
-    let finalVariants = [...variants];
-
-    if (finalVariants.length === 0 && (quickPrice || quickStock)) {
-      const price = parseFloat(quickPrice) || 0;
-      const stock = parseInt(quickStock) || 0;
-      const isWarehouse = settings.defaultStockLocation === 'warehouse';
-      finalVariants = [{
-        id: uuidv4(),
-        productId: pid,
-        name: name.trim(),
-        attributes: {},
-        price,
-        initialStock: stock,
-        currentStock: isWarehouse ? 0 : stock,
-        warehouseStock: isWarehouse ? stock : 0,
-        roadStock: isWarehouse ? 0 : stock,
-      }];
-    }
+    const pname = name.trim();
+    const finalVariants = hasVariants
+      ? variants.map((v, i) => ({ ...v, name: v.name.trim() || `${pname} ${i + 1}` }))
+      : variants.slice(0, 1).map(v => ({ ...v, name: pname, attributes: {} }));
 
     const now = new Date().toISOString();
     const p: Product = {
       id: pid,
       projectId: product?.projectId ?? activeProject?.id ?? '',
-      name: name.trim(),
+      name: pname,
       description: description.trim() || undefined,
       subtitle: subtitle.trim() || undefined,
       tags: cleanTags(tags),
@@ -276,6 +357,8 @@ export default function ProductEditorPage() {
     navigate('/');
   }
 
+  const stockLabel = `Stock · ${isWarehouse ? 'WH' : 'Road'}`;
+
   return (
     <div className="h-full flex flex-col bg-background">
 
@@ -284,316 +367,192 @@ export default function ProductEditorPage() {
         className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-border sticky top-0 z-10"
         style={{ background: 'var(--background)' }}
       >
-        <h1 className="text-base font-bold text-foreground">
+        <h1 className="text-lg font-bold text-foreground">
           {product ? 'Edit Product' : 'New Product'}
         </h1>
         <button
           onClick={() => navigate('/')}
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+          className="p-2 -mr-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
           aria-label="Close"
         >
-          <X size={18} />
+          <X size={20} />
         </button>
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">
 
-        {/* Basic info */}
-        <div className="space-y-3">
-          {/* Display Name — full width, no onFocus clear */}
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-              Display Name
-            </label>
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="T-Shirt"
-              className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors"
-            />
-          </div>
-
-          {/* Display Subtitle — optional second line shown on TallyCard */}
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-              Display Subtitle <span className="normal-case font-normal text-muted-foreground/60">(optional · shown on Tally card)</span>
-            </label>
-            <input
-              value={subtitle}
-              onChange={e => setSubtitle(e.target.value)}
-              placeholder="e.g. Acoustic Edition · Limited Run"
-              className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Product details..."
-              rows={2}
-              className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors resize-none"
-            />
-          </div>
-
-          {variants.length === 0 && (
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Price ({symbol})
-                </label>
-                <input
-                  value={quickPrice}
-                  onChange={e => setQuickPrice(e.target.value)}
-                  placeholder="0.00"
-                  type="number"
-                  step="0.01"
-                  className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Initial Stock ({settings.defaultStockLocation === 'warehouse' ? 'WH' : 'Road'})
-                </label>
-                <input
-                  value={quickStock}
-                  onChange={e => setQuickStock(e.target.value)}
-                  placeholder="0"
-                  type="number"
-                  className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors"
-                />
-              </div>
+        {/* 1 · Product */}
+        <Section title="Product">
+          <div className="space-y-3">
+            <div>
+              <FieldLabel>Name</FieldLabel>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="T-Shirt" className={inputCls} />
             </div>
-          )}
-        </div>
-
-        {/* Variants list */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Variants ({variants.length})
-            </p>
-            <button onClick={addVariant} className="flex items-center gap-1 text-xs text-primary hover:text-primary/80">
-              <Plus size={12} /> Add
-            </button>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 px-2 text-[10px] font-bold text-[#7B7F93] uppercase tracking-wider">
-              <span className="flex-1">Name</span>
-              <span className="w-16 text-right">Price</span>
-              <span className="w-16 text-right">Stock</span>
-              <span className="w-6" />
+            <div>
+              <FieldLabel>Subtitle <span className="text-muted-foreground/60">(optional · shown on Tally)</span></FieldLabel>
+              <input value={subtitle} onChange={e => setSubtitle(e.target.value)} placeholder="e.g. Acoustic Edition" className={inputCls} />
             </div>
-            {variants.map(v => (
-              <div
-                key={v.id}
-                className="flex items-center gap-2 p-2 rounded-lg"
-                style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
-              >
-                <input
-                  value={v.name}
-                  onChange={e => updateVariant(v.id, 'name', e.target.value)}
-                  className="flex-1 min-w-0 px-2 py-1 rounded text-sm text-foreground bg-transparent focus:outline-none"
+            {showDescription ? (
+              <div>
+                <FieldLabel>Description</FieldLabel>
+                <textarea
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="Product details…"
+                  rows={2}
+                  className="w-full px-3 py-2.5 rounded-xl text-[15px] text-foreground bg-background border border-border focus:border-primary focus:outline-none resize-none"
                 />
-                <div className="relative w-16">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-bold pointer-events-none">
-                    {symbol}
-                  </span>
-                  <input
-                    value={v.price}
-                    onChange={e => updateVariant(v.id, 'price', parseFloat(e.target.value) || 0)}
-                    type="number"
-                    min="0"
-                    step="1"
-                    className="w-full pl-5 pr-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right"
-                  />
-                </div>
-                <input
-                  value={v.currentStock}
-                  onChange={e => {
-                    const n = parseInt(e.target.value) || 0;
-                    const isWH = settings.defaultStockLocation === 'warehouse';
-                    updateVariant(v.id, 'currentStock', n);
-                    updateVariant(v.id, 'initialStock', n);
-                    updateVariant(v.id, 'warehouseStock', isWH ? n : 0);
-                    updateVariant(v.id, 'roadStock', isWH ? 0 : n);
-                  }}
-                  type="number"
-                  min="0"
-                  placeholder="Stock"
-                  className="w-16 px-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right"
-                />
-                <button
-                  onClick={() => removeVariant(v.id)}
-                  className="text-[#7B7F93] hover:text-[#F87171] p-1 flex-shrink-0"
-                >
-                  <Trash2 size={13} />
-                </button>
               </div>
-            ))}
-            {variants.length === 0 && (
-              <p className="text-sm text-[#7B7F93] text-center py-4">
-                No variants yet. Use the bulk generator or add manually.
-              </p>
+            ) : (
+              <button type="button" onClick={() => setShowDescription(true)} className="text-sm font-semibold text-primary">
+                + Description
+              </button>
             )}
           </div>
-        </div>
+        </Section>
 
-        {/* Bulk variant generator */}
-        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+        {/* 2 · Price & stock */}
+        <Section title="Price & stock">
           <button
             type="button"
-            onClick={() => setIsBulkOpen(!isBulkOpen)}
-            className="w-full flex items-center justify-between p-3 hover:bg-primary/5 transition-colors"
+            role="switch"
+            aria-checked={hasVariants}
+            onClick={() => toggleVariants(!hasVariants)}
+            className="w-full flex items-center justify-between gap-3 text-left"
           >
-            <div className="flex items-center gap-2">
-              <p className="text-xs font-semibold text-primary uppercase tracking-wider">⚡ Bulk Variant Generator</p>
-              <div className="group relative">
-                <Info size={14} className="text-primary/60 cursor-help" />
-                <div className="absolute bottom-full left-0 mb-2 w-64 p-3 rounded-lg bg-popover border border-border shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[60]">
-                  <p className="text-[11px] leading-relaxed text-foreground">
-                    Generate multiple variants at once by specifying an attribute (like Size or Color) and its values (separated by commas).
-                  </p>
-                </div>
-              </div>
-            </div>
-            {isBulkOpen
-              ? <ChevronUp size={16} className="text-primary" />
-              : <ChevronDown size={16} className="text-primary" />}
+            <span>
+              <span className="block text-[15px] font-semibold text-foreground">Has variants</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">Sizes, colours, formats…</span>
+            </span>
+            <span
+              className="relative w-12 h-7 rounded-full flex-shrink-0 transition-colors"
+              style={{ background: hasVariants ? 'var(--primary)' : 'var(--border)' }}
+            >
+              <span className={cn('absolute top-0.5 w-6 h-6 rounded-full bg-white transition-all', hasVariants ? 'left-[22px]' : 'left-0.5')} />
+            </span>
           </button>
 
-          {isBulkOpen && (
-            <div className="p-3 pt-0 space-y-3">
-              {showBulkNote && (
-                <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10 flex flex-col gap-2">
-                  <p className="text-[11px] text-primary/80 leading-snug">
-                    <strong>Pro tip:</strong> You can quickly create all your sizes or colors here. Just enter "Size" and "S, M, L, XL" to generate 4 variants instantly.
-                  </p>
-                  <label className="flex items-center gap-1.5 cursor-pointer self-end">
-                    <input
-                      type="checkbox"
-                      className="w-3 h-3 rounded border-primary/30 text-primary focus:ring-0 focus:ring-offset-0 bg-transparent"
-                      onChange={e => {
-                        if (e.target.checked) {
-                          localStorage.setItem('mp_hide_bulk_note', 'true');
-                          setShowBulkNote(false);
-                        }
-                      }}
-                    />
-                    <span className="text-[9px] font-medium text-primary/60 uppercase tracking-tighter">Never show again</span>
-                  </label>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  value={bulkBase}
-                  onChange={e => setBulkBase(e.target.value)}
-                  placeholder="Base name (e.g. T-Shirt Black)"
-                  className="col-span-2 px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none"
-                />
-                <div className="relative">
-                  <input
-                    value={bulkAttr}
-                    onChange={e => setBulkAttr(e.target.value)}
-                    placeholder="Attribute (e.g. size)"
-                    className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none"
-                  />
-                </div>
-                <div className="relative">
-                  <input
-                    value={bulkValues}
-                    onChange={e => setBulkValues(e.target.value)}
-                    placeholder="Values (e.g. M, L, XL)"
-                    className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-tighter">Price</label>
-                  <input
-                    value={bulkPrice}
-                    onChange={e => setBulkPrice(e.target.value)}
-                    placeholder={`Price (${symbol})`}
-                    type="number"
-                    min="0"
-                    step="1"
-                    className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-tighter">
-                    Initial stock ({settings.defaultStockLocation === 'warehouse' ? 'WH' : 'Road'})
-                  </label>
-                  <input
-                    value={bulkStock}
-                    onChange={e => setBulkStock(e.target.value)}
-                    placeholder="Initial stock"
-                    type="number"
-                    min="0"
-                    className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none"
-                  />
-                </div>
+          {!hasVariants && (
+            <div className="mt-3">
+              <div className="grid grid-cols-3 gap-2">
+                <NumBox label="Price" prefix={symbol} placeholder="0.00"
+                  value={simple ? fieldValue(simple, 'price') : ''} onChange={v => setSimpleField('price', v)} />
+                <NumBox label="Cost" prefix={symbol} placeholder="—"
+                  value={simple ? fieldValue(simple, 'unitCost') : ''} onChange={v => setSimpleField('unitCost', v)} />
+                <NumBox label={stockLabel} decimal={false}
+                  value={simple ? fieldValue(simple, 'stock') : ''} onChange={v => setSimpleField('stock', v)} />
               </div>
-              <button
-                onClick={bulkGenerate}
-                className="w-full py-2 rounded-lg text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
-                style={{ border: '1px solid var(--border)' }}
-              >
-                Generate Variants
-              </button>
+              {simple && <Margin price={simple.price} cost={simple.unitCost} symbol={symbol} />}
             </div>
           )}
-        </div>
+        </Section>
 
-        {/* Tags — last item; multi-select, only tags created in this project */}
-        <TagPicker value={tags} onChange={setTags} projectTags={availableTags} />
+        {/* 3 · Variants */}
+        {hasVariants && (
+          <Section title={`Variants (${variants.length})`}>
+            <div className="space-y-2">
+              {variants.map(v => (
+                <div key={v.id} className="rounded-xl p-2.5" style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      value={v.name}
+                      onChange={e => setVariants(prev => prev.map(x => x.id === v.id ? { ...x, name: e.target.value } : x))}
+                      placeholder="Variant name"
+                      className="flex-1 min-w-0 h-9 px-1 bg-transparent text-[15px] font-semibold text-foreground focus:outline-none"
+                    />
+                    <button onClick={() => removeVariant(v.id)} className="p-2 text-muted-foreground hover:text-[#F87171]" aria-label="Remove variant">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <NumBox label="Price" prefix={symbol} placeholder="0.00" value={fieldValue(v, 'price')} onChange={x => setField(v.id, 'price', x)} />
+                    <NumBox label="Cost" prefix={symbol} placeholder="—" value={fieldValue(v, 'unitCost')} onChange={x => setField(v.id, 'unitCost', x)} />
+                    <NumBox label={stockLabel} decimal={false} value={fieldValue(v, 'stock')} onChange={x => setField(v.id, 'stock', x)} />
+                  </div>
+                  <Margin price={v.price} cost={v.unitCost} symbol={symbol} />
+                </div>
+              ))}
+              {variants.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-3">No variants yet.</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              <button type="button" onClick={addVariant}
+                className="h-11 rounded-xl text-sm font-semibold text-primary flex items-center justify-center gap-1.5"
+                style={{ border: '1px dashed rgba(107,92,255,0.5)' }}>
+                <Plus size={15} /> Variant
+              </button>
+              <button type="button" onClick={() => setIsBulkOpen(o => !o)}
+                className="h-11 rounded-xl text-sm font-semibold text-primary flex items-center justify-center gap-1.5"
+                style={{ border: '1px dashed rgba(107,92,255,0.5)', background: isBulkOpen ? 'rgba(107,92,255,0.1)' : undefined }}>
+                <Zap size={15} /> Generate several
+              </button>
+            </div>
+
+            {isBulkOpen && (
+              <div className="mt-3 rounded-xl p-3 space-y-3" style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <FieldLabel>Attribute</FieldLabel>
+                    <input value={bulkAttr} onChange={e => setBulkAttr(e.target.value)} placeholder="Size" className={inputCls} />
+                  </div>
+                  <div>
+                    <FieldLabel>Values (comma)</FieldLabel>
+                    <input value={bulkValues} onChange={e => setBulkValues(e.target.value)} placeholder="S, M, L, XL" className={inputCls} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <NumBox label="Price" prefix={symbol} placeholder="0.00" value={bulkPrice} onChange={setBulkPrice} />
+                  <NumBox label="Cost" prefix={symbol} placeholder="—" value={bulkCost} onChange={setBulkCost} />
+                  <NumBox label={stockLabel} decimal={false} value={bulkStock} onChange={setBulkStock} />
+                </div>
+                <button type="button" onClick={bulkGenerate} className="w-full h-11 rounded-xl text-sm font-bold text-white mp-btn-primary">
+                  Add variants
+                </button>
+              </div>
+            )}
+          </Section>
+        )}
+
+        {/* 4 · Tags — last; only tags created in this project */}
+        <Section title="Tags">
+          <TagPicker value={tags} onChange={setTags} projectTags={availableTags} />
+        </Section>
 
       </div>
 
       {/* Footer */}
-      <div className="flex-shrink-0 flex flex-col gap-2 p-4 border-t border-border">
+      <div className="flex-shrink-0 flex flex-col gap-2 px-4 py-3 border-t border-border">
         {showSuspensionConfirm && (
-          <div className="mb-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/30">
+          <div className="mb-1 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30">
             <p className="text-xs font-semibold text-orange-500 mb-2 text-center">
               This product is currently suspended
             </p>
             <div className="flex gap-2">
-              <button
-                onClick={() => performSave('active')}
-                className="flex-1 py-1.5 rounded-lg text-[10px] font-bold bg-orange-500 text-white hover:bg-orange-600 transition-colors"
-              >
+              <button onClick={() => performSave('active')}
+                className="flex-1 h-9 rounded-lg text-xs font-bold bg-orange-500 text-white hover:bg-orange-600 transition-colors">
                 Activate
               </button>
-              <button
-                onClick={() => performSave('suspended')}
-                className="flex-1 py-1.5 rounded-lg text-[10px] font-bold border border-orange-500/50 text-orange-500 hover:bg-orange-500/10 transition-colors"
-              >
+              <button onClick={() => performSave('suspended')}
+                className="flex-1 h-9 rounded-lg text-xs font-bold border border-orange-500/50 text-orange-500 hover:bg-orange-500/10 transition-colors">
                 Keep Suspended
               </button>
-              <button
-                onClick={() => navigate('/')}
-                className="flex-1 py-1.5 rounded-lg text-[10px] font-bold border border-border text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <button onClick={() => navigate('/')}
+                className="flex-1 h-9 rounded-lg text-xs font-bold border border-border text-muted-foreground hover:text-foreground transition-colors">
                 Cancel Edit
               </button>
             </div>
           </div>
         )}
-        <div className="flex gap-2">
-          <button
-            onClick={() => navigate('/')}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
-            style={{ border: '1px solid var(--border)' }}
-          >
+        <div className="grid grid-cols-3 gap-2">
+          <button onClick={() => navigate('/')}
+            className="h-12 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            style={{ border: '1px solid var(--border)' }}>
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary"
-          >
+          <button onClick={handleSave} className="col-span-2 h-12 rounded-xl text-base font-bold text-white mp-btn-primary">
             Save Product
           </button>
         </div>
