@@ -149,15 +149,15 @@ export default function StockTransferPage() {
                 <div className="flex items-center gap-1.5">
                   {isToRoad ? (
                     <>
-                      <Warehouse size={18} className={active ? 'text-primary' : 'text-muted-foreground'} />
+                      <Warehouse size={24} className={active ? 'text-primary' : 'text-muted-foreground'} />
                       <ArrowRight size={13} className={active ? 'text-primary' : 'text-muted-foreground'} />
-                      <Truck size={18} className={active ? 'text-primary' : 'text-muted-foreground'} />
+                      <Truck size={24} className={active ? 'text-primary' : 'text-muted-foreground'} />
                     </>
                   ) : (
                     <>
-                      <Truck size={18} className={active ? 'text-amber-500' : 'text-muted-foreground'} />
+                      <Truck size={24} className={active ? 'text-amber-500' : 'text-muted-foreground'} />
                       <ArrowRight size={13} className={active ? 'text-amber-500' : 'text-muted-foreground'} />
-                      <Warehouse size={18} className={active ? 'text-amber-500' : 'text-muted-foreground'} />
+                      <Warehouse size={24} className={active ? 'text-amber-500' : 'text-muted-foreground'} />
                     </>
                   )}
                 </div>
@@ -165,7 +165,7 @@ export default function StockTransferPage() {
                   className="text-xs font-bold tracking-wide"
                   style={{ color: active ? (isToRoad ? '#6B5CFF' : '#f59e0b') : 'var(--muted-foreground)' }}
                 >
-                  {isToRoad ? 'WH → Road' : 'Road → WH'}
+                  {isToRoad ? 'Warehouse → Road' : 'Road → Warehouse'}
                 </span>
                 <span className="text-[10px] text-muted-foreground text-center leading-tight">
                   {isToRoad ? 'Load van for the show' : 'Return unsold stock'}

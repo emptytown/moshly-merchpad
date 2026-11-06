@@ -724,15 +724,15 @@ export default function MerchOffice() {
                     </div>
 
                     {/* WH ↔ Road summary */}
-                    <div className={cn("mx-3 mb-2 p-2 rounded-lg flex items-center justify-between text-xs", product.status === 'suspended' && "opacity-50 grayscale-[0.5]")}
+                    <div className={cn("mx-3 mb-2 p-2.5 rounded-lg flex items-center justify-between text-sm font-semibold", product.status === 'suspended' && "opacity-50 grayscale-[0.5]")}
                       style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
                       <div className="flex items-center gap-1.5 text-primary">
-                        <Warehouse size={11} />
-                        <span>WH: {product.variants.reduce((s, v) => s + (v.warehouseStock ?? 0), 0)}</span>
+                        <Warehouse size={20} />
+                        <span>Warehouse: {product.variants.reduce((s, v) => s + (v.warehouseStock ?? 0), 0)}</span>
                       </div>
-                      <ArrowRightLeft size={10} className="text-muted-foreground/30" />
+                      <ArrowRightLeft size={14} className="text-muted-foreground/40" />
                       <div className="flex items-center gap-1.5 text-green-500">
-                        <Truck size={11} />
+                        <Truck size={20} />
                         <span>Road: {product.variants.reduce((s, v) => s + (v.roadStock ?? v.currentStock), 0)}</span>
                       </div>
                     </div>
@@ -860,9 +860,12 @@ export default function MerchOffice() {
                               {/* WH + Road controls */}
                               <div className="flex flex-col divide-y divide-border">
                                 {/* Warehouse column */}
-                                <div className="flex-1 flex items-center gap-1.5 px-2 py-1.5">
-                                  <Warehouse size={15} className="text-primary flex-shrink-0" />
-                                  <span className="text-[15px] font-bold mp-mono text-primary flex-shrink-0">{warehouseStock}</span>
+                                <div className="flex-1 flex items-center gap-2.5 px-2.5 py-2">
+                                  <Warehouse size={24} className="text-primary flex-shrink-0" />
+                                  <div className="flex flex-col leading-none flex-shrink-0">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-primary/80">Warehouse</span>
+                                    <span className="text-lg font-bold mp-mono text-primary">{warehouseStock}</span>
+                                  </div>
                                   <div className="flex items-center gap-1.5 ml-auto">
                                     <button
                                       onClick={() => changeWHAdjustDelta(variant.id, warehouseStock, -1)}
@@ -884,9 +887,12 @@ export default function MerchOffice() {
                                   </div>
                                 </div>
                                 {/* Road column */}
-                                <div className="flex-1 flex items-center gap-1.5 px-2 py-1.5">
-                                  <Truck size={15} className="text-green-500 flex-shrink-0" />
-                                  <span className="text-[15px] font-bold mp-mono text-green-500 flex-shrink-0">{roadStock}</span>
+                                <div className="flex-1 flex items-center gap-2.5 px-2.5 py-2">
+                                  <Truck size={24} className="text-green-500 flex-shrink-0" />
+                                  <div className="flex flex-col leading-none flex-shrink-0">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-green-500/80">Road</span>
+                                    <span className="text-lg font-bold mp-mono text-green-500">{roadStock}</span>
+                                  </div>
                                   <div className="flex items-center gap-1.5 ml-auto">
                                     <button
                                       onClick={() => changeRoadAdjustDelta(variant.id, roadStock, -1)}
