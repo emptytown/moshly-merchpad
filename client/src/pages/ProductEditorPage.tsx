@@ -371,6 +371,78 @@ export default function ProductEditorPage() {
           )}
         </div>
 
+        {/* Variants list */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Variants ({variants.length})
+            </p>
+            <button onClick={addVariant} className="flex items-center gap-1 text-xs text-primary hover:text-primary/80">
+              <Plus size={12} /> Add
+            </button>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-2 text-[10px] font-bold text-[#7B7F93] uppercase tracking-wider">
+              <span className="flex-1">Name</span>
+              <span className="w-16 text-right">Price</span>
+              <span className="w-16 text-right">Stock</span>
+              <span className="w-6" />
+            </div>
+            {variants.map(v => (
+              <div
+                key={v.id}
+                className="flex items-center gap-2 p-2 rounded-lg"
+                style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
+              >
+                <input
+                  value={v.name}
+                  onChange={e => updateVariant(v.id, 'name', e.target.value)}
+                  className="flex-1 min-w-0 px-2 py-1 rounded text-sm text-foreground bg-transparent focus:outline-none"
+                />
+                <div className="relative w-16">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-bold pointer-events-none">
+                    {symbol}
+                  </span>
+                  <input
+                    value={v.price}
+                    onChange={e => updateVariant(v.id, 'price', parseFloat(e.target.value) || 0)}
+                    type="number"
+                    min="0"
+                    step="1"
+                    className="w-full pl-5 pr-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right"
+                  />
+                </div>
+                <input
+                  value={v.currentStock}
+                  onChange={e => {
+                    const n = parseInt(e.target.value) || 0;
+                    const isWH = settings.defaultStockLocation === 'warehouse';
+                    updateVariant(v.id, 'currentStock', n);
+                    updateVariant(v.id, 'initialStock', n);
+                    updateVariant(v.id, 'warehouseStock', isWH ? n : 0);
+                    updateVariant(v.id, 'roadStock', isWH ? 0 : n);
+                  }}
+                  type="number"
+                  min="0"
+                  placeholder="Stock"
+                  className="w-16 px-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right"
+                />
+                <button
+                  onClick={() => removeVariant(v.id)}
+                  className="text-[#7B7F93] hover:text-[#F87171] p-1 flex-shrink-0"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+            {variants.length === 0 && (
+              <p className="text-sm text-[#7B7F93] text-center py-4">
+                No variants yet. Use the bulk generator or add manually.
+              </p>
+            )}
+          </div>
+        </div>
+
         {/* Bulk variant generator */}
         <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
           <button
@@ -474,78 +546,6 @@ export default function ProductEditorPage() {
               </button>
             </div>
           )}
-        </div>
-
-        {/* Variants list */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Variants ({variants.length})
-            </p>
-            <button onClick={addVariant} className="flex items-center gap-1 text-xs text-primary hover:text-primary/80">
-              <Plus size={12} /> Add
-            </button>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 px-2 text-[10px] font-bold text-[#7B7F93] uppercase tracking-wider">
-              <span className="flex-1">Name</span>
-              <span className="w-16 text-right">Price</span>
-              <span className="w-16 text-right">Stock</span>
-              <span className="w-6" />
-            </div>
-            {variants.map(v => (
-              <div
-                key={v.id}
-                className="flex items-center gap-2 p-2 rounded-lg"
-                style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
-              >
-                <input
-                  value={v.name}
-                  onChange={e => updateVariant(v.id, 'name', e.target.value)}
-                  className="flex-1 min-w-0 px-2 py-1 rounded text-sm text-foreground bg-transparent focus:outline-none"
-                />
-                <div className="relative w-16">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-bold pointer-events-none">
-                    {symbol}
-                  </span>
-                  <input
-                    value={v.price}
-                    onChange={e => updateVariant(v.id, 'price', parseFloat(e.target.value) || 0)}
-                    type="number"
-                    min="0"
-                    step="1"
-                    className="w-full pl-5 pr-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right"
-                  />
-                </div>
-                <input
-                  value={v.currentStock}
-                  onChange={e => {
-                    const n = parseInt(e.target.value) || 0;
-                    const isWH = settings.defaultStockLocation === 'warehouse';
-                    updateVariant(v.id, 'currentStock', n);
-                    updateVariant(v.id, 'initialStock', n);
-                    updateVariant(v.id, 'warehouseStock', isWH ? n : 0);
-                    updateVariant(v.id, 'roadStock', isWH ? 0 : n);
-                  }}
-                  type="number"
-                  min="0"
-                  placeholder="Stock"
-                  className="w-16 px-2 py-1 rounded text-sm text-foreground bg-background border border-border focus:outline-none text-right"
-                />
-                <button
-                  onClick={() => removeVariant(v.id)}
-                  className="text-[#7B7F93] hover:text-[#F87171] p-1 flex-shrink-0"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            ))}
-            {variants.length === 0 && (
-              <p className="text-sm text-[#7B7F93] text-center py-4">
-                No variants yet. Use the bulk generator or add manually.
-              </p>
-            )}
-          </div>
         </div>
 
         {/* Tags — last item; multi-select, only tags created in this project */}
