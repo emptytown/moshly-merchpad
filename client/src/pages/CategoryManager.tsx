@@ -4,10 +4,9 @@ import { toast } from 'sonner';
 import { 
   loadCustomCategories, 
   addCustomCategory, 
-  deleteCustomCategory, 
-  loadCatalogue,
+  deleteCustomCategory,
   getAllCategories
-} from '../lib/catalogue';
+} from '../lib/categories';
 
 export default function CategoryManager({ onBack }: { onBack: () => void }) {
   const [customCats, setCustomCats] = useState<string[]>([]);
@@ -20,7 +19,7 @@ export default function CategoryManager({ onBack }: { onBack: () => void }) {
 
   function refresh() {
     setCustomCats(loadCustomCategories());
-    setAllCats(getAllCategories(loadCatalogue()));
+    setAllCats(getAllCategories());
   }
 
   function handleAdd() {
@@ -121,7 +120,7 @@ export default function CategoryManager({ onBack }: { onBack: () => void }) {
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground px-1 italic">
-            These are either system defaults or derived from existing templates. They cannot be deleted here.
+            These are system defaults and cannot be deleted.
           </p>
         </div>
       </div>

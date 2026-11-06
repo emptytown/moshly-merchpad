@@ -6,18 +6,13 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, X, BookOpen, Info, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, X, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { Product, ProductVariant } from '../lib/db';
 import { cn } from '../lib/utils';
-import { loadCatalogue, CatalogueTemplate } from '../lib/catalogue';
-
-function formatCurrency(n: number, currency = 'EUR') {
-  const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
-  return `${symbol}${n.toFixed(2)}`;
-}
+import { getAllCategories } from '../lib/categories';
 
 // ── Category Picker ────────────────────────────────────────────────────────
 
@@ -174,56 +169,17 @@ export default function ProductEditorPage() {
   const [bulkValues, setBulkValues] = useState('');
   const [bulkPrice, setBulkPrice] = useState('');
   const [bulkStock, setBulkStock] = useState('');
-  const [showCatPicker, setShowCatPicker] = useState(false);
   const [showSuspensionConfirm, setShowSuspensionConfirm] = useState(false);
-  const [nameWarning, setNameWarning] = useState<string | null>(null);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [showBulkNote, setShowBulkNote] = useState(() => {
     return localStorage.getItem('mp_hide_bulk_note') !== 'true';
   });
 
-  const catalogue = useMemo(() => loadCatalogue(), []);
-  const catalogueNames = useMemo(() => catalogue.map(t => t.name), [catalogue]);
-
-  /** Categories from catalogue templates + already-used categories in this project */
+  /** Common + custom categories + already-used categories in this project */
   const availableCategories = useMemo(() => {
-    const fromCatalogue = catalogue.map(t => t.category);
     const fromProducts = products.map(p => p.category).filter((c): c is string => Boolean(c));
-    return Array.from(new Set([...fromCatalogue, ...fromProducts])).sort();
-  }, [catalogue, products]);
-
-  const MIN_NAME_LENGTH_FOR_FUZZY_WARNING = 4;
-
-  function checkName(val: string) {
-    setName(val);
-    const trimmed = val.trim();
-    if (trimmed.length < MIN_NAME_LENGTH_FOR_FUZZY_WARNING) { setNameWarning(null); return; }
-    const lower = trimmed.toLowerCase();
-    const similarName = catalogueNames.find(n => {
-      const nl = n.toLowerCase();
-      if (nl === lower) return false;
-      if (nl.startsWith(lower) || lower.startsWith(nl)) return true;
-      let diff = 0;
-      const maxLen = Math.max(nl.length, lower.length);
-      for (let i = 0; i < maxLen; i++) { if (nl[i] !== lower[i]) diff++; }
-      return diff <= 2 && maxLen > 3;
-    });
-    setNameWarning(similarName ? `Did you mean "${similarName}"? Check the catalogue to avoid duplicates.` : null);
-  }
-
-  function applyTemplate(t: CatalogueTemplate) {
-    setName(t.name);
-    setCategory(t.category);
-    setNameWarning(null);
-    if (t.variantAxes.length > 0) {
-      const axis = t.variantAxes[0];
-      setBulkBase(t.name);
-      setBulkAttr(axis.key);
-      setBulkValues(axis.values.join(', '));
-      setBulkPrice(String(t.defaultPrice));
-    }
-    toast.success(`Template "${t.name}" applied — review and generate variants`);
-  }
+    return Array.from(new Set([...getAllCategories(), ...fromProducts])).sort();
+  }, [products]);
 
   function addVariant() {
     const v: ProductVariant = {
@@ -348,51 +304,6 @@ export default function ProductEditorPage() {
       {/* Scrollable content */}
       <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-4">
 
-        {/* Catalogue template picker */}
-        <div
-          className="rounded-xl overflow-hidden"
-          style={{ border: '1px solid var(--primary)', background: 'var(--primary)/5' }}
-        >
-          <button
-            onClick={() => setShowCatPicker(v => !v)}
-            className="w-full flex items-center justify-between px-3 py-2.5 text-left"
-          >
-            <div className="flex items-center gap-2">
-              <BookOpen size={14} className="text-primary" />
-              <span className="text-xs font-semibold text-primary">Pick from Item Template Creator</span>
-            </div>
-            <span className="text-[10px] text-muted-foreground">
-              {showCatPicker ? 'Hide' : `${catalogue.length} templates`}
-            </span>
-          </button>
-          {showCatPicker && (
-            <div className="px-3 pb-3 space-y-1 max-h-48 overflow-y-auto">
-              {catalogue.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => { applyTemplate(t); setShowCatPicker(false); }}
-                  className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-left transition-colors hover:bg-[rgba(0,229,255,0.08)]"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-[#E6E7EB]">{t.name}</p>
-                    <p className="text-[10px] text-[#7B7F93]">
-                      {t.category} · {t.variantAxes.map(a => a.key).join(', ') || 'no axes'}
-                    </p>
-                  </div>
-                  <span className="text-xs font-bold text-[#7B7F93]">
-                    {formatCurrency(t.defaultPrice, currency)}
-                  </span>
-                </button>
-              ))}
-              {catalogue.length === 0 && (
-                <p className="text-xs text-[#7B7F93] py-2 text-center">
-                  No templates yet — add them in Settings → Item Template Creator
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
         {/* Basic info */}
         <div className="space-y-3">
           {/* Display Name — full width, no onFocus clear */}
@@ -402,21 +313,10 @@ export default function ProductEditorPage() {
             </label>
             <input
               value={name}
-              onChange={e => checkName(e.target.value)}
+              onChange={e => setName(e.target.value)}
               placeholder="T-Shirt"
-              className={cn(
-                'w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border focus:outline-none transition-colors',
-                nameWarning
-                  ? 'border-orange-500 focus:border-orange-500'
-                  : 'border-border focus:border-primary'
-              )}
+              className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none transition-colors"
             />
-            {nameWarning && (
-              <div className="flex items-start gap-1.5 mt-1.5">
-                <AlertCircle size={11} className="text-orange-500 flex-shrink-0 mt-0.5" />
-                <p className="text-[10px] text-orange-500">{nameWarning}</p>
-              </div>
-            )}
           </div>
 
           {/* Display Subtitle — optional second line shown on TallyCard */}
@@ -540,14 +440,8 @@ export default function ProductEditorPage() {
                     value={bulkAttr}
                     onChange={e => setBulkAttr(e.target.value)}
                     placeholder="Attribute (e.g. size)"
-                    list="bulk-attr-suggestions"
                     className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none"
                   />
-                  <datalist id="bulk-attr-suggestions">
-                    {Array.from(new Set(catalogue.flatMap(t => t.variantAxes.map(a => a.key)))).map(k => (
-                      <option key={k} value={k} />
-                    ))}
-                  </datalist>
                 </div>
                 <div className="relative">
                   <input
@@ -556,29 +450,6 @@ export default function ProductEditorPage() {
                     placeholder="Values (e.g. M, L, XL)"
                     className="w-full px-3 py-2 rounded-lg text-sm text-foreground bg-background border border-border focus:border-primary focus:outline-none"
                   />
-                  {bulkAttr && (() => {
-                    const axisKey = bulkAttr.trim().toLowerCase();
-                    const suggested = Array.from(new Set(
-                      catalogue.flatMap(t =>
-                        t.variantAxes.filter(a => a.key === axisKey).flatMap(a => a.values)
-                      )
-                    ));
-                    return suggested.length > 0 ? (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {suggested.map(v => (
-                          <button
-                            key={v}
-                            type="button"
-                            onClick={() => setBulkValues(prev => prev ? `${prev}, ${v}` : v)}
-                            className="px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors"
-                            style={{ background: 'var(--primary)/10', color: 'var(--primary)', border: '1px solid var(--primary)/20' }}
-                          >
-                            + {v}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null;
-                  })()}
                 </div>
                 <div className="space-y-1">
                   <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-tighter">Price</label>
