@@ -439,7 +439,7 @@ function MoshlyRadialMenu({ tallyMode, items }: { tallyMode: boolean; items: Rad
 
 // ── Basket Preview Sheet (Register mode — expand button) ───────────────────
 interface BasketPreviewProps {
-  items: Array<{ variantId: string; name: string; qty: number; unitPrice: number }>;
+  items: Array<{ variantId: string; name: string; variantName: string; qty: number; unitPrice: number }>;
   totalRevenue: number;
   symbol: string;
   onClose: () => void;
@@ -478,13 +478,13 @@ function BasketPreview({ items, totalRevenue, symbol, onClose, onAdjust }: Baske
                     {symbol}{(item.qty * item.unitPrice).toFixed(2)}
                   </span>
                   <button
-                    onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, -1)}
+                    onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, -1)}
                     className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
                     style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}>
                     <Minus size={15} className="text-[#F87171]" />
                   </button>
                   <button
-                    onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, 1)}
+                    onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, 1)}
                     className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
                     style={{ background: 'rgba(107,92,255,0.12)', border: '1px solid rgba(107,92,255,0.2)' }}>
                     <Plus size={15} className="text-[#7C6DFF]" />
@@ -723,7 +723,7 @@ function ShortfallModal({
 const NUMPAD_KEYS = ['7','8','9','4','5','6','1','2','3','00','0','\u232b'] as const;
 
 interface RegisterModalProps {
-  items: Array<{ variantId: string; name: string; qty: number; unitPrice: number }>;
+  items: Array<{ variantId: string; name: string; variantName: string; qty: number; unitPrice: number }>;
   totalRevenue: number;
   symbol: string;
   requireMoneyInput: boolean;
@@ -809,13 +809,13 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
                   {symbol}{(item.qty * item.unitPrice).toFixed(2)}
                 </span>
                 <button
-                  onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, -1)}
+                  onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, -1)}
                   className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
                   style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}>
                   <Minus size={15} className="text-[#F87171]" />
                 </button>
                 <button
-                  onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, 1)}
+                  onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, 1)}
                   className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
                   style={{ background: 'rgba(107,92,255,0.12)', border: '1px solid rgba(107,92,255,0.2)' }}>
                   <Plus size={15} className="text-[#7C6DFF]" />
@@ -1025,10 +1025,15 @@ export default function TallyCounter() {
     return sum + (v ? v.price * qty : 0);
   }, 0);
 
-  // Basket items for modals / preview
+  // Basket items for modals / preview. Display name carries the product so that
+  // e.g. "Tee · M" and "Hoodie · M" are distinguishable (stored variantName is unchanged).
   const basketItems = Object.values(tally.items)
     .filter(i => i.qty > 0)
-    .map(i => ({ variantId: i.variantId, name: i.variantName, qty: i.qty, unitPrice: i.unitPrice }));
+    .map(i => {
+      const productName = state.products.find(p => p.variants.some(v => v.id === i.variantId))?.name;
+      const name = productName && productName !== i.variantName ? `${productName} · ${i.variantName}` : i.variantName;
+      return { variantId: i.variantId, name, variantName: i.variantName, qty: i.qty, unitPrice: i.unitPrice };
+    });
 
   // Adjust basket qty (used in both preview and modal)
   const handleAdjust = useCallback((variantId: string, variantName: string, unitPrice: number, delta: number) => {
