@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { getDB, ProductVariant, TeamMember } from '../lib/db';
+import { getDB, ProductVariant, TeamMember, projectTags } from '../lib/db';
 import { cn } from '../lib/utils';
 
 // ── Euro denominations for quick-amount buttons ────────────────────────────
@@ -1007,10 +1007,12 @@ export default function TallyCounter() {
   }, [activeSession?.id]);
 
   const activeProducts = products.filter(p => p.status !== 'suspended');
-  const categories = ['all', ...Array.from(new Set(activeProducts.map(p => p.category ?? 'Other').filter(Boolean)))];
-  const filteredProductGroups = filterCategory === 'all'
+  const categories = ['all', ...projectTags(activeProducts)];
+  // A saved tag filter that no longer exists falls back to All
+  const activeTag = categories.includes(filterCategory) ? filterCategory : 'all';
+  const filteredProductGroups = activeTag === 'all'
     ? activeProducts
-    : activeProducts.filter(p => (p.category ?? 'Other') === filterCategory);
+    : activeProducts.filter(p => (p.tags ?? []).includes(activeTag));
 
   const { units: totalUnits, revenue: totalRevenue } = getTallyTotal();
   const hasItems = totalUnits > 0;
@@ -1317,15 +1319,15 @@ export default function TallyCounter() {
         </div>
       ) : null}
 
-      {/* Category filter */}
-      {categories.length > 2 && (
+      {/* Tag filter */}
+      {categories.length > 1 && (
         <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-none">
           {categories.map(cat => (
             <button key={cat} onClick={() => { setFilterCategory(cat); localStorage.setItem('mp_tallyFilterCategory', cat); }}
               className={cn('mp-tally-cat-pill flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
-                filterCategory === cat ? 'mp-tally-cat-pill--active text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]'
+                activeTag === cat ? 'mp-tally-cat-pill--active text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]'
               )}
-              style={filterCategory === cat
+              style={activeTag === cat
                 ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }
                 : { background: '#1B1E2E', border: '1px solid #2D3048' }}>
               {cat === 'all' ? 'All' : cat}
@@ -1361,8 +1363,8 @@ export default function TallyCounter() {
                 <p className="text-[11px] font-bold text-foreground uppercase tracking-widest leading-none truncate flex-1">
                   {product.name}
                 </p>
-                {product.category && (
-                  <span className="text-[10px] text-muted-foreground flex-shrink-0">· {product.category}</span>
+                {(product.tags?.length ?? 0) > 0 && (
+                  <span className="text-[10px] text-muted-foreground truncate max-w-[40%]">· {product.tags!.join(', ')}</span>
                 )}
                 <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
                   {totalRoadStock} left
@@ -1405,7 +1407,7 @@ export default function TallyCounter() {
         })}
         {filteredProductGroups.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-sm text-[#7B7F93]">No items in this category</p>
+            <p className="text-sm text-[#7B7F93]">No items with this tag</p>
           </div>
         )}
       </div>

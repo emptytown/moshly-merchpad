@@ -2,7 +2,7 @@
  * Detail Info — analytics dashboard
  * Design: "Neon Ledger" — KPI cards, Recharts charts, filters, audit trail
  * Tabs: Analytics | Stock | Audit Trail
- * Filters: time range (today / session / all), category, product
+ * Filters: time range (session / all / range), tag, product
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { AuditEntry } from '../lib/db';
+import { AuditEntry, projectTags } from '../lib/db';
 import { cn } from '../lib/utils';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -300,8 +300,7 @@ export default function DetailInfo() {
   const activeProducts = useMemo(() => products.filter(p => p.status !== 'suspended'), [products]);
 
   const categories = useMemo(() => {
-    const cats = new Set(activeProducts.map(p => p.category).filter(Boolean));
-    return Array.from(cats) as string[];
+    return projectTags(activeProducts);
   }, [activeProducts]);
 
   useEffect(() => {
@@ -315,10 +314,10 @@ export default function DetailInfo() {
 
   // variant → product lookup for filters
   const variantProductMap = useMemo(() => {
-    const map = new Map<string, { productId: string; category?: string }>();
+    const map = new Map<string, { productId: string; tags: string[] }>();
     for (const p of activeProducts) {
       for (const v of p.variants) {
-        map.set(v.id, { productId: p.id, category: p.category });
+        map.set(v.id, { productId: p.id, tags: p.tags ?? [] });
       }
     }
     return map;
@@ -370,11 +369,11 @@ export default function DetailInfo() {
       });
     }
 
-    // Category filter
+    // Tag filter
     if (filterCategory !== 'all') {
       entries = entries.filter(e => {
         const items = e.newValue as Array<{ variantId: string }> | undefined;
-        return items?.some(i => variantProductMap.get(i.variantId)?.category === filterCategory);
+        return items?.some(i => variantProductMap.get(i.variantId)?.tags.includes(filterCategory));
       });
     }
 
@@ -383,15 +382,31 @@ export default function DetailInfo() {
 
   // ── KPI metrics ────────────────────────────────────────────────────────
 
-  const { totalRevenue, totalUnitsSold, totalBatches, avgBatchValue } = useMemo(() => {
-    let rev = 0, units = 0, batches = filteredSaleEntries.length;
+  // Current unit cost per variant — fallback for sales recorded before costs were snapshotted
+  const currentCost = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of products) for (const v of p.variants) if (v.unitCost !== undefined) m.set(v.id, v.unitCost);
+    return m;
+  }, [products]);
+
+  const { totalRevenue, totalUnitsSold, totalBatches, avgBatchValue, totalCost, unitsWithoutCost } = useMemo(() => {
+    let rev = 0, units = 0, cost = 0, noCost = 0;
+    const batches = filteredSaleEntries.length;
     for (const e of filteredSaleEntries) {
-      const items = e.newValue as Array<{ qty: number; unitPrice: number }> | undefined;
+      const items = e.newValue as Array<{ variantId: string; qty: number; unitPrice: number; unitCost?: number }> | undefined;
       if (!items) continue;
-      for (const i of items) { rev += i.qty * i.unitPrice; units += i.qty; }
+      for (const i of items) {
+        rev += i.qty * i.unitPrice; units += i.qty;
+        const c = i.unitCost ?? currentCost.get(i.variantId);
+        if (c === undefined) noCost += i.qty; else cost += i.qty * c;
+      }
     }
-    return { totalRevenue: rev, totalUnitsSold: units, totalBatches: batches, avgBatchValue: batches > 0 ? rev / batches : 0 };
-  }, [filteredSaleEntries]);
+    return {
+      totalRevenue: rev, totalUnitsSold: units, totalBatches: batches,
+      avgBatchValue: batches > 0 ? rev / batches : 0, totalCost: cost, unitsWithoutCost: noCost,
+    };
+  }, [filteredSaleEntries, currentCost]);
+  const totalProfit = totalRevenue - totalCost;
 
   // ── Sales over time (15-min buckets) ──────────────────────────────────
 
@@ -515,7 +530,7 @@ export default function DetailInfo() {
 
           <div className="w-px h-4 bg-[#2D3048] flex-shrink-0" />
 
-          {/* Category filter */}
+          {/* Tag filter */}
           {categories.length > 0 && (
             <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
               className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-[var(--pill-text)] bg-[var(--pill-bg)] border border-[var(--pill-border)] focus:outline-none appearance-none cursor-pointer">
@@ -557,16 +572,19 @@ export default function DetailInfo() {
           { label: 'Avg Batch', value: formatCurrency(avgBatchValue), sub: `${totalBatches} batches`, color: '#7C6DFF', trend: null },
           { label: 'Units Sold', value: totalUnitsSold.toString(), sub: 'items sold', color: '#00E5FF', trend: null },
           { label: 'Stock Alerts', value: lowStockVariants.length.toString(), sub: 'variants low/empty', color: lowStockVariants.length > 0 ? '#F87171' : '#4ADE80', trend: null },
-          // Placeholders — need product unit cost, not tracked yet
-          { label: 'Total Cost', value: '—', sub: 'coming soon', color: '#F59E0B', trend: null, placeholder: true },
-          { label: 'Total Profit', value: '—', sub: 'coming soon', color: '#C026D3', trend: null, placeholder: true },
-        ].map(({ label, value, sub, color, placeholder }) => (
-          <div key={label} className={cn('mp-card p-3.5 relative overflow-hidden', placeholder && 'opacity-50 border-dashed')}>
+          { label: 'Total Cost', value: formatCurrency(totalCost),
+            sub: unitsWithoutCost > 0 ? `${unitsWithoutCost} unit${unitsWithoutCost !== 1 ? 's' : ''} without cost` : 'unit cost × sold',
+            subWarn: unitsWithoutCost > 0, color: '#F59E0B', trend: null },
+          { label: 'Total Profit', value: formatCurrency(totalProfit),
+            sub: totalRevenue > 0 ? `${Math.round((totalProfit / totalRevenue) * 100)}% margin` : 'revenue − cost',
+            color: totalProfit < 0 ? '#F87171' : '#C026D3', trend: null },
+        ].map(({ label, value, sub, color, subWarn }: { label: string; value: string; sub: string; color: string; subWarn?: boolean }) => (
+          <div key={label} className="mp-card p-3.5 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-16 h-16 rounded-full opacity-10 -translate-y-4 translate-x-4"
               style={{ background: color }} />
             <p className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider mb-1">{label}</p>
             <p className="text-2xl font-black leading-none mb-1" style={{ color, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
-            <p className="text-xs text-[#7B7F93]">{sub}</p>
+            <p className={cn('text-xs', subWarn ? 'text-[#F59E0B]' : 'text-[#7B7F93]')}>{sub}</p>
           </div>
         ))}
       </div>

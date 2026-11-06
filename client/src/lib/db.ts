@@ -25,6 +25,8 @@ export interface ProductVariant {
   sku?: string;
   attributes: Record<string, string>;
   price: number;
+  /** Unit cost (what one unit cost you) — optional, used for Cost / Profit stats */
+  unitCost?: number;
   initialStock: number;   // set at "Start Sale" snapshot
   currentStock: number;   // alias for roadStock — decremented as sales happen
   warehouseStock: number; // master inventory (transfer → road to use)
@@ -38,11 +40,36 @@ export interface Product {
   name: string;
   description?: string;
   subtitle?: string;  // optional display subtitle shown on TallyCard below the variant label
+  tags?: string[];
+  /** @deprecated legacy single category — migrated into tags on load */
   category?: string;
   variants: ProductVariant[];
   createdAt: string;
   updatedAt: string;
   status?: 'active' | 'suspended';
+}
+
+/** Clean list of tags: trimmed, non-empty, unique (case-insensitive), in given order */
+export function cleanTags(tags: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const t of tags) {
+    const v = t.trim();
+    if (v && !seen.has(v.toLowerCase())) { seen.add(v.toLowerCase()); out.push(v); }
+  }
+  return out;
+}
+
+/** Migrates a legacy `category` into `tags` */
+export function normalizeProduct(p: Product): Product {
+  if (p.tags && !p.category) return p;
+  const { category, ...rest } = p;
+  return { ...rest, tags: cleanTags([...(p.tags ?? []), ...(category ? [category] : [])]) };
+}
+
+/** All tags used by the given products, sorted */
+export function projectTags(products: Product[]): string[] {
+  return cleanTags(products.flatMap(p => p.tags ?? [])).sort((a, b) => a.localeCompare(b));
 }
 
 export interface Show {
@@ -77,7 +104,7 @@ export interface TallyBatch {
   showId: string;
   deviceId: string;
   repName: string;
-  items: Array<{ variantId: string; variantName: string; qty: number; unitPrice: number }>;
+  items: Array<{ variantId: string; variantName: string; qty: number; unitPrice: number; unitCost?: number }>;
   totalItems: number;
   totalPrice: number;
   confirmedAt: string;
@@ -384,23 +411,23 @@ export async function seedDemoData(): Promise<void> {
 
   const products: Product[] = [
     {
-      id: uuidv4(), name: 'T-Shirt', category: 'Apparel', createdAt: now, updatedAt: now,
+      id: uuidv4(), name: 'T-Shirt', createdAt: now, updatedAt: now,
       variants: [],
     },
     {
-      id: uuidv4(), name: 'Poster', category: 'Print', createdAt: now, updatedAt: now,
+      id: uuidv4(), name: 'Poster', createdAt: now, updatedAt: now,
       variants: [],
     },
     {
-      id: uuidv4(), name: 'Vinyl Record', category: 'Music', createdAt: now, updatedAt: now,
+      id: uuidv4(), name: 'Vinyl Record', createdAt: now, updatedAt: now,
       variants: [],
     },
     {
-      id: uuidv4(), name: 'Enamel Pin', category: 'Accessories', createdAt: now, updatedAt: now,
+      id: uuidv4(), name: 'Enamel Pin', createdAt: now, updatedAt: now,
       variants: [],
     },
     {
-      id: uuidv4(), name: 'Hoodie', category: 'Apparel', createdAt: now, updatedAt: now,
+      id: uuidv4(), name: 'Hoodie', createdAt: now, updatedAt: now,
       variants: [],
     },
   ];

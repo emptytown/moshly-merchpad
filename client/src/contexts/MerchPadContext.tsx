@@ -9,7 +9,7 @@ import {
   getDB, getDeviceId, getSetting, setSetting, enqueueSync, addAuditEntry,
   getPendingSyncItems, markSyncItemDone, migrateStockTiers,
   Product, ProductVariant, Show, SaleSession, TallyBatch, StockAdjustment, AuditEntry,
-  calcStockStatus, StockStatus, TeamMember,
+  calcStockStatus, StockStatus, TeamMember, normalizeProduct,
 } from '../lib/db';
 import { startSyncWorker, stopSyncWorker, onSyncComplete } from '../lib/syncWorker';
 import { restoreProjectFromServer } from '../lib/restoreFromServer';
@@ -95,7 +95,7 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, isLoading: action.payload };
 
     case 'SET_PRODUCTS':
-      return { ...state, products: action.payload };
+      return { ...state, products: action.payload.map(normalizeProduct) };
 
     case 'SET_SHOWS':
       return { ...state, shows: action.payload };
@@ -182,12 +182,12 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, settings: { ...state.settings, ...action.payload } };
 
     case 'ADD_PRODUCT':
-      return { ...state, products: [...state.products, action.payload] };
+      return { ...state, products: [...state.products, normalizeProduct(action.payload)] };
 
     case 'UPDATE_PRODUCT':
       return {
         ...state,
-        products: state.products.map(p => p.id === action.payload.id ? action.payload : p),
+        products: state.products.map(p => p.id === action.payload.id ? normalizeProduct(action.payload) : p),
       };
 
     case 'DELETE_PRODUCT':
@@ -552,7 +552,11 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
       showId: activeSession.showId,
       deviceId: activeSession.deviceId,
       repName,
-      items: items.map(i => ({ variantId: i.variantId, variantName: i.variantName, qty: i.qty, unitPrice: i.unitPrice })),
+      // unitCost is snapshotted at sale time, so later cost edits don't rewrite past profit
+      items: items.map(i => {
+        const unitCost = stateProducts.flatMap(p => p.variants).find(v => v.id === i.variantId)?.unitCost;
+        return { variantId: i.variantId, variantName: i.variantName, qty: i.qty, unitPrice: i.unitPrice, ...(unitCost !== undefined && { unitCost }) };
+      }),
       totalItems,
       totalPrice,
       confirmedAt: now,
