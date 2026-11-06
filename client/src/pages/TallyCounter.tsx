@@ -936,7 +936,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
 // ── Main Screen ────────────────────────────────────────────────────────────
 export default function TallyCounter() {
   const [, navigate] = useLocation();
-  const { state, dispatch, confirmSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock, adjustStock } = useMerchPad();
+  const { state, dispatch, confirmSale, voidLastSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock, adjustStock } = useMerchPad();
   const { products, activeSession, tally, settings, teamMembers, shows } = state;
   const currency = settings.currency ?? 'EUR';
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
@@ -1146,6 +1146,32 @@ export default function TallyCounter() {
     await adjustStock(variantId, productId, variantName, +1, 'counting_error', 'Tally correction (minus tap)');
     toast.success(`${variantName} — tally corrected`, { duration: 1500 });
   }, [sessionSold, adjustStock]);
+
+  // Undo (radial menu): in Register mode with a basket, undo the last basket tap;
+  // otherwise undo the last confirmed sale of this session (voids it, restores stock).
+  const handleUndo = useCallback(async () => {
+    if (!tallyMode && tally.lastAction && hasItems) {
+      dispatch({ type: 'TALLY_UNDO_LAST' });
+      return;
+    }
+    const voided = await voidLastSale();
+    if (!voided) {
+      toast('Nothing to undo', { duration: 1500 });
+      return;
+    }
+    setSessionSold(prev => {
+      const next = { ...prev };
+      voided.items.forEach(i => {
+        const n = (next[i.variantId] ?? 0) - i.qty;
+        if (n > 0) next[i.variantId] = n; else delete next[i.variantId];
+      });
+      return next;
+    });
+    const label = voided.items.length === 1
+      ? `${voided.items[0].variantName} ×${voided.items[0].qty}`
+      : `${voided.totalItems} items`;
+    toast.success(`Undone: ${label} · ${symbol}${voided.totalPrice.toFixed(2)}`, { duration: 2500 });
+  }, [tallyMode, tally.lastAction, hasItems, dispatch, voidLastSale, symbol]);
 
   // Mid-sale restock: pull units from warehouse into road stock
   const handleRestock = useCallback(async (variantId: string, productId: string, variantName: string, qty: number) => {
@@ -1401,9 +1427,9 @@ export default function TallyCounter() {
                   onSelect: () => { setMode('tally'); localStorage.setItem('mp_tallyMode', 'tally'); } },
                 { key: 'register', label: 'Register', icon: <ShoppingBag size={17} />, active: !tallyMode,
                   onSelect: () => { setMode('register'); localStorage.setItem('mp_tallyMode', 'register'); } },
-                ...(settings.undoEnabled && tally.lastAction ? [{
+                ...(settings.undoEnabled ? [{
                   key: 'undo', label: 'Undo', icon: <RotateCcw size={17} />,
-                  onSelect: () => dispatch({ type: 'TALLY_UNDO_LAST' }),
+                  onSelect: handleUndo,
                 }] : []),
                 ...(hasItems ? [{
                   key: 'clear', label: 'Clear', icon: <Trash2 size={17} />, danger: true,
