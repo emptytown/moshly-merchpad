@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Minus, Trash2, Edit2, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign, Pencil, Download, AlertTriangle } from 'lucide-react';
+import { Plus, Minus, Trash2, Edit2, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, Store, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign, Pencil, Download, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
@@ -228,7 +228,7 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
         <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground" style={{ border: '1px solid var(--border)' }}>Cancel</button>
         <button onClick={() => { if (!repName.trim()) { toast.error('Name required'); return; } onStart(repName.trim(), stand.trim() || undefined); }}
           className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary flex items-center justify-center gap-2">
-          <Zap size={14} /> Start Sale
+          <Store size={14} /> Start Sale
         </button>
       </div>
     </RightDrawer>
@@ -608,7 +608,7 @@ export default function MerchOffice() {
               onClick={() => { if (!selectedShowId) { toast.error('Select a show first'); return; } setShowStartSale(true); }}
               className="flex-1 py-4 rounded-2xl text-base font-black text-white mp-btn-primary flex items-center justify-center gap-2"
               style={{ boxShadow: '0 0 24px rgba(107,92,255,0.3)' }}>
-              <Zap size={18} />
+              <Store size={18} />
               Start Sale Session
             </button>
             <button
