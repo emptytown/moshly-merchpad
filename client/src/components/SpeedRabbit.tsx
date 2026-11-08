@@ -1,9 +1,9 @@
 /** Speeding rabbit — lucide "rabbit" outline with motion lines; the OneOff Sale icon */
 
-export function SpeedRabbit({ size = 16 }: { size?: number }) {
+export function SpeedRabbit({ size = 16, className }: { size?: number; className?: string }) {
   return (
     <svg width={size * 29 / 24} height={size} viewBox="-5 0 29 24" fill="none" stroke="currentColor"
-      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
       <path d="M-3 8h7" />
       <path d="M-4 12.5h5" />
       <path d="M-2 18h4.5" />

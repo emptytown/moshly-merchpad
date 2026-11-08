@@ -187,12 +187,12 @@ export function SessionHistory({ saleEntries, auditEntries, inTimeRange, current
             ['oneoff', `OneOff · ${oneOffCount}`],
           ] as [TypeFilter, string][]).map(([id, label]) => (
             <button key={id} onClick={() => { setTypeFilter(id); setLimit(PAGE); }}
-              className={cn('px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
+              className={cn('px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5',
                 typeFilter === id ? 'text-white' : 'text-[var(--pill-text)]')}
               style={typeFilter === id
                 ? { background: 'linear-gradient(135deg, #6B5CFF, #C026D3)' }
                 : { background: 'var(--pill-bg)', border: '1px solid var(--pill-border)' }}>
-              {label}
+              {id === 'oneoff' && <SpeedRabbit size={12} />}{label}
             </button>
           ))}
         </div>

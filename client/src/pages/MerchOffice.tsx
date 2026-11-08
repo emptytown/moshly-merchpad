@@ -1307,8 +1307,8 @@ function OneOffModal({ onStart, onClose }: { onStart: (repName: string) => Promi
     <RightDrawer open={true} onClose={onClose} title="OneOff Sale" subtitle="No show required">
       <div className="min-h-0 overflow-y-auto p-3 space-y-4">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.2)' }}>
-          <Truck size={14} className="text-amber-400 flex-shrink-0" />
-          <p className="text-xs text-amber-300">Sale is logged in the OneOff register</p>
+          <SpeedRabbit size={14} className="text-amber-400 flex-shrink-0" />
+          <p className="text-xs text-amber-300">Shows up in Stats → Sessions as a OneOff</p>
         </div>
         <div>
           <label className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider block mb-1.5">Rep Name *</label>
@@ -1328,7 +1328,7 @@ function OneOffModal({ onStart, onClose }: { onStart: (repName: string) => Promi
           disabled={loading}
           className="w-full py-3.5 rounded-2xl text-base font-black text-white flex items-center justify-center gap-2"
           style={{ background: 'linear-gradient(135deg,#d97706,#f59e0b)', boxShadow: '0 0 20px rgba(217,119,6,0.3)' }}>
-          {loading ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <Truck size={18} />}
+          {loading ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <SpeedRabbit size={18} />}
           Start OneOff Sale
         </button>
       </div>

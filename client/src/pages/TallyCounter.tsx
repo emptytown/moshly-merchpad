@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { getDB, ProductVariant, TeamMember, projectTags } from '../lib/db';
 import { cn } from '../lib/utils';
+import { SpeedRabbit } from '../components/SpeedRabbit';
 
 // ── Euro denominations for quick-amount buttons ────────────────────────────
 const EURO_DENOMS = [1, 2, 5, 10, 20, 50, 100];
@@ -1266,8 +1267,9 @@ export default function TallyCounter() {
           ? { background: 'rgba(217,119,6,0.08)', borderBottom: '1px solid rgba(217,119,6,0.2)' }
           : { background: 'rgba(107,92,255,0.08)', borderBottom: '1px solid rgba(107,92,255,0.15)' }}>
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs font-semibold flex-shrink-0"
+          <span className="text-xs font-semibold flex-shrink-0 flex items-center gap-1.5"
             style={{ color: activeSession.sessionType === 'oneoff' ? '#F59E0B' : '#7C6DFF' }}>
+            {activeSession.sessionType === 'oneoff' && <SpeedRabbit size={13} />}
             {activeSession.sessionType === 'oneoff' ? 'ONEOFF' : 'SESSION'}
           </span>
           <span className="text-xs text-[#7B7F93] truncate">· {activeSession.repName}</span>
