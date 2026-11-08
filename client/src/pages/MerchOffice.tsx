@@ -595,10 +595,10 @@ export default function MerchOffice() {
             </button>
             <button
               onClick={() => setShowOneOff(true)}
-              className="py-4 px-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap"
+              className="py-[18px] px-[18px] rounded-2xl text-base font-bold text-white flex items-center justify-center gap-2 shrink-0 whitespace-nowrap"
               style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.35)', color: '#FBBF24' }}
               title="OneOff Sale">
-              <Truck size={16} />
+              <span aria-hidden="true" className="text-lg leading-none">🐇</span>
               <span>OneOff Sale</span>
             </button>
           </div>
