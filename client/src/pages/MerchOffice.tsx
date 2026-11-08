@@ -595,11 +595,11 @@ export default function MerchOffice() {
             </button>
             <button
               onClick={() => setShowOneOff(true)}
-              className="py-4 px-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-1.5 shrink-0"
+              className="py-4 px-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap"
               style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.35)', color: '#FBBF24' }}
               title="OneOff Sale">
               <Truck size={16} />
-              <span className="hidden sm:inline">OneOff</span>
+              <span>OneOff Sale</span>
             </button>
           </div>
         ) : (
@@ -1303,7 +1303,7 @@ function OneOffModal({ onStart, onClose }: { onStart: (repName: string) => Promi
   }
 
   return (
-    <RightDrawer open={true} onClose={onClose} title="Quick Sale" subtitle="OneOff — no show required">
+    <RightDrawer open={true} onClose={onClose} title="OneOff Sale" subtitle="No show required">
       <div className="min-h-0 overflow-y-auto p-3 space-y-4">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.2)' }}>
           <Truck size={14} className="text-amber-400 flex-shrink-0" />
