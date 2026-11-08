@@ -8,9 +8,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   AlertTriangle, TrendingDown, TrendingUp, ChevronDown, ChevronUp,
-  Sliders, Clock, Package, BarChart2, X, UserCheck,
+  Sliders, Clock, Package, BarChart2, X, UserCheck, History,
 } from 'lucide-react';
 import { RightDrawer } from '../components/RightDrawer';
+import { AuditTimeline, auditItems, auditItemLabel } from '../components/AuditTimeline';
+import { SessionHistory } from '../components/SessionHistory';
 import { ExportButton } from '../components/ExportSheet';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -27,19 +29,7 @@ function formatCurrency(n: number, currency = 'EUR') {
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
   return `${symbol}${n.toFixed(2)}`;
 }
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-}
 
-const ACTION_LABELS: Record<string, { label: string; color: string }> = {
-  tally_confirmed: { label: 'Sale', color: '#4ADE80' },
-  tally_voided: { label: 'Voided', color: '#F87171' },
-  stock_adjusted: { label: 'Adjustment', color: '#FBBF24' },
-  stock_transferred: { label: 'Transfer', color: '#00E5FF' },
-  session_started: { label: 'Session Start', color: '#6B5CFF' },
-  session_ended: { label: 'Session End', color: '#7B7F93' },
-  tally_undo: { label: 'Undo', color: '#F87171' },
-};
 
 const CHART_COLORS = ['#6B5CFF', '#C026D3', '#00E5FF', '#4ADE80', '#FBBF24', '#F87171'];
 
@@ -185,76 +175,10 @@ export function AdjustmentModal({ variantName, currentStock, defaultAdjusterName
   );
 }
 
-// ── Audit Timeline ─────────────────────────────────────────────────────────
-
-type AuditItem = { variantId: string; variantName: string; qty: number };
-
-// Sale / void entries carry their line items in newValue / oldValue — use them to name what was sold
-function auditItems(entry: AuditEntry): AuditItem[] {
-  const v = (entry.newValue ?? entry.oldValue) as unknown;
-  if (!Array.isArray(v)) return [];
-  return v.filter((i): i is AuditItem => !!i && typeof i === 'object' && 'variantName' in i && 'qty' in i);
-}
-
-function auditItemLabel(items: AuditItem[], productOf: (variantId: string) => string | undefined): string {
-  return items.map(i => {
-    const product = productOf(i.variantId);
-    const name = product && product !== i.variantName ? `${product} · ${i.variantName}` : i.variantName;
-    return `${name} ×${i.qty}`;
-  }).join(', ');
-}
-
-function AuditTimeline({ entries, productOf }: { entries: AuditEntry[]; productOf: (variantId: string) => string | undefined }) {
-  if (entries.length === 0) return (
-    <div className="text-center py-8">
-      <Clock size={24} className="text-[#7B7F93] mx-auto mb-2" />
-      <p className="text-sm text-[#7B7F93]">No activity yet</p>
-    </div>
-  );
-  return (
-    <div className="space-y-0">
-      {entries.map((entry, i) => {
-        const meta = ACTION_LABELS[entry.action] ?? { label: entry.action, color: '#7B7F93' };
-        return (
-          <div key={entry.id} className="flex gap-3 pb-4 relative">
-            {i < entries.length - 1 && <div className="absolute left-[11px] top-6 bottom-0 w-px bg-[#24273A]" />}
-            <div className="w-5 h-5 rounded-full flex-shrink-0 mt-0.5 flex items-center justify-center"
-              style={{ background: `${meta.color}20`, border: `1px solid ${meta.color}40` }}>
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: meta.color }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <span className="text-xs font-bold" style={{ color: meta.color }}>{meta.label}</span>
-                  {(() => {
-                    const items = auditItems(entry);
-                    // "by X" is already shown below — drop it from the description
-                    const suffix = ` by ${entry.actorName}`;
-                    const desc = entry.description.endsWith(suffix) ? entry.description.slice(0, -suffix.length) : entry.description;
-                    return (<>
-                      {items.length > 0 && (
-                        <p className="text-base font-bold text-foreground leading-snug mt-0.5">{auditItemLabel(items, productOf)}</p>
-                      )}
-                      <p className="text-sm text-[#A4A7B5] leading-snug mt-0.5">{desc}</p>
-                    </>);
-                  })()}
-                  {entry.reason && <span className="text-xs text-[#7B7F93] capitalize">Reason: {entry.reason.replace('_', ' ')}</span>}
-                </div>
-                <span className="text-xs text-[#7B7F93] flex-shrink-0">{formatTime(entry.timestamp)}</span>
-              </div>
-              {entry.actorName && <p className="text-xs text-[#7B7F93] mt-0.5">by {entry.actorName}</p>}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Main Screen ────────────────────────────────────────────────────────────
 
 type TimeRange = 'session' | 'all' | 'range';
-type Tab = 'analytics' | 'stock';
+type Tab = 'analytics' | 'stock' | 'sessions';
 
 // Local date (not UTC) so "today" matches the phone's clock after midnight
 const todayISO = () => {
@@ -331,7 +255,8 @@ export default function DetailInfo() {
     () => new Set(products.flatMap(p => p.variants.map(v => v.id))),
     [products]);
 
-  const filteredSaleEntries = useMemo(() => {
+  // Every confirmed (not undone) sale of this project, unfiltered — shared with the Sessions tab
+  const projectSaleEntries = useMemo(() => {
     // A sale can be undone (tally_voided) and redone (tally_confirmed again) — keep each sale
     // once, at its original time, and only if its latest event is a confirm.
     const byBatch = new Map<string, { first: AuditEntry; lastAction: string; lastTs: string }>();
@@ -358,6 +283,12 @@ export default function DetailInfo() {
       return own.length === items.length ? [e] : [{ ...e, newValue: own }];
     });
 
+    return entries;
+  }, [auditEntries, projectVariantIds]);
+
+  const filteredSaleEntries = useMemo(() => {
+    let entries = projectSaleEntries;
+
     // Time filter
     entries = entries.filter(e => inTimeRange(e.timestamp));
 
@@ -378,7 +309,7 @@ export default function DetailInfo() {
     }
 
     return entries;
-  }, [auditEntries, inTimeRange, filterProduct, filterCategory, variantProductMap, projectVariantIds]);
+  }, [projectSaleEntries, inTimeRange, filterProduct, filterCategory, variantProductMap]);
 
   // ── KPI metrics ────────────────────────────────────────────────────────
 
@@ -528,6 +459,7 @@ export default function DetailInfo() {
             </button>
           ))}
 
+          {activeTab !== 'sessions' && (<>
           <div className="w-px h-4 bg-[#2D3048] flex-shrink-0" />
 
           {/* Tag filter */}
@@ -545,6 +477,7 @@ export default function DetailInfo() {
             <option value="all">All Products</option>
             {activeProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
+          </>)}
 
           {activeFiltersCount > 0 && (
             <button onClick={() => { setTimeRange('all'); setFilterCategory('all'); setFilterProduct('all'); }}
@@ -565,7 +498,8 @@ export default function DetailInfo() {
         )}
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — not on Sessions: each session card carries its own numbers */}
+      {activeTab !== 'sessions' && (
       <div className="px-4 grid grid-cols-2 gap-2 mb-4">
         {[
           { label: 'Revenue', value: formatCurrency(totalRevenue), sub: `${totalUnitsSold} units`, color: '#4ADE80', trend: null },
@@ -588,6 +522,7 @@ export default function DetailInfo() {
           </div>
         ))}
       </div>
+      )}
 
       {/* Tabs */}
       <div className="px-4 mb-4">
@@ -595,6 +530,7 @@ export default function DetailInfo() {
           {([
             { id: 'analytics', label: 'Charts', icon: BarChart2 },
             { id: 'stock', label: 'Stock', icon: Package },
+            { id: 'sessions', label: 'Sessions', icon: History },
           ] as { id: Tab; label: string; icon: any }[]).map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setActiveTab(id)}
               className={cn('flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5',
@@ -833,10 +769,23 @@ export default function DetailInfo() {
           </div>
         )}
 
+        {/* ── Sessions Tab ──────────────────────────────────────────────── */}
+        {activeTab === 'sessions' && (
+          <SessionHistory
+            saleEntries={projectSaleEntries}
+            auditEntries={auditEntries}
+            inTimeRange={inTimeRange}
+            currentCost={currentCost}
+            currency={currency}
+            productOf={productOf}
+          />
+        )}
+
       </div>
 
-      {/* ── Activity (audit log) — follows the time filter above ─────────── */}
-      {(() => {
+      {/* ── Activity (audit log) — follows the time filter above.
+             Hidden on Sessions: each session carries its own activity. ── */}
+      {activeTab !== 'sessions' && (() => {
         const visible = auditEntries.filter(e => {
           if (!inTimeRange(e.timestamp)) return false;
           const items = auditItems(e);
