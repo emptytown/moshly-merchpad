@@ -8,6 +8,7 @@
  */
 
 import { useEffect, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -42,7 +43,9 @@ export function RightDrawer({ open, onClose, title, subtitle, children, classNam
 
   if (!open) return null;
 
-  return (
+  // Portal to <body>: a transformed ancestor (e.g. .animate-fade-in pages) would otherwise
+  // become the containing block and pin this "fixed" drawer to the page instead of the screen.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end" aria-modal="true" role="dialog">
       {/* Backdrop */}
       <div
@@ -83,6 +86,7 @@ export function RightDrawer({ open, onClose, title, subtitle, children, classNam
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
