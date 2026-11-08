@@ -613,10 +613,10 @@ export default function MerchOffice() {
             </button>
             <button
               onClick={() => setShowOneOff(true)}
-              className="py-4 px-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap"
+              className="py-3.5 px-3.5 rounded-2xl text-[12.5px] font-bold text-white flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap"
               style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.35)', color: '#FBBF24' }}
               title="OneOff Sale">
-              <SpeedRabbit size={18} />
+              <SpeedRabbit size={16} />
               <span>OneOff Sale</span>
             </button>
           </div>
