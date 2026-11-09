@@ -1407,19 +1407,11 @@ export default function TallyCounter() {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* LIVE indicator + Stop Sale */}
-          <div className="flex items-center rounded-xl overflow-hidden"
-            style={{ border: '1px solid rgba(248,113,113,0.25)' }}>
-            <div className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse" />
-              <span className="text-[10px] font-bold text-[#4ADE80]">LIVE</span>
-            </div>
-            <button
-              onClick={() => setShowStopConfirm(true)}
-              className="flex items-center gap-1 px-2.5 py-2 text-xs font-bold transition-all active:scale-95"
-              style={{ background: 'rgba(248,113,113,0.12)', color: '#F87171' }}>
-              <StopCircle size={12} /> Stop
-            </button>
+          {/* LIVE indicator — ending the sale lives in the radial menu (End) */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl"
+            style={{ border: '1px solid rgba(74,222,128,0.25)' }}>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse" />
+            <span className="text-[10px] font-bold text-[#4ADE80]">LIVE</span>
           </div>
         </div>
       </div>
