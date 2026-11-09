@@ -1523,21 +1523,6 @@ export default function TallyCounter() {
         </div>
       )}
 
-      {/* Last action feedback */}
-      {tally.lastAction && (
-        <div className="mx-4 mb-2 px-3 py-2 rounded-lg flex items-center gap-2 animate-fade-in"
-          style={{ background: 'rgba(107,92,255,0.08)', border: '1px solid rgba(107,92,255,0.15)' }}>
-          <span className={cn('text-xs font-bold mp-mono',
-            tally.lastAction.action === '+1' ? 'text-[#4ADE80]' : 'text-[#F87171]')}>
-            {tally.lastAction.action}
-          </span>
-          <span className="text-xs text-[#A4A7B5] truncate">{tally.lastAction.variantName}</span>
-          <span className="text-xs text-[#7B7F93] ml-auto flex-shrink-0">
-            {new Date(tally.lastAction.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </span>
-        </div>
-      )}
-
       {/* Tally grid — grouped by product */}
       <div className="px-4 space-y-5">
         {filteredProductGroups.map(product => {
