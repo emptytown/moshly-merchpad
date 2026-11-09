@@ -165,12 +165,15 @@ function TallyCard({
         <div className="flex-shrink-0 relative" ref={infoRef}>
           <button
             onClick={e => { e.stopPropagation(); setShowInfo(v => !v); }}
-            className="w-5 h-5 rounded-full flex items-center justify-center transition-colors mt-0.5"
-            style={{ background: showInfo ? 'rgba(107,92,255,0.25)' : 'rgba(107,92,255,0.1)', color: '#7C6DFF' }}>
-            <Info size={11} />
+            aria-label="Variant info"
+            className="w-11 h-11 -mt-2.5 -mr-2.5 flex items-center justify-center">
+            <span className="w-6 h-6 rounded-full flex items-center justify-center transition-colors"
+              style={{ background: showInfo ? 'rgba(107,92,255,0.25)' : 'rgba(107,92,255,0.1)', color: '#7C6DFF' }}>
+              <Info size={13} />
+            </span>
           </button>
           {showInfo && (
-            <div className="mp-variant-info-popup absolute top-6 right-0 z-50 w-44 rounded-xl p-3 shadow-2xl animate-fade-in"
+            <div className="mp-variant-info-popup absolute top-9 right-0 z-50 w-44 rounded-xl p-3 shadow-2xl animate-fade-in"
               style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}>
               <p className="text-[10px] font-bold text-[#7C6DFF] uppercase tracking-wider mb-2">Variant Info</p>
               <div className="space-y-1.5">
@@ -252,7 +255,7 @@ function TallyCard({
           {!showRestockPicker ? (
             <button
               onClick={() => setShowRestockPicker(true)}
-              className="w-full flex items-center justify-center gap-1 py-1 rounded-lg text-[10px] font-semibold transition-all active:scale-95"
+              className="w-full flex items-center justify-center gap-1 h-11 rounded-lg text-xs font-semibold transition-all active:scale-95"
               style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', color: '#FBBF24' }}>
               <Package size={10} /> Restock (WH: {warehouseStock})
             </button>
@@ -261,14 +264,14 @@ function TallyCard({
               {[1, 2, 5, 10].filter(q => q <= warehouseStock).map(q => (
                 <button key={q}
                   onClick={() => { onRestock(q); setShowRestockPicker(false); }}
-                  className="flex-1 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-90"
+                  className="flex-1 h-11 rounded-lg text-xs font-bold transition-all active:scale-90"
                   style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.3)', color: '#FBBF24' }}>
                   +{q}
                 </button>
               ))}
               <button
                 onClick={() => setShowRestockPicker(false)}
-                className="flex-1 py-1 rounded-lg text-[10px] font-bold text-[#7B7F93] transition-all active:scale-90"
+                className="flex-1 h-11 rounded-lg text-xs font-bold text-[#7B7F93] transition-all active:scale-90"
                 style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}>
                 ✕
               </button>
@@ -473,7 +476,8 @@ function BasketPreview({ items, totalRevenue, symbol, onClose, onAdjust }: Baske
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <h3 className="text-sm font-bold text-[#E6E7EB]">Current Basket</h3>
           <button onClick={onClose}
-            className="w-7 h-7 rounded-full flex items-center justify-center text-[#7B7F93]"
+            aria-label="Close basket"
+            className="w-11 h-11 -mr-2 rounded-full flex items-center justify-center text-[#7B7F93]"
             style={{ background: 'rgba(45,48,72,0.5)' }}>
             <ChevronDown size={14} />
           </button>
@@ -495,13 +499,13 @@ function BasketPreview({ items, totalRevenue, symbol, onClose, onAdjust }: Baske
                   </span>
                   <button
                     onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, -1)}
-                    className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
+                    className="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90"
                     style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}>
                     <Minus size={15} className="text-[#F87171]" />
                   </button>
                   <button
                     onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, 1)}
-                    className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
+                    className="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90"
                     style={{ background: 'rgba(107,92,255,0.12)', border: '1px solid rgba(107,92,255,0.2)' }}>
                     <Plus size={15} className="text-[#7C6DFF]" />
                   </button>
@@ -625,7 +629,7 @@ function ShortfallModal({
               </button>
 
               <button onClick={onCancel}
-                className="w-full py-2 text-sm font-semibold text-[#F87171] opacity-70 hover:opacity-100 transition-opacity">
+                className="w-full h-11 text-sm font-semibold text-[#F87171] opacity-70 hover:opacity-100 transition-opacity">
                 Cancel Sale
               </button>
             </>
@@ -651,12 +655,12 @@ function ShortfallModal({
               </button>
               <div className="flex gap-2">
                 <button onClick={goBack}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
+                  className="flex-1 h-11 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
                   Go Back
                 </button>
                 <button onClick={onCancel}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
+                  className="flex-1 h-11 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
                   style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
                   Cancel Sale
                 </button>
@@ -682,12 +686,12 @@ function ShortfallModal({
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={goBack}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
+                  className="flex-1 h-11 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
                   Go Back
                 </button>
                 <button onClick={onCancel}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
+                  className="flex-1 h-11 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
                   style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
                   Cancel Sale
                 </button>
@@ -717,12 +721,12 @@ function ShortfallModal({
               </button>
               <div className="flex gap-2">
                 <button onClick={goBack}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
+                  className="flex-1 h-11 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
                   Go Back
                 </button>
                 <button onClick={onCancel}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
+                  className="flex-1 h-11 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
                   style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
                   Cancel Sale
                 </button>
@@ -805,7 +809,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
               <p className="text-xs text-[#7B7F93]">{totalUnits} items · {symbol}{totalRevenue.toFixed(2)}</p>
             </div>
           </div>
-          <button onClick={onCancel} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
+          <button onClick={onCancel} className="flex items-center gap-1.5 px-4 h-11 rounded-full text-xs font-bold transition-all active:scale-95"
             style={{ background: 'rgba(107,92,255,0.15)', border: '1px solid rgba(107,92,255,0.35)', color: '#7C6DFF' }}>
             <X size={13} /> Back
           </button>
@@ -826,13 +830,13 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
                 </span>
                 <button
                   onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, -1)}
-                  className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
+                  className="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90"
                   style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}>
                   <Minus size={15} className="text-[#F87171]" />
                 </button>
                 <button
                   onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, 1)}
-                  className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
+                  className="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90"
                   style={{ background: 'rgba(107,92,255,0.12)', border: '1px solid rgba(107,92,255,0.2)' }}>
                   <Plus size={15} className="text-[#7C6DFF]" />
                 </button>
@@ -853,7 +857,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
             <p className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Money Received</p>
             {moneyIn > 0 && (
               <button onClick={handleClearMoney}
-                className="text-[10px] font-semibold text-[#F87171] hover:text-[#FCA5A5] transition-colors">
+                className="h-11 -my-3 px-3 text-xs font-semibold text-[#F87171] hover:text-[#FCA5A5] transition-colors">
                 Clear
               </button>
             )}
@@ -874,7 +878,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
             {EURO_DENOMS.map(d => (
               <button key={d}
                 onClick={() => handleDenom(d)}
-                className="mp-denom-btn flex-1 min-w-0 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
+                className="mp-denom-btn flex-1 min-w-0 h-11 rounded-full text-xs font-bold transition-all active:scale-95"
                 style={{
                   background: '#1B1E2E',
                   border: '1px solid #2D3048',
@@ -918,7 +922,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
         {/* Numpad toggle */}
         <button
           onClick={() => setNumpadOpen(v => !v)}
-          className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-[#7B7F93] hover:text-[#A4A7B5] transition-colors border-t border-[#24273A]">
+          className="w-full flex items-center justify-center gap-1.5 h-11 text-xs font-semibold text-[#7B7F93] hover:text-[#A4A7B5] transition-colors border-t border-[#24273A]">
           {numpadOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
           {numpadOpen ? 'Hide Numpad' : 'Show Numpad'}
         </button>
@@ -1432,10 +1436,11 @@ export default function TallyCounter() {
           <span className="text-xs text-[#7B7F93] flex-1">— build basket, then confirm with cash drawer</span>
           <button
             onClick={() => { localStorage.setItem(registerModeTipKey, '1'); setHideRegisterModeTip(true); }}
-            className="flex items-center gap-1 text-[10px] text-[#7B7F93] hover:text-[#A4A7B5] flex-shrink-0 transition-colors"
+            aria-label="Don't show again"
+            title="Don't show again"
+            className="flex items-center justify-center w-11 h-11 -my-2 -mr-2 rounded-lg text-[#7B7F93] hover:text-[#A4A7B5] flex-shrink-0 transition-colors"
           >
-            <X size={11} />
-            don't show again
+            <X size={16} />
           </button>
         </div>
       ) : null}
@@ -1445,7 +1450,7 @@ export default function TallyCounter() {
         <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-none">
           {categories.map(cat => (
             <button key={cat} onClick={() => { setFilterCategory(cat); localStorage.setItem('mp_tallyFilterCategory', cat); }}
-              className={cn('mp-tally-cat-pill flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
+              className={cn('mp-tally-cat-pill flex-shrink-0 h-11 px-4 rounded-full text-xs font-semibold transition-all',
                 activeTag === cat ? 'mp-tally-cat-pill--active text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]'
               )}
               style={activeTag === cat
