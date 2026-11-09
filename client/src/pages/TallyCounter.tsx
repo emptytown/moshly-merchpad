@@ -456,9 +456,31 @@ function MoshlyRadialMenu({ tallyMode, items }: { tallyMode: boolean; items: Rad
   );
 }
 
+// ── Basket rows (shared by the basket sheet and Confirm Sale) ─────────────
+interface BasketItem {
+  variantId: string;
+  /** Product name, shown small above the variant (omitted when it equals the variant name) */
+  productName?: string;
+  variantName: string;
+  qty: number;
+  unitPrice: number;
+}
+
+/** Two-line label: product (small, muted) over variant, so long names stay readable */
+function BasketItemLabel({ item }: { item: BasketItem }) {
+  return (
+    <div className="min-w-0 leading-tight">
+      {item.productName && (
+        <p className="text-[11px] text-[#7B7F93] truncate">{item.productName}</p>
+      )}
+      <p className="text-sm font-semibold text-[#E6E7EB] truncate">{item.variantName}</p>
+    </div>
+  );
+}
+
 // ── Basket Preview Sheet (Register mode — expand button) ───────────────────
 interface BasketPreviewProps {
-  items: Array<{ variantId: string; name: string; variantName: string; qty: number; unitPrice: number }>;
+  items: BasketItem[];
   totalRevenue: number;
   symbol: string;
   onClose: () => void;
@@ -491,7 +513,7 @@ function BasketPreview({ items, totalRevenue, symbol, onClose, onAdjust }: Baske
                 style={{ background: 'rgba(14,15,20,0.5)' }}>
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <span className="text-xs font-bold text-[#7C6DFF] mp-mono w-5 text-center">×{item.qty}</span>
-                  <span className="text-sm text-[#A4A7B5] truncate">{item.name}</span>
+                  <BasketItemLabel item={item} />
                 </div>
                 <div className="flex items-center gap-1.5 ml-2">
                   <span className="text-sm font-bold text-[#E6E7EB] mp-mono mr-2">
@@ -743,7 +765,7 @@ function ShortfallModal({
 const NUMPAD_KEYS = ['7','8','9','4','5','6','1','2','3','00','0','\u232b'] as const;
 
 interface RegisterModalProps {
-  items: Array<{ variantId: string; name: string; variantName: string; qty: number; unitPrice: number }>;
+  items: BasketItem[];
   totalRevenue: number;
   symbol: string;
   requireMoneyInput: boolean;
@@ -822,7 +844,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
               style={{ background: 'rgba(14,15,20,0.5)' }}>
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="text-xs font-bold text-[#7C6DFF] mp-mono w-5 text-center">×{item.qty}</span>
-                <span className="text-sm text-[#A4A7B5] truncate">{item.name}</span>
+                <BasketItemLabel item={item} />
               </div>
               <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
                 <span className="text-sm font-bold text-[#E6E7EB] mp-mono mr-1">
@@ -1075,14 +1097,17 @@ export default function TallyCounter() {
     return sum + (v ? v.price * qty : 0);
   }, 0);
 
-  // Basket items for modals / preview. Display name carries the product so that
-  // e.g. "Tee · M" and "Hoodie · M" are distinguishable (stored variantName is unchanged).
-  const basketItems = Object.values(tally.items)
+  // Basket items for modals / preview. Rows show the product above the variant so that
+  // e.g. Tee "M" and Hoodie "M" are distinguishable (stored variantName is unchanged).
+  const basketItems: BasketItem[] = Object.values(tally.items)
     .filter(i => i.qty > 0)
     .map(i => {
       const productName = state.products.find(p => p.variants.some(v => v.id === i.variantId))?.name;
-      const name = productName && productName !== i.variantName ? `${productName} · ${i.variantName}` : i.variantName;
-      return { variantId: i.variantId, name, variantName: i.variantName, qty: i.qty, unitPrice: i.unitPrice };
+      return {
+        variantId: i.variantId,
+        productName: productName && productName !== i.variantName ? productName : undefined,
+        variantName: i.variantName, qty: i.qty, unitPrice: i.unitPrice,
+      };
     });
 
   // Register mode: the basket may never hold more units than are left in road stock
