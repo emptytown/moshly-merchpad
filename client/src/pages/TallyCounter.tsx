@@ -1,17 +1,25 @@
 /**
- * Tally Counter — offline-first sale mode  v0.14.0
+ * Tally Counter — offline-first sale mode  (MerchPad 2.0)
  * Design: "Neon Ledger" — glowing stock-stroke cards, large tally numbers
  *
- * Modes:
+ * Modes (switched from the radial menu orb in the sticky bar):
  *  1. TALLY mode (default) — + tap instantly records a single-item sale.
  *     Big number on card = cumulative session-sold count (persists across sales).
- *  2. REGISTER mode — build basket, Confirm Sale opens augmented modal with
- *     items list (with +/- tweaks), total, money received, change, Complete Sale,
- *     collapsible iOS numpad.  Basket preview available via expand button on bar.
+ *     Card undo arrow voids that variant's latest sale (single-item sales only).
+ *  2. REGISTER mode — build a basket (capped at road stock); the single-row bar
+ *     holds cart · "Confirm €total" · menu. Confirm opens the cash drawer modal
+ *     (items, money received, change, numpad); a typed amount below the total
+ *     goes to the shortfall flow (discount / seller debt). Card undo arrow takes
+ *     one unit back out of the basket. Switching to Tally with a basket asks first.
+ *
+ * Menu Undo walks an undo stack (sales and card undos), persisted per project +
+ * session in IndexedDB settings. Session status (type, seller, show, End sale)
+ * sits collapsed below the cards.
  *
  * Key state:
  *  - sessionSold: Record<variantId, number>  — cumulative sold this session
  *  - tally.items: current basket (resets after each confirmed sale in Register mode)
+ *  - undoStack: UndoEntry[] — menu Undo history for the active session
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
