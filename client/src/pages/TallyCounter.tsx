@@ -1,29 +1,46 @@
 /**
- * Tally Counter — offline-first sale mode  v0.14.0
+ * Tally Counter — offline-first sale mode  (MerchPad 2.0)
  * Design: "Neon Ledger" — glowing stock-stroke cards, large tally numbers
  *
- * Modes:
+ * Modes (switched from the radial menu orb in the sticky bar):
  *  1. TALLY mode (default) — + tap instantly records a single-item sale.
  *     Big number on card = cumulative session-sold count (persists across sales).
- *  2. REGISTER mode — build basket, Confirm Sale opens augmented modal with
- *     items list (with +/- tweaks), total, money received, change, Complete Sale,
- *     collapsible iOS numpad.  Basket preview available via expand button on bar.
+ *     Card undo arrow voids that variant's latest sale (single-item sales only).
+ *  2. REGISTER mode — build a basket (capped at road stock); the single-row bar
+ *     holds cart · "Confirm €total" · menu. Confirm opens the cash drawer modal
+ *     (items, money received, change, numpad); a typed amount below the total
+ *     goes to the shortfall flow (discount / seller debt). Card undo arrow takes
+ *     one unit back out of the basket. Switching to Tally with a basket asks first.
+ *
+ * Menu Undo walks an undo stack (sales and card undos), persisted per project +
+ * session in IndexedDB settings. Session status (type, seller, show, End sale)
+ * sits collapsed below the cards.
  *
  * Key state:
  *  - sessionSold: Record<variantId, number>  — cumulative sold this session
  *  - tally.items: current basket (resets after each confirmed sale in Register mode)
+ *  - undoStack: UndoEntry[] — menu Undo history for the active session
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   Minus, Plus, RotateCcw, Trash2, CheckCircle2, Zap, ShoppingBag,
-  StopCircle, Archive, Info, ChevronDown, ChevronUp, Delete, Package, X, ShoppingCart,
+  StopCircle, Archive, Info, ChevronDown, ChevronUp, ChevronRight, Delete, Package, X, ShoppingCart,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { getDB, ProductVariant, TeamMember, projectTags } from '../lib/db';
+import { getDB, getSetting, setSetting, ProductVariant, SaleSession, TeamMember, TallyBatch, projectTags } from '../lib/db';
 import { cn } from '../lib/utils';
 import { SpeedRabbit } from '../components/SpeedRabbit';
+
+// ── Undo stack entries (menu Undo) ─────────────────────────────────────────
+interface UndoEntry {
+  /** 'sale': a confirmed sale (undo voids it) · 'void': a card undo (undo restores the sale) */
+  kind: 'sale' | 'void';
+  batchId: string;
+  sessionId: string;
+}
+const UNDO_STACK_LIMIT = 200;
 
 // ── Euro denominations for quick-amount buttons ────────────────────────────
 const EURO_DENOMS = [1, 2, 5, 10, 20, 50, 100];
@@ -59,8 +76,8 @@ interface TallyCardProps {
   effectivelyEmpty: boolean;
   onIncrement: () => void;
   onDecrement: () => void;
-  /** Tally mode only: subtract one mark from session sold count and restore road stock */
-  onTallyMinus: () => void;
+  /** Tally mode: void this variant's latest sale. (Register mode uses onDecrement: last basket tap) */
+  onUndo: () => void;
   onInstantSell: () => void;
   allowMidSaleRestock: boolean;
   warehouseStock: number;
@@ -68,12 +85,13 @@ interface TallyCardProps {
   symbol: string;
 }
 
-/** Returns the font-size class for the identity label based on character length */
+/** Returns the font-size class for the identity label based on character length.
+ *  Sizes are 80% of the original 36/30/24/20px scale, so longer names stay readable. */
 function identityLabelFontClass(label: string): string {
-  if (label.length <= 2) return 'text-4xl';
-  if (label.length <= 4) return 'text-3xl';
-  if (label.length <= 8) return 'text-2xl';
-  return 'text-xl';
+  if (label.length <= 2) return 'text-[29px]';
+  if (label.length <= 4) return 'text-2xl';
+  if (label.length <= 8) return 'text-[19px]';
+  return 'text-base';
 }
 
 /** The distinguishing label shown large on the card.
@@ -86,7 +104,7 @@ function resolveIdentityLabel(variant: ProductVariant): string {
 
 function TallyCard({
   variant, subtitle, liveStock, sessionSoldQty, basketQty, stockStatus,
-  tallyMode, effectivelyEmpty, onIncrement, onDecrement, onTallyMinus, onInstantSell,
+  tallyMode, effectivelyEmpty, onIncrement, onDecrement, onUndo, onInstantSell,
   allowMidSaleRestock, warehouseStock, onRestock, symbol,
 }: TallyCardProps) {
   const [bumping, setBumping] = useState(false);
@@ -95,6 +113,8 @@ function TallyCard({
   const infoRef = useRef<HTMLDivElement>(null);
 
   const isEmpty = tallyMode ? (liveStock <= 0) : stockStatus === 'empty';
+  // Register mode: basket already holds every unit left on the road
+  const atBasketLimit = !tallyMode && basketQty >= (variant.roadStock ?? liveStock);
   // Tally mode: cumulative session total. Register mode: basket qty only.
   const displayQty = tallyMode ? sessionSoldQty : basketQty;
 
@@ -125,9 +145,11 @@ function TallyCard({
       return;
     }
     if (isEmpty) return;
-    setBumping(true);
-    setTimeout(() => setBumping(false), 200);
-    onIncrement();
+    if (!atBasketLimit) {
+      setBumping(true);
+      setTimeout(() => setBumping(false), 200);
+    }
+    onIncrement(); // parent refuses (with a toast) when the basket is at the stock limit
   }
 
   return (
@@ -152,12 +174,15 @@ function TallyCard({
         <div className="flex-shrink-0 relative" ref={infoRef}>
           <button
             onClick={e => { e.stopPropagation(); setShowInfo(v => !v); }}
-            className="w-5 h-5 rounded-full flex items-center justify-center transition-colors mt-0.5"
-            style={{ background: showInfo ? 'rgba(107,92,255,0.25)' : 'rgba(107,92,255,0.1)', color: '#7C6DFF' }}>
-            <Info size={11} />
+            aria-label="Variant info"
+            className="w-11 h-11 -mt-2.5 -mr-2.5 flex items-center justify-center">
+            <span className="w-6 h-6 rounded-full flex items-center justify-center transition-colors"
+              style={{ background: showInfo ? 'rgba(107,92,255,0.25)' : 'rgba(107,92,255,0.1)', color: '#7C6DFF' }}>
+              <Info size={13} />
+            </span>
           </button>
           {showInfo && (
-            <div className="mp-variant-info-popup absolute top-6 right-0 z-50 w-44 rounded-xl p-3 shadow-2xl animate-fade-in"
+            <div className="mp-variant-info-popup absolute top-9 right-0 z-50 w-44 rounded-xl p-3 shadow-2xl animate-fade-in"
               style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}>
               <p className="text-[10px] font-bold text-[#7C6DFF] uppercase tracking-wider mb-2">Variant Info</p>
               <div className="space-y-1.5">
@@ -209,23 +234,25 @@ function TallyCard({
         </div>
       </div>
 
-      {/* +/- controls */}
+      {/* Undo / + controls — undo: Tally voids this variant's last sale, Register takes the last tap back out of the basket */}
       <div className="flex items-center gap-1.5 mb-2">
         <button
-          onClick={e => { e.stopPropagation(); tallyMode ? onTallyMinus() : onDecrement(); }}
+          onClick={e => { e.stopPropagation(); tallyMode ? onUndo() : onDecrement(); }}
           disabled={tallyMode ? sessionSoldQty === 0 : basketQty === 0}
-          className="flex-1 flex items-center justify-center h-9 rounded-lg transition-all active:scale-95 disabled:opacity-30"
+          aria-label={tallyMode ? `Undo last ${identityLabel} sale` : `Remove one ${identityLabel} from basket`}
+          className="flex-1 flex items-center justify-center h-11 rounded-lg transition-all active:scale-95 disabled:opacity-30"
           style={{ background: '#0E0F14', border: '1px solid #2D3048' }}>
-          <Minus size={14} className="text-[#A4A7B5]" />
+          <RotateCcw size={16} className="text-[#A4A7B5]" />
         </button>
         <button
           onClick={handleIncrementTap}
-          className="flex-[2] flex items-center justify-center h-9 rounded-lg font-bold text-white transition-all active:scale-95"
+          aria-label={tallyMode ? `Sell one ${identityLabel}` : `Add one ${identityLabel} to basket`}
+          className="flex-[2] flex items-center justify-center h-11 rounded-lg font-bold text-white transition-all active:scale-95"
           style={{
             background: tallyMode
               ? 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)'
               : 'linear-gradient(135deg, #6B5CFF 0%, #C026D3 100%)',
-            opacity: isEmpty ? 0.4 : 1,
+            opacity: isEmpty || atBasketLimit ? 0.4 : 1,
           }}>
           <Plus size={16} />
         </button>
@@ -237,7 +264,7 @@ function TallyCard({
           {!showRestockPicker ? (
             <button
               onClick={() => setShowRestockPicker(true)}
-              className="w-full flex items-center justify-center gap-1 py-1 rounded-lg text-[10px] font-semibold transition-all active:scale-95"
+              className="w-full flex items-center justify-center gap-1 h-11 rounded-lg text-xs font-semibold transition-all active:scale-95"
               style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', color: '#FBBF24' }}>
               <Package size={10} /> Restock (WH: {warehouseStock})
             </button>
@@ -246,14 +273,14 @@ function TallyCard({
               {[1, 2, 5, 10].filter(q => q <= warehouseStock).map(q => (
                 <button key={q}
                   onClick={() => { onRestock(q); setShowRestockPicker(false); }}
-                  className="flex-1 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-90"
+                  className="flex-1 h-11 rounded-lg text-xs font-bold transition-all active:scale-90"
                   style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.3)', color: '#FBBF24' }}>
                   +{q}
                 </button>
               ))}
               <button
                 onClick={() => setShowRestockPicker(false)}
-                className="flex-1 py-1 rounded-lg text-[10px] font-bold text-[#7B7F93] transition-all active:scale-90"
+                className="flex-1 h-11 rounded-lg text-xs font-bold text-[#7B7F93] transition-all active:scale-90"
                 style={{ background: '#1B1E2E', border: '1px solid #2D3048' }}>
                 ✕
               </button>
@@ -438,9 +465,94 @@ function MoshlyRadialMenu({ tallyMode, items }: { tallyMode: boolean; items: Rad
   );
 }
 
+// ── Session status (collapsible, below the cards) ──────────────────────────
+function SessionStatus({ session, showName, onEndSale }: {
+  session: SaleSession;
+  showName?: string;
+  onEndSale: () => void;
+}) {
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem('mp_tallySessionStatusOpen') === '1'; } catch { return false; }
+  });
+  const toggle = () => setOpen(v => {
+    try { localStorage.setItem('mp_tallySessionStatusOpen', v ? '0' : '1'); } catch { /* noop */ }
+    return !v;
+  });
+  const oneoff = session.sessionType === 'oneoff';
+  const accent = oneoff ? '#F59E0B' : '#7C6DFF';
+  const started = new Date(session.startedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const rows: Array<[string, string]> = [
+    ['Type', oneoff ? 'One-off sale' : 'Show session'],
+    ['Seller', session.repName || '—'],
+    ...(oneoff ? [] : [['Show', showName ?? '—'] as [string, string]]),
+    ['Started', started],
+  ];
+  return (
+    <div className="mp-tally-session-bar mx-4 mt-5 rounded-2xl overflow-hidden"
+      style={{
+        background: oneoff ? 'rgba(217,119,6,0.06)' : 'rgba(107,92,255,0.06)',
+        border: `1px solid ${oneoff ? 'rgba(217,119,6,0.2)' : 'rgba(107,92,255,0.18)'}`,
+      }}>
+      <button onClick={toggle} aria-expanded={open}
+        className="w-full h-12 px-4 flex items-center gap-2 text-left">
+        <ChevronRight size={16} className="flex-shrink-0 text-[#7B7F93] transition-transform"
+          style={{ transform: open ? 'rotate(90deg)' : 'none' }} />
+        <span className="text-sm font-semibold text-foreground">Session status</span>
+        <span className="text-xs font-semibold truncate flex items-center gap-1.5" style={{ color: accent }}>
+          · {oneoff && <SpeedRabbit size={13} />}{oneoff ? 'ONEOFF' : 'SESSION'}
+        </span>
+        <span className="ml-auto flex items-center gap-1.5 flex-shrink-0 px-2.5 py-1 rounded-lg"
+          style={{ border: '1px solid rgba(74,222,128,0.25)' }}>
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse" />
+          <span className="text-[10px] font-bold text-[#4ADE80]">LIVE</span>
+        </span>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 animate-fade-in">
+          <dl className="space-y-1.5 mb-3">
+            {rows.map(([k, v]) => (
+              <div key={k} className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-[#7B7F93]">{k}</dt>
+                <dd className="text-xs font-semibold text-[#A4A7B5] truncate">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          <button onClick={onEndSale}
+            className="w-full h-11 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: '#F87171' }}>
+            <StopCircle size={15} /> End sale
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Basket rows (shared by the basket sheet and Confirm Sale) ─────────────
+interface BasketItem {
+  variantId: string;
+  /** Product name, shown small above the variant (omitted when it equals the variant name) */
+  productName?: string;
+  variantName: string;
+  qty: number;
+  unitPrice: number;
+}
+
+/** Two-line label: product (small, muted) over variant, so long names stay readable */
+function BasketItemLabel({ item }: { item: BasketItem }) {
+  return (
+    <div className="min-w-0 leading-tight">
+      {item.productName && (
+        <p className="text-[11px] text-[#7B7F93] truncate">{item.productName}</p>
+      )}
+      <p className="text-sm font-semibold text-[#E6E7EB] truncate">{item.variantName}</p>
+    </div>
+  );
+}
+
 // ── Basket Preview Sheet (Register mode — expand button) ───────────────────
 interface BasketPreviewProps {
-  items: Array<{ variantId: string; name: string; qty: number; unitPrice: number }>;
+  items: BasketItem[];
   totalRevenue: number;
   symbol: string;
   onClose: () => void;
@@ -458,7 +570,8 @@ function BasketPreview({ items, totalRevenue, symbol, onClose, onAdjust }: Baske
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <h3 className="text-sm font-bold text-[#E6E7EB]">Current Basket</h3>
           <button onClick={onClose}
-            className="w-7 h-7 rounded-full flex items-center justify-center text-[#7B7F93]"
+            aria-label="Close basket"
+            className="w-11 h-11 -mr-2 rounded-full flex items-center justify-center text-[#7B7F93]"
             style={{ background: 'rgba(45,48,72,0.5)' }}>
             <ChevronDown size={14} />
           </button>
@@ -472,21 +585,21 @@ function BasketPreview({ items, totalRevenue, symbol, onClose, onAdjust }: Baske
                 style={{ background: 'rgba(14,15,20,0.5)' }}>
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <span className="text-xs font-bold text-[#7C6DFF] mp-mono w-5 text-center">×{item.qty}</span>
-                  <span className="text-sm text-[#A4A7B5] truncate">{item.name}</span>
+                  <BasketItemLabel item={item} />
                 </div>
                 <div className="flex items-center gap-1.5 ml-2">
                   <span className="text-sm font-bold text-[#E6E7EB] mp-mono mr-2">
                     {symbol}{(item.qty * item.unitPrice).toFixed(2)}
                   </span>
                   <button
-                    onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, -1)}
-                    className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
+                    onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, -1)}
+                    className="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90"
                     style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}>
                     <Minus size={15} className="text-[#F87171]" />
                   </button>
                   <button
-                    onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, 1)}
-                    className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
+                    onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, 1)}
+                    className="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90"
                     style={{ background: 'rgba(107,92,255,0.12)', border: '1px solid rgba(107,92,255,0.2)' }}>
                     <Plus size={15} className="text-[#7C6DFF]" />
                   </button>
@@ -568,7 +681,7 @@ function ShortfallModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
       style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
-      <div className="mp-register-modal w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-hidden"
+      <div className="mp-register-modal w-full sm:max-w-sm max-h-[100dvh] rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-y-auto overscroll-contain"
         style={{ background: '#141624', border: '1px solid rgba(248,113,113,0.3)' }}>
 
         {/* Header */}
@@ -610,7 +723,7 @@ function ShortfallModal({
               </button>
 
               <button onClick={onCancel}
-                className="w-full py-2 text-sm font-semibold text-[#F87171] opacity-70 hover:opacity-100 transition-opacity">
+                className="w-full h-11 text-sm font-semibold text-[#F87171] opacity-70 hover:opacity-100 transition-opacity">
                 Cancel Sale
               </button>
             </>
@@ -636,12 +749,12 @@ function ShortfallModal({
               </button>
               <div className="flex gap-2">
                 <button onClick={goBack}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
+                  className="flex-1 h-11 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
                   Go Back
                 </button>
                 <button onClick={onCancel}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
+                  className="flex-1 h-11 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
                   style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
                   Cancel Sale
                 </button>
@@ -667,12 +780,12 @@ function ShortfallModal({
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={goBack}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
+                  className="flex-1 h-11 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
                   Go Back
                 </button>
                 <button onClick={onCancel}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
+                  className="flex-1 h-11 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
                   style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
                   Cancel Sale
                 </button>
@@ -702,12 +815,12 @@ function ShortfallModal({
               </button>
               <div className="flex gap-2">
                 <button onClick={goBack}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
+                  className="flex-1 h-11 rounded-xl text-xs font-semibold text-[#A4A7B5] transition-all"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
                   Go Back
                 </button>
                 <button onClick={onCancel}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
+                  className="flex-1 h-11 rounded-xl text-xs font-semibold text-[#F87171] transition-all"
                   style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}>
                   Cancel Sale
                 </button>
@@ -724,7 +837,7 @@ function ShortfallModal({
 const NUMPAD_KEYS = ['7','8','9','4','5','6','1','2','3','00','0','\u232b'] as const;
 
 interface RegisterModalProps {
-  items: Array<{ variantId: string; name: string; qty: number; unitPrice: number }>;
+  items: BasketItem[];
   totalRevenue: number;
   symbol: string;
   requireMoneyInput: boolean;
@@ -775,7 +888,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
-      <div className="mp-register-modal w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-hidden"
+      <div className="mp-register-modal w-full sm:max-w-sm max-h-[100dvh] rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-y-auto overscroll-contain"
         style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}>
 
         {/* Header */}
@@ -790,7 +903,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
               <p className="text-xs text-[#7B7F93]">{totalUnits} items · {symbol}{totalRevenue.toFixed(2)}</p>
             </div>
           </div>
-          <button onClick={onCancel} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
+          <button onClick={onCancel} className="flex items-center gap-1.5 px-4 h-11 rounded-full text-xs font-bold transition-all active:scale-95"
             style={{ background: 'rgba(107,92,255,0.15)', border: '1px solid rgba(107,92,255,0.35)', color: '#7C6DFF' }}>
             <X size={13} /> Back
           </button>
@@ -803,21 +916,21 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
               style={{ background: 'rgba(14,15,20,0.5)' }}>
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="text-xs font-bold text-[#7C6DFF] mp-mono w-5 text-center">×{item.qty}</span>
-                <span className="text-sm text-[#A4A7B5] truncate">{item.name}</span>
+                <BasketItemLabel item={item} />
               </div>
               <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
                 <span className="text-sm font-bold text-[#E6E7EB] mp-mono mr-1">
                   {symbol}{(item.qty * item.unitPrice).toFixed(2)}
                 </span>
                 <button
-                  onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, -1)}
-                  className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
+                  onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, -1)}
+                  className="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90"
                   style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}>
                   <Minus size={15} className="text-[#F87171]" />
                 </button>
                 <button
-                  onClick={() => onAdjust(item.variantId, item.name, item.unitPrice, 1)}
-                  className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
+                  onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, 1)}
+                  className="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90"
                   style={{ background: 'rgba(107,92,255,0.12)', border: '1px solid rgba(107,92,255,0.2)' }}>
                   <Plus size={15} className="text-[#7C6DFF]" />
                 </button>
@@ -838,7 +951,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
             <p className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Money Received</p>
             {moneyIn > 0 && (
               <button onClick={handleClearMoney}
-                className="text-[10px] font-semibold text-[#F87171] hover:text-[#FCA5A5] transition-colors">
+                className="h-11 -my-3 px-3 text-xs font-semibold text-[#F87171] hover:text-[#FCA5A5] transition-colors">
                 Clear
               </button>
             )}
@@ -859,7 +972,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
             {EURO_DENOMS.map(d => (
               <button key={d}
                 onClick={() => handleDenom(d)}
-                className="mp-denom-btn flex-1 min-w-0 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
+                className="mp-denom-btn flex-1 min-w-0 h-11 rounded-full text-xs font-bold transition-all active:scale-95"
                 style={{
                   background: '#1B1E2E',
                   border: '1px solid #2D3048',
@@ -903,7 +1016,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
         {/* Numpad toggle */}
         <button
           onClick={() => setNumpadOpen(v => !v)}
-          className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-[#7B7F93] hover:text-[#A4A7B5] transition-colors border-t border-[#24273A]">
+          className="w-full flex items-center justify-center gap-1.5 h-11 text-xs font-semibold text-[#7B7F93] hover:text-[#A4A7B5] transition-colors border-t border-[#24273A]">
           {numpadOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
           {numpadOpen ? 'Hide Numpad' : 'Show Numpad'}
         </button>
@@ -937,7 +1050,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
 // ── Main Screen ────────────────────────────────────────────────────────────
 export default function TallyCounter() {
   const [, navigate] = useLocation();
-  const { state, dispatch, confirmSale, voidLastSale, restoreVoidedSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock, adjustStock } = useMerchPad();
+  const { state, dispatch, confirmSale, voidLastSale, voidSale, restoreVoidedSale, recordSellerDebt, getVariantStockStatus, getTallyTotal, transferStock } = useMerchPad();
   const { products, activeSession, tally, settings, teamMembers, shows } = state;
   const currency = settings.currency ?? 'EUR';
   const symbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
@@ -954,12 +1067,17 @@ export default function TallyCounter() {
 
   const [justConfirmed, setJustConfirmed] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
 
   // TALLY = instant-confirm mode (default), REGISTER = cash drawer modal mode
   const [mode, setMode] = useState<'tally' | 'register'>(
     () => localStorage.getItem('mp_tallyMode') === 'register' ? 'register' : 'tally'
   );
   const tallyMode = mode === 'tally';
+  const switchMode = (next: 'tally' | 'register') => {
+    setMode(next);
+    try { localStorage.setItem('mp_tallyMode', next); } catch { /* noop */ }
+  };
 
   const registerModeTipKey = `mp_hideRegModeTip_${activeSession?.repName ?? 'default'}`;
   const [hideRegisterModeTip, setHideRegisterModeTip] = useState(
@@ -1007,6 +1125,36 @@ export default function TallyCounter() {
     }
   }, [activeSession?.id]);
 
+  // ── Undo stack (menu Undo) ────────────────────────────────────────────
+  // Every confirmed sale and every card undo is pushed here; the menu Undo pops the
+  // most recent one and reverses it (sale → void it, card undo → restore the sale).
+  // Device-local, kept in IndexedDB per project + session so it survives a reload.
+  const undoStack = useRef<UndoEntry[]>([]);
+  const undoStackKey = activeSession ? `undoStack:${activeSession.id}` : null;
+  useEffect(() => {
+    if (!activeSession || !undoStackKey) { undoStack.current = []; return; }
+    let cancelled = false;
+    const sessionId = activeSession.id;
+    getSetting<UndoEntry[]>(activeSession.projectId, undoStackKey, []).then(saved => {
+      if (cancelled) return;
+      // Keep anything pushed while loading (same session) on top of what was saved
+      undoStack.current = [...saved, ...undoStack.current.filter(e => e.sessionId === sessionId)];
+    });
+    return () => { cancelled = true; };
+  }, [activeSession?.id]);
+
+  const persistUndoStack = useCallback(() => {
+    if (!activeSession || !undoStackKey) return;
+    undoStack.current = undoStack.current.slice(-UNDO_STACK_LIMIT);
+    setSetting(activeSession.projectId, undoStackKey, undoStack.current).catch(() => { /* best effort */ });
+  }, [activeSession, undoStackKey]);
+
+  const pushUndo = useCallback((kind: UndoEntry['kind'], batchId: string) => {
+    if (!activeSession) return;
+    undoStack.current = [...undoStack.current, { kind, batchId, sessionId: activeSession.id }];
+    persistUndoStack();
+  }, [activeSession, persistUndoStack]);
+
   const activeProducts = products.filter(p => p.status !== 'suspended');
   const categories = ['all', ...projectTags(activeProducts)];
   // A saved tag filter that no longer exists falls back to All
@@ -1026,19 +1174,37 @@ export default function TallyCounter() {
     return sum + (v ? v.price * qty : 0);
   }, 0);
 
-  // Basket items for modals / preview
-  const basketItems = Object.values(tally.items)
+  // Basket items for modals / preview. Rows show the product above the variant so that
+  // e.g. Tee "M" and Hoodie "M" are distinguishable (stored variantName is unchanged).
+  const basketItems: BasketItem[] = Object.values(tally.items)
     .filter(i => i.qty > 0)
-    .map(i => ({ variantId: i.variantId, name: i.variantName, qty: i.qty, unitPrice: i.unitPrice }));
+    .map(i => {
+      const productName = state.products.find(p => p.variants.some(v => v.id === i.variantId))?.name;
+      return {
+        variantId: i.variantId,
+        productName: productName && productName !== i.variantName ? productName : undefined,
+        variantName: i.variantName, qty: i.qty, unitPrice: i.unitPrice,
+      };
+    });
+
+  // Register mode: the basket may never hold more units than are left in road stock
+  const basketHasRoom = useCallback((variantId: string, variantName: string) => {
+    const v = state.products.flatMap(p => p.variants).find(vv => vv.id === variantId);
+    const road = v ? (v.roadStock ?? v.currentStock) : 0;
+    if ((tally.items[variantId]?.qty ?? 0) < road) return true;
+    toast.error(road > 0 ? `${variantName} — only ${road} left` : `${variantName} — no stock left!`, { duration: 2000 });
+    return false;
+  }, [state.products, tally.items]);
 
   // Adjust basket qty (used in both preview and modal)
   const handleAdjust = useCallback((variantId: string, variantName: string, unitPrice: number, delta: number) => {
     if (delta > 0) {
+      if (!basketHasRoom(variantId, variantName)) return;
       dispatch({ type: 'TALLY_INCREMENT', payload: { variantId, variantName, unitPrice } });
     } else {
       dispatch({ type: 'TALLY_DECREMENT', payload: { variantId, variantName } });
     }
-  }, [dispatch]);
+  }, [dispatch, basketHasRoom]);
 
   const finishSale = useCallback(async (
     moneyIn: number,
@@ -1047,6 +1213,7 @@ export default function TallyCounter() {
     const snapshot = Object.values(tally.items).filter(i => i.qty > 0);
     const batch = await confirmSale(opts);
     if (batch) {
+      pushUndo('sale', batch.id);
       setSessionSold(prev => {
         const next = { ...prev };
         snapshot.forEach(item => { next[item.variantId] = (next[item.variantId] ?? 0) + item.qty; });
@@ -1069,17 +1236,24 @@ export default function TallyCounter() {
       );
       setTimeout(() => setJustConfirmed(false), 2000);
     }
-  }, [confirmSale, tally.items]);
+  }, [confirmSale, tally.items, dispatch, symbol, pushUndo]);
 
   // Register confirm (with cash amount)
+  const requireMoneyInput = settings.requireMoneyInput ?? false;
   const handleRegisterConfirm = useCallback(async (moneyIn: number) => {
+    // No cash entered and cash entry is optional → record as paid in full.
+    // Only an amount actually typed in and below the total counts as a shortfall.
+    if (moneyIn === 0 && !requireMoneyInput) {
+      await finishSale(0);
+      return;
+    }
     if (moneyIn < totalRevenue) {
       setPendingMoneyIn(moneyIn);
       setShowShortfallModal(true);
       return;
     }
     await finishSale(moneyIn);
-  }, [finishSale, totalRevenue]);
+  }, [finishSale, totalRevenue, requireMoneyInput]);
 
   const handleShortfallDiscount = useCallback(async (reason?: string) => {
     const shortfall = totalRevenue - pendingMoneyIn;
@@ -1091,7 +1265,7 @@ export default function TallyCounter() {
     await finishSale(pendingMoneyIn, { shortfallType: 'seller_debt', shortfallAmount: shortfall, shortfallReason: reason, shortfallMemberId: memberId });
     await recordSellerDebt(memberId, shortfall);
     toast(`${memberName} owes ${symbol}${shortfall.toFixed(2)}`, { duration: 3000 });
-  }, [finishSale, recordSellerDebt, totalRevenue, pendingMoneyIn]);
+  }, [finishSale, recordSellerDebt, totalRevenue, pendingMoneyIn, symbol]);
 
   // Instant sell (Tally mode — single variant, qty=1, immediate confirm)
   const handleInstantSell = useCallback(async (variantId: string, variantName: string, unitPrice: number) => {
@@ -1119,6 +1293,7 @@ export default function TallyCounter() {
     inFlightDebits.current[variantId] = Math.max(0, (inFlightDebits.current[variantId] ?? 0) - 1);
 
     if (batch) {
+      pushUndo('sale', batch.id);
       dispatch({ type: 'TALLY_REMOVE_VARIANT', payload: { variantId } });
       setJustConfirmed(true);
       toast.success(`${variantName} · ${symbol}${unitPrice.toFixed(2)}`, { duration: 1500 });
@@ -1134,46 +1309,28 @@ export default function TallyCounter() {
       });
       toast.error(`Failed to record sale: no active session found.`, { duration: 3000 });
     }
-  }, [dispatch, confirmSale, state.products, symbol]);
+  }, [dispatch, confirmSale, state.products, symbol, pushUndo]);
 
-  // Tally mode minus: subtract one mark, restore road stock via counting-error adjustment
-  const handleTallyMinus = useCallback(async (variantId: string, productId: string, variantName: string) => {
-    const currentSold = sessionSold[variantId] ?? 0;
-    if (currentSold <= 0) return;
+  // Keep the per-card session counters in step with sales that are voided / restored
+  const applySoldDelta = useCallback((batch: TallyBatch, sign: 1 | -1) => {
     setSessionSold(prev => {
       const next = { ...prev };
-      const updated = Math.max(0, (next[variantId] ?? 0) - 1);
-      if (updated === 0) { delete next[variantId]; } else { next[variantId] = updated; }
-      return next;
-    });
-    await adjustStock(variantId, productId, variantName, +1, 'counting_error', 'Tally correction (minus tap)');
-    toast.success(`${variantName} — tally corrected`, { duration: 1500 });
-  }, [sessionSold, adjustStock]);
-
-  // Undo (radial menu): in Register mode with a basket, undo the last basket tap;
-  // otherwise undo the last confirmed sale of this session (voids it, restores stock).
-  const handleUndo = useCallback(async () => {
-    if (!tallyMode && tally.lastAction && hasItems) {
-      dispatch({ type: 'TALLY_UNDO_LAST' });
-      return;
-    }
-    const voided = await voidLastSale();
-    if (!voided) {
-      toast('Nothing to undo', { duration: 1500 });
-      return;
-    }
-    setSessionSold(prev => {
-      const next = { ...prev };
-      voided.items.forEach(i => {
-        const n = (next[i.variantId] ?? 0) - i.qty;
+      batch.items.forEach(i => {
+        const n = (next[i.variantId] ?? 0) + sign * i.qty;
         if (n > 0) next[i.variantId] = n; else delete next[i.variantId];
       });
       return next;
     });
-    const label = voided.items.map(i => {
-      const product = state.products.find(p => p.variants.some(v => v.id === i.variantId))?.name;
-      return `${product && product !== i.variantName ? `${product} · ` : ''}${i.variantName} ×${i.qty}`;
-    }).join(', ');
+  }, []);
+
+  // "Undone: …" toast with a Redo action that brings the sale back
+  const saleLabel = useCallback((batch: TallyBatch) => batch.items.map(i => {
+    const product = state.products.find(p => p.variants.some(v => v.id === i.variantId))?.name;
+    return `${product && product !== i.variantName ? `${product} · ` : ''}${i.variantName} ×${i.qty}`;
+  }).join(', '), [state.products]);
+
+  const announceVoided = useCallback((voided: TallyBatch) => {
+    const label = saleLabel(voided);
     toast.success(`Undone: ${label} · ${symbol}${voided.totalPrice.toFixed(2)}`, {
       duration: 6000,
       action: {
@@ -1181,16 +1338,93 @@ export default function TallyCounter() {
         onClick: async () => {
           const back = await restoreVoidedSale(voided.id);
           if (!back) return;
-          setSessionSold(prev => {
-            const next = { ...prev };
-            back.items.forEach(i => { next[i.variantId] = (next[i.variantId] ?? 0) + i.qty; });
-            return next;
-          });
+          pushUndo('sale', back.id);
+          applySoldDelta(back, 1);
           toast.success(`Redone: ${label}`, { duration: 2000 });
         },
       },
     });
-  }, [tallyMode, tally.lastAction, hasItems, dispatch, voidLastSale, restoreVoidedSale, symbol, state.products]);
+  }, [saleLabel, symbol, restoreVoidedSale, applySoldDelta, pushUndo]);
+
+  // Card undo (Tally mode): void the latest sale of this variant in the session.
+  // Sales that also hold other items, or that carry a discount / seller debt, are left
+  // alone — splitting them would change what was paid or owed; the menu Undo voids them whole.
+  const handleCardUndo = useCallback(async (variantId: string, variantName: string) => {
+    if (!activeSession) return;
+    const db = await getDB();
+    const sessionBatches = await db.getAllFromIndex('tallyBatches', 'by-session', activeSession.id);
+    const latest = sessionBatches
+      .filter(b => b.status !== 'voided' && b.items.some(i => i.variantId === variantId))
+      .sort((a, b) => b.confirmedAt.localeCompare(a.confirmedAt))[0];
+    if (!latest) {
+      toast('Nothing to undo', { duration: 1500 });
+      return;
+    }
+    if (latest.items.length > 1 || latest.shortfallType) {
+      toast.error(`${variantName}: last sale has other items or a discount/debt — use Undo in the menu to void it whole`, { duration: 4000 });
+      return;
+    }
+    const voided = await voidSale(latest.id);
+    if (!voided) return;
+    pushUndo('void', voided.id);
+    applySoldDelta(voided, -1);
+    announceVoided(voided);
+  }, [activeSession, voidSale, applySoldDelta, announceVoided, pushUndo]);
+
+  // Undo (radial menu): in Register mode with a basket, undo the last basket tap.
+  // Otherwise reverse the most recent action on the undo stack — a sale is voided, a
+  // card undo is reversed by restoring that sale. Entries that no longer match the
+  // sale's status (e.g. changed elsewhere) are skipped. Empty stack: fall back to
+  // voiding the session's latest sale (sales made before the stack existed).
+  const handleUndo = useCallback(async () => {
+    if (!tallyMode && tally.lastAction && hasItems) {
+      dispatch({ type: 'TALLY_UNDO_LAST' });
+      return;
+    }
+    const db = await getDB();
+    while (undoStack.current.length > 0) {
+      const entry = undoStack.current[undoStack.current.length - 1];
+      undoStack.current = undoStack.current.slice(0, -1);
+      persistUndoStack();
+      const batch = await db.get('tallyBatches', entry.batchId);
+      if (!batch) continue;
+      if (entry.kind === 'sale' && batch.status !== 'voided') {
+        const voided = await voidSale(batch.id);
+        if (!voided) continue;
+        applySoldDelta(voided, -1);
+        announceVoided(voided);
+        return;
+      }
+      if (entry.kind === 'void' && batch.status === 'voided') {
+        const back = await restoreVoidedSale(batch.id);
+        if (!back) continue;
+        applySoldDelta(back, 1);
+        const label = saleLabel(back);
+        toast.success(`Undo reversed: ${label} sold again · ${symbol}${back.totalPrice.toFixed(2)}`, {
+          duration: 6000,
+          action: {
+            label: 'Redo',
+            onClick: async () => {
+              const again = await voidSale(back.id);
+              if (!again) return;
+              pushUndo('void', again.id);
+              applySoldDelta(again, -1);
+              toast.success(`Redone: ${label} undone`, { duration: 2000 });
+            },
+          },
+        });
+        return;
+      }
+    }
+    const voided = await voidLastSale();
+    if (!voided) {
+      toast('Nothing to undo', { duration: 1500 });
+      return;
+    }
+    applySoldDelta(voided, -1);
+    announceVoided(voided);
+  }, [tallyMode, tally.lastAction, hasItems, dispatch, persistUndoStack, voidSale, restoreVoidedSale,
+      voidLastSale, applySoldDelta, announceVoided, saleLabel, symbol, pushUndo]);
 
   // Mid-sale restock: pull units from warehouse into road stock
   const handleRestock = useCallback(async (variantId: string, productId: string, variantName: string, qty: number) => {
@@ -1226,6 +1460,42 @@ export default function TallyCounter() {
 
   return (
     <div className="flex flex-col min-h-full">
+      {/* Register → Tally with items in the basket: clear it or stay */}
+      {showSwitchConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setShowSwitchConfirm(false)}>
+          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up p-5"
+            style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(107,92,255,0.12)' }}>
+                <ShoppingCart size={20} className="text-[#7C6DFF]" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-[#E6E7EB]">Basket not confirmed</h2>
+                <p className="text-xs text-[#7B7F93]">{totalUnits} {totalUnits === 1 ? 'item' : 'items'} · {symbol}{totalRevenue.toFixed(2)}</p>
+              </div>
+            </div>
+            <p className="text-sm text-[#A4A7B5] mb-4">
+              Tally mode sells each tap instantly, so the basket can't come along. Confirm it in Register first, or clear it and switch.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowSwitchConfirm(false)}
+                className="flex-[2] h-12 rounded-xl text-sm font-black text-white mp-btn-primary">
+                Stay in Register
+              </button>
+              <button onClick={() => { dispatch({ type: 'TALLY_CLEAR' }); setShowSwitchConfirm(false); switchMode('tally'); }}
+                className="flex-1 h-12 rounded-xl text-sm font-semibold"
+                style={{ border: '1px solid rgba(248,113,113,0.3)', color: '#F87171' }}>
+                Clear & switch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stop Sale confirmation modal */}
       {showStopConfirm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -1261,42 +1531,6 @@ export default function TallyCounter() {
         </div>
       )}
 
-      {/* Session bar */}
-      <div className="mp-tally-session-bar px-4 py-2.5 flex items-center justify-between gap-2"
-        style={activeSession.sessionType === 'oneoff'
-          ? { background: 'rgba(217,119,6,0.08)', borderBottom: '1px solid rgba(217,119,6,0.2)' }
-          : { background: 'rgba(107,92,255,0.08)', borderBottom: '1px solid rgba(107,92,255,0.15)' }}>
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs font-semibold flex-shrink-0 flex items-center gap-1.5"
-            style={{ color: activeSession.sessionType === 'oneoff' ? '#F59E0B' : '#7C6DFF' }}>
-            {activeSession.sessionType === 'oneoff' && <SpeedRabbit size={13} />}
-            {activeSession.sessionType === 'oneoff' ? 'ONEOFF' : 'SESSION'}
-          </span>
-          <span className="text-xs text-[#7B7F93] truncate">· {activeSession.repName}</span>
-          {activeSession.sessionType !== 'oneoff' && (() => {
-            const show = shows?.find(s => s.id === activeSession.showId);
-            return show ? <span className="text-xs text-[#4A4D5E] truncate">· {show.name}</span> : null;
-          })()}
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* LIVE indicator + Stop Sale */}
-          <div className="flex items-center rounded-xl overflow-hidden"
-            style={{ border: '1px solid rgba(248,113,113,0.25)' }}>
-            <div className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse" />
-              <span className="text-[10px] font-bold text-[#4ADE80]">LIVE</span>
-            </div>
-            <button
-              onClick={() => setShowStopConfirm(true)}
-              className="flex items-center gap-1 px-2.5 py-2 text-xs font-bold transition-all active:scale-95"
-              style={{ background: 'rgba(248,113,113,0.12)', color: '#F87171' }}>
-              <StopCircle size={12} /> Stop
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Mode indicator banner */}
       {tallyMode ? (
         <div className="mp-tally-mode-banner mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
@@ -1313,10 +1547,11 @@ export default function TallyCounter() {
           <span className="text-xs text-[#7B7F93] flex-1">— build basket, then confirm with cash drawer</span>
           <button
             onClick={() => { localStorage.setItem(registerModeTipKey, '1'); setHideRegisterModeTip(true); }}
-            className="flex items-center gap-1 text-[10px] text-[#7B7F93] hover:text-[#A4A7B5] flex-shrink-0 transition-colors"
+            aria-label="Don't show again"
+            title="Don't show again"
+            className="flex items-center justify-center w-11 h-11 -my-2 -mr-2 rounded-lg text-[#7B7F93] hover:text-[#A4A7B5] flex-shrink-0 transition-colors"
           >
-            <X size={11} />
-            don't show again
+            <X size={16} />
           </button>
         </div>
       ) : null}
@@ -1326,7 +1561,7 @@ export default function TallyCounter() {
         <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-none">
           {categories.map(cat => (
             <button key={cat} onClick={() => { setFilterCategory(cat); localStorage.setItem('mp_tallyFilterCategory', cat); }}
-              className={cn('mp-tally-cat-pill flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all',
+              className={cn('mp-tally-cat-pill flex-shrink-0 h-11 px-4 rounded-full text-xs font-semibold transition-all',
                 activeTag === cat ? 'mp-tally-cat-pill--active text-white' : 'text-[#7B7F93] hover:text-[#A4A7B5]'
               )}
               style={activeTag === cat
@@ -1335,21 +1570,6 @@ export default function TallyCounter() {
               {cat === 'all' ? 'All' : cat}
             </button>
           ))}
-        </div>
-      )}
-
-      {/* Last action feedback */}
-      {tally.lastAction && (
-        <div className="mx-4 mb-2 px-3 py-2 rounded-lg flex items-center gap-2 animate-fade-in"
-          style={{ background: 'rgba(107,92,255,0.08)', border: '1px solid rgba(107,92,255,0.15)' }}>
-          <span className={cn('text-xs font-bold mp-mono',
-            tally.lastAction.action === '+1' ? 'text-[#4ADE80]' : 'text-[#F87171]')}>
-            {tally.lastAction.action}
-          </span>
-          <span className="text-xs text-[#A4A7B5] truncate">{tally.lastAction.variantName}</span>
-          <span className="text-xs text-[#7B7F93] ml-auto flex-shrink-0">
-            {new Date(tally.lastAction.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </span>
         </div>
       )}
 
@@ -1362,7 +1582,7 @@ export default function TallyCounter() {
             <div key={product.id}>
               {/* Product group header */}
               <div className="flex items-center gap-2 mb-2.5 px-0.5">
-                <p className="text-[11px] font-bold text-foreground uppercase tracking-widest leading-none truncate flex-1">
+                <p className="text-[17px] font-bold text-foreground uppercase tracking-wider leading-none truncate flex-1">
                   {product.name}
                 </p>
                 {(product.tags?.length ?? 0) > 0 && (
@@ -1392,9 +1612,9 @@ export default function TallyCounter() {
                       stockStatus={stockStatus}
                       tallyMode={tallyMode}
                       effectivelyEmpty={(variant.roadStock ?? liveVariant.currentStock) <= 0}
-                      onIncrement={() => dispatch({ type: 'TALLY_INCREMENT', payload: { variantId: variant.id, variantName: variant.name, unitPrice: variant.price } })}
+                      onIncrement={() => handleAdjust(variant.id, variant.name, variant.price, 1)}
                       onDecrement={() => dispatch({ type: 'TALLY_DECREMENT', payload: { variantId: variant.id, variantName: variant.name } })}
-                      onTallyMinus={() => handleTallyMinus(variant.id, product.id, variant.name)}
+                      onUndo={() => handleCardUndo(variant.id, variant.name)}
                       onInstantSell={() => handleInstantSell(variant.id, variant.name, variant.price)}
                       allowMidSaleRestock={allowMidSaleRestock}
                       onRestock={(qty) => handleRestock(variant.id, product.id, variant.name, qty)}
@@ -1414,6 +1634,13 @@ export default function TallyCounter() {
         )}
       </div>
 
+      {/* Session status — moved below the cards to free the top; opens to details + End sale */}
+      <SessionStatus
+        session={activeSession}
+        showName={activeSession.sessionType !== 'oneoff' ? shows?.find(s => s.id === activeSession.showId)?.name : undefined}
+        onEndSale={() => setShowStopConfirm(true)}
+      />
+
       {/* Bottom action bar */}
       {(() => {
         const isSticky = tallyMode ? stickyBarTally : stickyBarRegister;
@@ -1423,30 +1650,49 @@ export default function TallyCounter() {
           'mp-tally-action-bar rounded-2xl p-3 shadow-2xl transition-all duration-300',
         )}
           style={{ background: 'var(--card)', backdropFilter: 'blur(20px)', border: '1px solid var(--border)' }}>
-          {/* Totals row */}
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between">
+            {tallyMode ? (
             <div className="flex items-center gap-3">
               <div>
-                <p className="text-xs text-muted-foreground">{tallyMode ? 'Sold' : 'Units'}</p>
-                <p className="text-lg font-black text-foreground mp-mono leading-none">
-                  {tallyMode ? sessionTotalUnits : totalUnits}
-                </p>
+                <p className="text-xs text-muted-foreground">Sold</p>
+                <p className="text-lg font-black text-foreground mp-mono leading-none">{sessionTotalUnits}</p>
               </div>
               <div className="w-px h-8 bg-border" />
               <div>
                 <p className="text-xs text-muted-foreground">Total</p>
-                <p className="text-lg font-black mp-gradient-text mp-mono leading-none">
-                  {symbol}{(tallyMode ? sessionTotalRevenue : totalRevenue).toFixed(2)}
-                </p>
+                <p className="text-lg font-black mp-gradient-text mp-mono leading-none">{symbol}{sessionTotalRevenue.toFixed(2)}</p>
               </div>
             </div>
+            ) : (
+            <div className="flex items-center gap-2 flex-1 min-w-0 mr-2">
+              <button onClick={() => setShowBasketPreview(true)} aria-label="Open basket"
+                className="relative w-12 h-14 flex-shrink-0 rounded-xl flex items-center justify-center active:scale-95 transition-all"
+                style={{ border: '1px solid var(--border)', color: hasItems ? '#A78BFA' : 'var(--muted-foreground)' }}>
+                <ShoppingCart size={20} />
+                {hasItems && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white"
+                    style={{ background: '#6B5CFF' }}>{totalUnits}</span>
+                )}
+              </button>
+              {/* Confirm carries the total: one button, one line — keeps the Register bar as low as Tally's */}
+              <button onClick={handleConfirmButton} disabled={!hasItems}
+                aria-label={`Confirm Sale, ${totalUnits} ${totalUnits === 1 ? 'item' : 'items'}, ${symbol}${totalRevenue.toFixed(2)}`}
+                className={cn('flex-1 min-w-0 h-14 rounded-xl px-3 flex items-center justify-between gap-2 text-white transition-all',
+                  hasItems ? 'mp-btn-primary' : 'cursor-not-allowed')}
+                style={hasItems ? { boxShadow: '0 0 18px rgba(107,92,255,0.3)' } : { background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
+                <span className="flex items-center gap-1.5 text-sm font-black"><CheckCircle2 size={17} /> {justConfirmed ? 'Confirmed!' : 'Confirm'}</span>
+                <span className="text-base font-black mp-mono">{symbol}{totalRevenue.toFixed(2)}</span>
+              </button>
+            </div>
+            )}
             <MoshlyRadialMenu
               tallyMode={tallyMode}
               items={[
                 { key: 'tally', label: 'Tally', icon: <Zap size={17} />, active: tallyMode,
-                  onSelect: () => { setMode('tally'); localStorage.setItem('mp_tallyMode', 'tally'); } },
+                  // A Register basket would sit hidden in Tally mode: ask first
+                  onSelect: () => { if (!tallyMode && hasItems) setShowSwitchConfirm(true); else switchMode('tally'); } },
                 { key: 'register', label: 'Register', icon: <ShoppingBag size={17} />, active: !tallyMode,
-                  onSelect: () => { setMode('register'); localStorage.setItem('mp_tallyMode', 'register'); } },
+                  onSelect: () => switchMode('register') },
                 ...(settings.undoEnabled ? [{
                   key: 'undo', label: 'Undo', icon: <RotateCcw size={17} />,
                   onSelect: handleUndo,
@@ -1462,53 +1708,12 @@ export default function TallyCounter() {
               ]}
             />
           </div>
-
-          {/* Action button — context-aware */}
-          {tallyMode ? (
-            <div className="mp-tally-mode-hint w-full py-3.5 rounded-xl text-sm font-bold text-center select-none"
-              style={{ background: 'var(--muted)', color: 'var(--muted-foreground)', border: '1px solid var(--border)' }}>
-              Tally Mode — tap + to sell instantly
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                onClick={handleConfirmButton}
-                disabled={!hasItems}
-                className={cn(
-                  'flex-[4] py-3.5 rounded-xl text-base font-black text-white transition-all flex items-center justify-center gap-2',
-                  hasItems ? 'mp-btn-primary' : 'opacity-30 cursor-not-allowed'
-                )}
-                style={hasItems ? { boxShadow: '0 0 24px rgba(107,92,255,0.35)' } : {}}>
-                {justConfirmed ? (
-                  <><CheckCircle2 size={18} /> Sale Confirmed!</>
-                ) : (
-                  <><CheckCircle2 size={18} /> Confirm Sale</>
-                )}
-              </button>
-              <button
-                onClick={() => setShowBasketPreview(true)}
-                className="flex-1 py-3.5 rounded-xl flex items-center justify-center relative transition-all active:scale-95"
-                style={{
-                  background: hasItems ? 'rgba(107,92,255,0.2)' : 'rgba(45,48,72,0.4)',
-                  border: `1px solid ${hasItems ? 'rgba(107,92,255,0.4)' : '#2D3048'}`,
-                  color: hasItems ? '#A78BFA' : '#7B7F93',
-                }}>
-                <ShoppingCart size={20} />
-                {hasItems && (
-                  <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white"
-                    style={{ background: '#6B5CFF' }}>
-                    {totalUnits}
-                  </span>
-                )}
-              </button>
-            </div>
-          )}
         </div>
       </div>
         );
       })()}
-      {/* Spacer */}
-      <div className="h-60" />
+      {/* Spacer — room for the sticky action bar (single row) above the bottom nav */}
+      <div className="h-44" />
 
       {/* Basket preview sheet (Register mode) */}
       {showBasketPreview && (
@@ -1527,7 +1732,7 @@ export default function TallyCounter() {
           items={basketItems}
           totalRevenue={totalRevenue}
           symbol={symbol}
-          requireMoneyInput={settings.requireMoneyInput ?? false}
+          requireMoneyInput={requireMoneyInput}
           onConfirm={handleRegisterConfirm}
           onCancel={() => setShowRegisterModal(false)}
           onAdjust={handleAdjust}
