@@ -1486,7 +1486,7 @@ export default function TallyCounter() {
             <div key={product.id}>
               {/* Product group header */}
               <div className="flex items-center gap-2 mb-2.5 px-0.5">
-                <p className="text-[22px] font-bold text-foreground uppercase tracking-widest leading-none truncate flex-1">
+                <p className="text-[17px] font-bold text-foreground uppercase tracking-wider leading-none truncate flex-1">
                   {product.name}
                 </p>
                 {(product.tags?.length ?? 0) > 0 && (
