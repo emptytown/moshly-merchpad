@@ -1600,23 +1600,41 @@ export default function TallyCounter() {
           'mp-tally-action-bar rounded-2xl p-3 shadow-2xl transition-all duration-300',
         )}
           style={{ background: 'var(--card)', backdropFilter: 'blur(20px)', border: '1px solid var(--border)' }}>
-          {/* Totals row */}
-          <div className={cn('flex items-center justify-between', !tallyMode && 'mb-2')}>
+          <div className="flex items-center justify-between">
+            {tallyMode ? (
             <div className="flex items-center gap-3">
               <div>
-                <p className="text-xs text-muted-foreground">{tallyMode ? 'Sold' : 'Units'}</p>
-                <p className="text-lg font-black text-foreground mp-mono leading-none">
-                  {tallyMode ? sessionTotalUnits : totalUnits}
-                </p>
+                <p className="text-xs text-muted-foreground">Sold</p>
+                <p className="text-lg font-black text-foreground mp-mono leading-none">{sessionTotalUnits}</p>
               </div>
               <div className="w-px h-8 bg-border" />
               <div>
                 <p className="text-xs text-muted-foreground">Total</p>
-                <p className="text-lg font-black mp-gradient-text mp-mono leading-none">
-                  {symbol}{(tallyMode ? sessionTotalRevenue : totalRevenue).toFixed(2)}
-                </p>
+                <p className="text-lg font-black mp-gradient-text mp-mono leading-none">{symbol}{sessionTotalRevenue.toFixed(2)}</p>
               </div>
             </div>
+            ) : (
+            <div className="flex items-center gap-2 flex-1 min-w-0 mr-2">
+              <button onClick={() => setShowBasketPreview(true)} aria-label="Open basket"
+                className="relative w-12 h-14 flex-shrink-0 rounded-xl flex items-center justify-center active:scale-95 transition-all"
+                style={{ border: '1px solid var(--border)', color: hasItems ? '#A78BFA' : 'var(--muted-foreground)' }}>
+                <ShoppingCart size={20} />
+                {hasItems && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white"
+                    style={{ background: '#6B5CFF' }}>{totalUnits}</span>
+                )}
+              </button>
+              {/* Confirm carries the total: one button, one line — keeps the Register bar as low as Tally's */}
+              <button onClick={handleConfirmButton} disabled={!hasItems}
+                aria-label={`Confirm Sale, ${totalUnits} items, ${symbol}${totalRevenue.toFixed(2)}`}
+                className={cn('flex-1 min-w-0 h-14 rounded-xl px-3 flex items-center justify-between gap-2 text-white transition-all',
+                  hasItems ? 'mp-btn-primary' : 'cursor-not-allowed')}
+                style={hasItems ? { boxShadow: '0 0 18px rgba(107,92,255,0.3)' } : { background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
+                <span className="flex items-center gap-1.5 text-sm font-black"><CheckCircle2 size={17} /> {justConfirmed ? 'Confirmed!' : 'Confirm'}</span>
+                <span className="text-base font-black mp-mono">{symbol}{totalRevenue.toFixed(2)}</span>
+              </button>
+            </div>
+            )}
             <MoshlyRadialMenu
               tallyMode={tallyMode}
               items={[
@@ -1639,49 +1657,12 @@ export default function TallyCounter() {
               ]}
             />
           </div>
-
-          {/* Action button — context-aware */}
-          {/* Register only: Confirm Sale + basket. Tally needs no action row (+ on a card sells). */}
-          {tallyMode ? null : (
-            <div className="flex gap-2">
-              <button
-                onClick={handleConfirmButton}
-                disabled={!hasItems}
-                className={cn(
-                  'flex-[4] py-3.5 rounded-xl text-base font-black text-white transition-all flex items-center justify-center gap-2',
-                  hasItems ? 'mp-btn-primary' : 'opacity-30 cursor-not-allowed'
-                )}
-                style={hasItems ? { boxShadow: '0 0 24px rgba(107,92,255,0.35)' } : {}}>
-                {justConfirmed ? (
-                  <><CheckCircle2 size={18} /> Sale Confirmed!</>
-                ) : (
-                  <><CheckCircle2 size={18} /> Confirm Sale</>
-                )}
-              </button>
-              <button
-                onClick={() => setShowBasketPreview(true)}
-                className="flex-1 py-3.5 rounded-xl flex items-center justify-center relative transition-all active:scale-95"
-                style={{
-                  background: hasItems ? 'rgba(107,92,255,0.2)' : 'rgba(45,48,72,0.4)',
-                  border: `1px solid ${hasItems ? 'rgba(107,92,255,0.4)' : '#2D3048'}`,
-                  color: hasItems ? '#A78BFA' : '#7B7F93',
-                }}>
-                <ShoppingCart size={20} />
-                {hasItems && (
-                  <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white"
-                    style={{ background: '#6B5CFF' }}>
-                    {totalUnits}
-                  </span>
-                )}
-              </button>
-            </div>
-          )}
         </div>
       </div>
         );
       })()}
-      {/* Spacer */}
-      <div className="h-60" />
+      {/* Spacer — room for the sticky action bar (single row) above the bottom nav */}
+      <div className="h-44" />
 
       {/* Basket preview sheet (Register mode) */}
       {showBasketPreview && (
