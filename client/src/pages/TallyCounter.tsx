@@ -17,11 +17,11 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   Minus, Plus, RotateCcw, Trash2, CheckCircle2, Zap, ShoppingBag,
-  StopCircle, Archive, Info, ChevronDown, ChevronUp, Delete, Package, X, ShoppingCart,
+  StopCircle, Archive, Info, ChevronDown, ChevronUp, ChevronRight, Delete, Package, X, ShoppingCart,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
-import { getDB, getSetting, setSetting, ProductVariant, TeamMember, TallyBatch, projectTags } from '../lib/db';
+import { getDB, getSetting, setSetting, ProductVariant, SaleSession, TeamMember, TallyBatch, projectTags } from '../lib/db';
 import { cn } from '../lib/utils';
 
 // ── Undo stack entries (menu Undo) ─────────────────────────────────────────
@@ -452,6 +452,69 @@ function MoshlyRadialMenu({ tallyMode, items }: { tallyMode: boolean; items: Rad
           {open ? 'close' : tallyMode ? 'Tally' : 'Register'}
         </span>
       </button>
+    </div>
+  );
+}
+
+// ── Session status (collapsible, below the cards) ──────────────────────────
+function SessionStatus({ session, showName, onEndSale }: {
+  session: SaleSession;
+  showName?: string;
+  onEndSale: () => void;
+}) {
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem('mp_tallySessionStatusOpen') === '1'; } catch { return false; }
+  });
+  const toggle = () => setOpen(v => {
+    try { localStorage.setItem('mp_tallySessionStatusOpen', v ? '0' : '1'); } catch { /* noop */ }
+    return !v;
+  });
+  const oneoff = session.sessionType === 'oneoff';
+  const accent = oneoff ? '#F59E0B' : '#7C6DFF';
+  const started = new Date(session.startedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const rows: Array<[string, string]> = [
+    ['Type', oneoff ? 'One-off sale' : 'Show session'],
+    ['Seller', session.repName || '—'],
+    ...(oneoff ? [] : [['Show', showName ?? '—'] as [string, string]]),
+    ['Started', started],
+  ];
+  return (
+    <div className="mp-tally-session-bar mx-4 mt-5 rounded-2xl overflow-hidden"
+      style={{
+        background: oneoff ? 'rgba(217,119,6,0.06)' : 'rgba(107,92,255,0.06)',
+        border: `1px solid ${oneoff ? 'rgba(217,119,6,0.2)' : 'rgba(107,92,255,0.18)'}`,
+      }}>
+      <button onClick={toggle} aria-expanded={open}
+        className="w-full h-12 px-4 flex items-center gap-2 text-left">
+        <ChevronRight size={16} className="flex-shrink-0 text-[#7B7F93] transition-transform"
+          style={{ transform: open ? 'rotate(90deg)' : 'none' }} />
+        <span className="text-sm font-semibold text-foreground">Session status</span>
+        <span className="text-xs font-semibold truncate" style={{ color: accent }}>
+          · {oneoff ? 'ONEOFF' : 'SESSION'}
+        </span>
+        <span className="ml-auto flex items-center gap-1.5 flex-shrink-0 px-2.5 py-1 rounded-lg"
+          style={{ border: '1px solid rgba(74,222,128,0.25)' }}>
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse" />
+          <span className="text-[10px] font-bold text-[#4ADE80]">LIVE</span>
+        </span>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 animate-fade-in">
+          <dl className="space-y-1.5 mb-3">
+            {rows.map(([k, v]) => (
+              <div key={k} className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-[#7B7F93]">{k}</dt>
+                <dd className="text-xs font-semibold text-[#A4A7B5] truncate">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          <button onClick={onEndSale}
+            className="w-full h-11 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: '#F87171' }}>
+            <StopCircle size={15} /> End sale
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1418,33 +1481,6 @@ export default function TallyCounter() {
         </div>
       )}
 
-      {/* Session bar */}
-      <div className="mp-tally-session-bar px-4 py-2.5 flex items-center justify-between gap-2"
-        style={activeSession.sessionType === 'oneoff'
-          ? { background: 'rgba(217,119,6,0.08)', borderBottom: '1px solid rgba(217,119,6,0.2)' }
-          : { background: 'rgba(107,92,255,0.08)', borderBottom: '1px solid rgba(107,92,255,0.15)' }}>
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs font-semibold flex-shrink-0"
-            style={{ color: activeSession.sessionType === 'oneoff' ? '#F59E0B' : '#7C6DFF' }}>
-            {activeSession.sessionType === 'oneoff' ? 'ONEOFF' : 'SESSION'}
-          </span>
-          <span className="text-xs text-[#7B7F93] truncate">· {activeSession.repName}</span>
-          {activeSession.sessionType !== 'oneoff' && (() => {
-            const show = shows?.find(s => s.id === activeSession.showId);
-            return show ? <span className="text-xs text-[#4A4D5E] truncate">· {show.name}</span> : null;
-          })()}
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* LIVE indicator — ending the sale lives in the radial menu (End) */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl"
-            style={{ border: '1px solid rgba(74,222,128,0.25)' }}>
-            <div className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse" />
-            <span className="text-[10px] font-bold text-[#4ADE80]">LIVE</span>
-          </div>
-        </div>
-      </div>
-
       {/* Mode indicator banner */}
       {tallyMode ? (
         <div className="mp-tally-mode-banner mx-4 mt-2 px-3 py-2 rounded-xl flex items-center gap-2 animate-fade-in"
@@ -1562,6 +1598,13 @@ export default function TallyCounter() {
           </div>
         )}
       </div>
+
+      {/* Session status — moved below the cards to free the top; opens to details + End sale */}
+      <SessionStatus
+        session={activeSession}
+        showName={activeSession.sessionType !== 'oneoff' ? shows?.find(s => s.id === activeSession.showId)?.name : undefined}
+        onEndSale={() => setShowStopConfirm(true)}
+      />
 
       {/* Bottom action bar */}
       {(() => {
