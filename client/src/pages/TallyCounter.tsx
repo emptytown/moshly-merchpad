@@ -1676,7 +1676,7 @@ export default function TallyCounter() {
               </button>
               {/* Confirm carries the total: one button, one line — keeps the Register bar as low as Tally's */}
               <button onClick={handleConfirmButton} disabled={!hasItems}
-                aria-label={`Confirm Sale, ${totalUnits} items, ${symbol}${totalRevenue.toFixed(2)}`}
+                aria-label={`Confirm Sale, ${totalUnits} ${totalUnits === 1 ? 'item' : 'items'}, ${symbol}${totalRevenue.toFixed(2)}`}
                 className={cn('flex-1 min-w-0 h-14 rounded-xl px-3 flex items-center justify-between gap-2 text-white transition-all',
                   hasItems ? 'mp-btn-primary' : 'cursor-not-allowed')}
                 style={hasItems ? { boxShadow: '0 0 18px rgba(107,92,255,0.3)' } : { background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
