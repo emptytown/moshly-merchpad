@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { getDB, getSetting, setSetting, ProductVariant, SaleSession, TeamMember, TallyBatch, projectTags } from '../lib/db';
 import { cn } from '../lib/utils';
+import { SpeedRabbit } from '../components/SpeedRabbit';
 
 // ── Undo stack entries (menu Undo) ─────────────────────────────────────────
 interface UndoEntry {
@@ -497,8 +498,8 @@ function SessionStatus({ session, showName, onEndSale }: {
         <ChevronRight size={16} className="flex-shrink-0 text-[#7B7F93] transition-transform"
           style={{ transform: open ? 'rotate(90deg)' : 'none' }} />
         <span className="text-sm font-semibold text-foreground">Session status</span>
-        <span className="text-xs font-semibold truncate" style={{ color: accent }}>
-          · {oneoff ? 'ONEOFF' : 'SESSION'}
+        <span className="text-xs font-semibold truncate flex items-center gap-1.5" style={{ color: accent }}>
+          · {oneoff && <SpeedRabbit size={13} />}{oneoff ? 'ONEOFF' : 'SESSION'}
         </span>
         <span className="ml-auto flex items-center gap-1.5 flex-shrink-0 px-2.5 py-1 rounded-lg"
           style={{ border: '1px solid rgba(74,222,128,0.25)' }}>

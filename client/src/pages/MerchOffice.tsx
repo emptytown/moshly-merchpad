@@ -7,12 +7,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Minus, Trash2, Edit2, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign, Pencil, Download, AlertTriangle } from 'lucide-react';
+import { Plus, Minus, Trash2, Edit2, ChevronDown, ChevronUp, Package, Calendar, TrendingUp, X, Check, Zap, Store, ArrowRightLeft, Warehouse, Truck, Sliders, Phone, Mail, UserCheck, UserX, ShoppingBag, Clock, DollarSign, Pencil, Download, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMerchPad } from '../contexts/MerchPadContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { Product, Show, TeamMember, StockAdjustment, getDB } from '../lib/db';
 import { cn } from '../lib/utils';
+import { SpeedRabbit } from '../components/SpeedRabbit';
 import { RightDrawer } from '../components/RightDrawer';
 import TeamSection from '../components/TeamSection';
 import { Switch } from '../components/ui/switch';
@@ -210,7 +211,7 @@ function StartSaleModal({ showId, onStart, onClose }: { showId: string; onStart:
         <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground" style={{ border: '1px solid var(--border)' }}>Cancel</button>
         <button onClick={() => { if (!repName.trim()) { toast.error('Name required'); return; } onStart(repName.trim(), stand.trim() || undefined); }}
           className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white mp-btn-primary flex items-center justify-center gap-2">
-          <Zap size={14} /> Start Sale
+          <Store size={14} /> Start Sale
         </button>
       </div>
     </RightDrawer>
@@ -590,16 +591,16 @@ export default function MerchOffice() {
               onClick={() => { if (!selectedShowId) { toast.error('Select a show first'); return; } setShowStartSale(true); }}
               className="flex-1 py-4 rounded-2xl text-base font-black text-white mp-btn-primary flex items-center justify-center gap-2"
               style={{ boxShadow: '0 0 24px rgba(107,92,255,0.3)' }}>
-              <Zap size={18} />
+              <Store size={18} />
               Start Sale Session
             </button>
             <button
               onClick={() => setShowOneOff(true)}
-              className="py-4 px-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-1.5 shrink-0"
+              className="py-3.5 px-3.5 rounded-2xl text-[12.5px] font-bold text-white flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap"
               style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.35)', color: '#FBBF24' }}
               title="OneOff Sale">
-              <Truck size={16} />
-              <span className="hidden sm:inline">OneOff</span>
+              <SpeedRabbit size={16} />
+              <span>OneOff Sale</span>
             </button>
           </div>
         ) : (
@@ -1303,11 +1304,11 @@ function OneOffModal({ onStart, onClose }: { onStart: (repName: string) => Promi
   }
 
   return (
-    <RightDrawer open={true} onClose={onClose} title="Quick Sale" subtitle="OneOff — no show required">
+    <RightDrawer open={true} onClose={onClose} title="OneOff Sale" subtitle="No show required">
       <div className="min-h-0 overflow-y-auto p-3 space-y-4">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.2)' }}>
-          <Truck size={14} className="text-amber-400 flex-shrink-0" />
-          <p className="text-xs text-amber-300">Sale is logged in the OneOff register</p>
+          <SpeedRabbit size={14} className="text-amber-400 flex-shrink-0" />
+          <p className="text-xs text-amber-300">Shows up in Stats → Sessions as a OneOff</p>
         </div>
         <div>
           <label className="text-xs font-semibold text-[#7B7F93] uppercase tracking-wider block mb-1.5">Rep Name *</label>
@@ -1327,7 +1328,7 @@ function OneOffModal({ onStart, onClose }: { onStart: (repName: string) => Promi
           disabled={loading}
           className="w-full py-3.5 rounded-2xl text-base font-black text-white flex items-center justify-center gap-2"
           style={{ background: 'linear-gradient(135deg,#d97706,#f59e0b)', boxShadow: '0 0 20px rgba(217,119,6,0.3)' }}>
-          {loading ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <Truck size={18} />}
+          {loading ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <SpeedRabbit size={18} />}
           Start OneOff Sale
         </button>
       </div>
