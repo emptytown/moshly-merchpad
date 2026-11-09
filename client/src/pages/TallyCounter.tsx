@@ -1058,12 +1058,17 @@ export default function TallyCounter() {
 
   const [justConfirmed, setJustConfirmed] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
 
   // TALLY = instant-confirm mode (default), REGISTER = cash drawer modal mode
   const [mode, setMode] = useState<'tally' | 'register'>(
     () => localStorage.getItem('mp_tallyMode') === 'register' ? 'register' : 'tally'
   );
   const tallyMode = mode === 'tally';
+  const switchMode = (next: 'tally' | 'register') => {
+    setMode(next);
+    try { localStorage.setItem('mp_tallyMode', next); } catch { /* noop */ }
+  };
 
   const registerModeTipKey = `mp_hideRegModeTip_${activeSession?.repName ?? 'default'}`;
   const [hideRegisterModeTip, setHideRegisterModeTip] = useState(
@@ -1446,6 +1451,42 @@ export default function TallyCounter() {
 
   return (
     <div className="flex flex-col min-h-full">
+      {/* Register → Tally with items in the basket: clear it or stay */}
+      {showSwitchConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setShowSwitchConfirm(false)}>
+          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up p-5"
+            style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(107,92,255,0.12)' }}>
+                <ShoppingCart size={20} className="text-[#7C6DFF]" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-[#E6E7EB]">Basket not confirmed</h2>
+                <p className="text-xs text-[#7B7F93]">{totalUnits} {totalUnits === 1 ? 'item' : 'items'} · {symbol}{totalRevenue.toFixed(2)}</p>
+              </div>
+            </div>
+            <p className="text-sm text-[#A4A7B5] mb-4">
+              Tally mode sells each tap instantly, so the basket can't come along. Confirm it in Register first, or clear it and switch.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowSwitchConfirm(false)}
+                className="flex-[2] h-12 rounded-xl text-sm font-black text-white mp-btn-primary">
+                Stay in Register
+              </button>
+              <button onClick={() => { dispatch({ type: 'TALLY_CLEAR' }); setShowSwitchConfirm(false); switchMode('tally'); }}
+                className="flex-1 h-12 rounded-xl text-sm font-semibold"
+                style={{ border: '1px solid rgba(248,113,113,0.3)', color: '#F87171' }}>
+                Clear & switch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stop Sale confirmation modal */}
       {showStopConfirm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -1639,9 +1680,10 @@ export default function TallyCounter() {
               tallyMode={tallyMode}
               items={[
                 { key: 'tally', label: 'Tally', icon: <Zap size={17} />, active: tallyMode,
-                  onSelect: () => { setMode('tally'); localStorage.setItem('mp_tallyMode', 'tally'); } },
+                  // A Register basket would sit hidden in Tally mode: ask first
+                  onSelect: () => { if (!tallyMode && hasItems) setShowSwitchConfirm(true); else switchMode('tally'); } },
                 { key: 'register', label: 'Register', icon: <ShoppingBag size={17} />, active: !tallyMode,
-                  onSelect: () => { setMode('register'); localStorage.setItem('mp_tallyMode', 'register'); } },
+                  onSelect: () => switchMode('register') },
                 ...(settings.undoEnabled ? [{
                   key: 'undo', label: 'Undo', icon: <RotateCcw size={17} />,
                   onSelect: handleUndo,
