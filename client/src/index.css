@@ -532,15 +532,6 @@
 [data-skin="mono"][data-mode="dark"] .mp-tally-action-bar .text-lg {
   color: #EEEEEE;
 }
-[data-skin="mono"][data-mode="dark"] .mp-tally-mode-hint {
-  background: #000000 !important;
-  color: #555555 !important;
-  border: 1px solid #333333 !important;
-  border-radius: 0px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  font-size: 11px;
-}
 [data-skin="mono"][data-mode="dark"] .mp-tally-session-bar {
   background: #111111 !important;
   border-bottom: 2px solid #EEEEEE !important;
@@ -668,15 +659,6 @@
 }
 [data-skin="mono"][data-mode="light"] .mp-tally-action-bar .text-lg {
   color: #111111;
-}
-[data-skin="mono"][data-mode="light"] .mp-tally-mode-hint {
-  background: #F0F0F0 !important;
-  color: #999999 !important;
-  border: 2px solid #DDDDDD !important;
-  border-radius: 0px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  font-size: 11px;
 }
 [data-skin="mono"][data-mode="light"] .mp-tally-session-bar {
   background: #FFFFFF !important;

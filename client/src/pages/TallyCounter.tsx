@@ -1543,7 +1543,7 @@ export default function TallyCounter() {
         )}
           style={{ background: 'var(--card)', backdropFilter: 'blur(20px)', border: '1px solid var(--border)' }}>
           {/* Totals row */}
-          <div className="flex items-center justify-between mb-2">
+          <div className={cn('flex items-center justify-between', !tallyMode && 'mb-2')}>
             <div className="flex items-center gap-3">
               <div>
                 <p className="text-xs text-muted-foreground">{tallyMode ? 'Sold' : 'Units'}</p>
@@ -1583,12 +1583,8 @@ export default function TallyCounter() {
           </div>
 
           {/* Action button — context-aware */}
-          {tallyMode ? (
-            <div className="mp-tally-mode-hint w-full py-3.5 rounded-xl text-sm font-bold text-center select-none"
-              style={{ background: 'var(--muted)', color: 'var(--muted-foreground)', border: '1px solid var(--border)' }}>
-              Tally Mode — tap + to sell instantly
-            </div>
-          ) : (
+          {/* Register only: Confirm Sale + basket. Tally needs no action row (+ on a card sells). */}
+          {tallyMode ? null : (
             <div className="flex gap-2">
               <button
                 onClick={handleConfirmButton}
