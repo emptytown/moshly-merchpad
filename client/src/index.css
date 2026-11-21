@@ -812,6 +812,12 @@
 }
 [data-skin="neo"][data-mode="light"] [data-slot="switch"][data-state="checked"] { background: var(--nb-lime) !important; }
 
+/* Dark/Light toggle in Settings — same look as the switches */
+[data-skin="neo"] .mp-mode-toggle { background: var(--nb-lime) !important; }
+[data-skin="neo"] .mp-mode-toggle[aria-checked="false"] { background: var(--nb-card) !important; border: 2px solid var(--nb-line); border-radius: 4px !important; }
+[data-skin="neo"] .mp-mode-toggle-thumb { background: var(--nb-on) !important; box-shadow: none !important; }
+[data-skin="neo"] .mp-mode-toggle[aria-checked="false"] .mp-mode-toggle-thumb { background: var(--nb-ink) !important; border-radius: 2px !important; top: 2px; width: 16px; height: 16px; }
+
 /* ── Drawers / sheets ── */
 [data-skin="neo"] [data-vaul-drawer] > div {
   background: var(--nb-paper) !important;

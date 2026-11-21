@@ -390,10 +390,13 @@ export default function Settings() {
             </div>
             <button
               onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}
-              className="relative w-12 h-6 rounded-full transition-all flex-shrink-0"
+              role="switch"
+              aria-checked={mode === 'dark'}
+              aria-label="Dark mode"
+              className="mp-mode-toggle relative w-12 h-6 rounded-full transition-all flex-shrink-0"
               style={{ background: mode === 'dark' ? 'var(--color-mp-accent)' : 'var(--color-mp-border-strong)' }}>
               <span
-                className="absolute top-0.5 w-5 h-5 rounded-full transition-all"
+                className="mp-mode-toggle-thumb absolute top-0.5 w-5 h-5 rounded-full transition-all"
                 style={{
                   background: 'white',
                   left: mode === 'dark' ? 'calc(100% - 1.375rem)' : '0.125rem',
