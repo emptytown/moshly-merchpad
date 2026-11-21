@@ -15,7 +15,7 @@ import { Slider } from '../components/ui/slider';
 import ProjectsSettings from './ProjectsSettings';
 import DangerZone from '../components/DangerZone';
 import TeamEditor from '../components/TeamEditor';
-import { useTheme, type Skin, type Mode } from '../contexts/ThemeContext';
+import { useTheme, SKINS, type Mode } from '../contexts/ThemeContext';
 
 type SettingsView = 'main' | 'projects';
 
@@ -345,7 +345,7 @@ export default function Settings() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-mp-text-tertiary)' }}>Skin</p>
             <div className="grid grid-cols-2 gap-2">
-              {(['neon', 'mono'] as Skin[]).map(s => (
+              {SKINS.map(({ id: s, label }) => (
                 <button
                   key={s}
                   onClick={() => setSkin(s)}
@@ -355,21 +355,19 @@ export default function Settings() {
                     borderColor: skin === s ? 'var(--color-mp-accent)' : 'var(--color-mp-border-strong)',
                   }}>
                   {/* Mini preview swatch */}
-                  <div className="w-full h-10 rounded-lg overflow-hidden flex">
-                    {s === 'neon' ? (
-                      <>
-                        <div className="flex-1" style={{ background: '#0E0F14' }} />
-                        <div className="flex-1" style={{ background: 'linear-gradient(135deg,#6B5CFF,#C026D3)' }} />
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex-1" style={{ background: mode === 'light' ? '#FFFFFF' : '#0A0A0A' }} />
-                        <div className="flex-1" style={{ background: mode === 'light' ? '#888888' : '#D0D0D0' }} />
-                      </>
-                    )}
-                  </div>
-                  <span className="text-xs font-bold capitalize" style={{ color: skin === s ? 'var(--color-mp-accent)' : 'var(--color-mp-text-secondary)' }}>
-                    {s === 'neon' ? 'Neon Ledger' : 'Mono'}
+                  {s === 'legacy' ? (
+                    <div className="w-full h-10 rounded-lg overflow-hidden flex">
+                      <div className="flex-1" style={{ background: mode === 'light' ? '#F9FAFB' : '#0E0F14' }} />
+                      <div className="flex-1" style={{ background: 'linear-gradient(135deg,#6B5CFF,#C026D3)' }} />
+                    </div>
+                  ) : (
+                    <div className="w-full h-10 flex gap-1.5 p-1.5" style={{ background: mode === 'light' ? '#FFF3DD' : '#181818' }}>
+                      <div className="flex-1" style={{ background: '#D8FF54', border: mode === 'light' ? '2px solid #111111' : 'none', borderRadius: mode === 'light' ? 4 : 999, boxShadow: mode === 'light' ? '2px 2px 0 #111111' : 'none' }} />
+                      <div className="flex-1" style={{ background: '#C575F8', border: mode === 'light' ? '2px solid #111111' : 'none', borderRadius: mode === 'light' ? 4 : 999, boxShadow: mode === 'light' ? '2px 2px 0 #111111' : 'none' }} />
+                    </div>
+                  )}
+                  <span className="text-xs font-bold" style={{ color: skin === s ? 'var(--color-mp-accent)' : 'var(--color-mp-text-secondary)' }}>
+                    {label}
                   </span>
                   {skin === s && (
                     <div className="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: 'var(--color-mp-accent)' }}>
@@ -392,10 +390,13 @@ export default function Settings() {
             </div>
             <button
               onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}
-              className="relative w-12 h-6 rounded-full transition-all flex-shrink-0"
+              role="switch"
+              aria-checked={mode === 'dark'}
+              aria-label="Dark mode"
+              className="mp-mode-toggle relative w-12 h-6 rounded-full transition-all flex-shrink-0"
               style={{ background: mode === 'dark' ? 'var(--color-mp-accent)' : 'var(--color-mp-border-strong)' }}>
               <span
-                className="absolute top-0.5 w-5 h-5 rounded-full transition-all"
+                className="mp-mode-toggle-thumb absolute top-0.5 w-5 h-5 rounded-full transition-all"
                 style={{
                   background: 'white',
                   left: mode === 'dark' ? 'calc(100% - 1.375rem)' : '0.125rem',

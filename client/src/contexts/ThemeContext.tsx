@@ -1,13 +1,36 @@
 /**
  * ThemeContext — skin + mode management
- * Skins: "neon" (Moshly electric dark glass), "mono" (minimal black/white/grey)
+ * Skins follow the cross-app Moshly contract (ids "neo" | "legacy"):
+ *   "neo"    — Neo Brut, as on the Moshly Site (tokens: styles/neo-brut.tokens.css)
+ *   "legacy" — Legacy Purple, the original electric-glass look
  * Modes: "dark" | "light" — each skin supports both
  * Persisted to localStorage. Applies data-skin and data-mode attributes to <html>.
  */
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-export type Skin = "neon" | "mono";
+export type Skin = "neo" | "legacy";
 export type Mode = "dark" | "light";
+
+export const SKINS: { id: Skin; label: string }[] = [
+  { id: "neo", label: "Neo Brut" },
+  { id: "legacy", label: "Legacy Purple" },
+];
+
+const DEFAULT_SKIN: Skin = "neo";
+
+/** Maps stored values (including retired skins) onto a current skin. */
+function normalizeSkin(stored: string | null): Skin {
+  switch (stored) {
+    case "legacy":
+    case "neon": // pre-contract id of Legacy Purple
+      return "legacy";
+    case "neo":
+    case "mono": // retired skin — closest match is Neo Brut
+      return "neo";
+    default:
+      return DEFAULT_SKIN;
+  }
+}
 
 interface ThemeContextType {
   skin: Skin;
@@ -28,7 +51,9 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({ children, defaultTheme = "dark" }: ThemeProviderProps) {
   const [skin, setSkinState] = useState<Skin>(() => {
-    return (localStorage.getItem("mp-skin") as Skin) || "neon";
+    const s = normalizeSkin(localStorage.getItem("mp-skin"));
+    localStorage.setItem("mp-skin", s);
+    return s;
   });
   const [mode, setModeState] = useState<Mode>(() => {
     return (localStorage.getItem("mp-mode") as Mode) || defaultTheme;
@@ -44,6 +69,7 @@ export function ThemeProvider({ children, defaultTheme = "dark" }: ThemeProvider
     }
     root.setAttribute("data-skin", skin);
     root.setAttribute("data-mode", mode);
+    root.setAttribute("data-theme", mode); // name used by the other Moshly apps
   }, [skin, mode]);
 
   const setSkin = (s: Skin) => {
