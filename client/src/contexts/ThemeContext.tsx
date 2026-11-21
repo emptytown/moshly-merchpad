@@ -1,31 +1,32 @@
 /**
  * ThemeContext — skin + mode management
- * Skins: "legacy-purple" (original Moshly electric glass, purple gradients)
- *        "neobrut"       (neo-brutalist: thick ink borders, hard offset shadows, flat colour)
+ * Skins follow the cross-app Moshly contract (ids "neo" | "legacy"):
+ *   "neo"    — Neo Brut, as on the Moshly Site (tokens: styles/neo-brut.tokens.css)
+ *   "legacy" — Legacy Purple, the original electric-glass look
  * Modes: "dark" | "light" — each skin supports both
  * Persisted to localStorage. Applies data-skin and data-mode attributes to <html>.
  */
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-export type Skin = "legacy-purple" | "neobrut";
+export type Skin = "neo" | "legacy";
 export type Mode = "dark" | "light";
 
 export const SKINS: { id: Skin; label: string }[] = [
-  { id: "legacy-purple", label: "Legacy Purple" },
-  { id: "neobrut", label: "Neobrut" },
+  { id: "neo", label: "Neo Brut" },
+  { id: "legacy", label: "Legacy Purple" },
 ];
 
-const DEFAULT_SKIN: Skin = "legacy-purple";
+const DEFAULT_SKIN: Skin = "neo";
 
 /** Maps stored values (including retired skins) onto a current skin. */
 function normalizeSkin(stored: string | null): Skin {
   switch (stored) {
-    case "legacy-purple":
-    case "neon": // renamed
-      return "legacy-purple";
-    case "neobrut":
-    case "mono": // retired — closest match is the flat, sharp-edged neobrut
-      return "neobrut";
+    case "legacy":
+    case "neon": // pre-contract id of Legacy Purple
+      return "legacy";
+    case "neo":
+    case "mono": // retired skin — closest match is Neo Brut
+      return "neo";
     default:
       return DEFAULT_SKIN;
   }
@@ -68,6 +69,7 @@ export function ThemeProvider({ children, defaultTheme = "dark" }: ThemeProvider
     }
     root.setAttribute("data-skin", skin);
     root.setAttribute("data-mode", mode);
+    root.setAttribute("data-theme", mode); // name used by the other Moshly apps
   }, [skin, mode]);
 
   const setSkin = (s: Skin) => {

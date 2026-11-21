@@ -33,10 +33,10 @@ function ThemeSwitcher() {
       <Button
         variant="outline"
         size="sm"
-        onClick={() => setSkin(skin === "legacy-purple" ? "neobrut" : "legacy-purple")}
+        onClick={() => setSkin(skin === "legacy" ? "neo" : "legacy")}
         className="text-xs"
       >
-        {skin === "legacy-purple" ? "→ Neobrut" : "→ Legacy Purple"}
+        {skin === "legacy" ? "→ Neo Brut" : "→ Legacy Purple"}
       </Button>
       <Button variant="outline" size="sm" onClick={toggleMode} className="text-xs">
         {mode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -74,20 +74,20 @@ export default function Home() {
             <div>
               <h3 className="font-semibold mb-2">Available Skins:</h3>
               <ul className="list-disc list-inside space-y-1 text-sm">
-                <li><span className="font-mono">legacy-purple</span> — original Moshly electric dark/light theme with purple gradients</li>
-                <li><span className="font-mono">neobrut</span> — neo-brutalist: thick ink borders, hard offset shadows, flat colour</li>
+                <li><span className="font-mono">legacy</span> — original Moshly electric dark/light theme with purple gradients</li>
+                <li><span className="font-mono">neo</span> — Neo Brut (Moshly Site): lime actions, purple identity, ink outlines</li>
               </ul>
             </div>
             <div>
               <h3 className="font-semibold mb-2">Typography:</h3>
-              <p className="text-sm">Standard Inter font for all skins. Heavy display weights and hard shadows in Neobrut.</p>
+              <p className="text-sm">Standard Inter font for all skins. Inter Tight 900 display type in Neo Brut.</p>
             </div>
             <div>
               <h3 className="font-semibold mb-2">Colors:</h3>
               <p className="text-sm">
                 <strong>Moshly light:</strong> Clean grays (#F9FAFB bg, purple accents) <br />
                 <strong>Moshly dark:</strong> Deep electric theme (default) <br />
-                <strong>Neobrut:</strong> Driven by --nb-* tokens (light: #FFF6E5 paper, dark: #141414)
+                <strong>Neo Brut:</strong> --nb-* tokens from moshly-design-tokens (light: #FFF3DD, dark: #181818)
               </p>
             </div>
           </CardContent>

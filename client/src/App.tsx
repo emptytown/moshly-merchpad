@@ -86,18 +86,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function ThemedToaster() {
   const { mode, skin } = useTheme();
   const isDark = mode === 'dark';
-  const isNeobrut = skin === 'neobrut';
+  const isNeo = skin === 'neo';
   return (
     <Toaster
       theme={isDark ? 'dark' : 'light'}
       toastOptions={{
-        style: isNeobrut ? {
-          background: 'var(--nb-surface)',
+        style: isNeo ? {
+          background: 'var(--nb-card)',
           border: 'var(--nb-border)',
-          borderRadius: 'var(--nb-radius)',
-          boxShadow: 'var(--nb-shadow)',
+          borderRadius: 'var(--nb-radius-control)',
+          boxShadow: 'var(--nb-shadow-md)',
           color: 'var(--nb-ink)',
-          fontFamily: 'Inter, sans-serif',
+          fontFamily: 'var(--nb-font-family-base)',
         } : {
           background: isDark ? '#1B1E2E' : '#FFFFFF',
           border: `1px solid ${isDark ? '#2D3048' : '#D8D8E8'}`,
