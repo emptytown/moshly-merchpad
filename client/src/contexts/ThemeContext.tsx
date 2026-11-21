@@ -1,13 +1,35 @@
 /**
  * ThemeContext — skin + mode management
- * Skins: "neon" (Moshly electric dark glass), "mono" (minimal black/white/grey)
+ * Skins: "legacy-purple" (original Moshly electric glass, purple gradients)
+ *        "neobrut"       (neo-brutalist: thick ink borders, hard offset shadows, flat colour)
  * Modes: "dark" | "light" — each skin supports both
  * Persisted to localStorage. Applies data-skin and data-mode attributes to <html>.
  */
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-export type Skin = "neon" | "mono";
+export type Skin = "legacy-purple" | "neobrut";
 export type Mode = "dark" | "light";
+
+export const SKINS: { id: Skin; label: string }[] = [
+  { id: "legacy-purple", label: "Legacy Purple" },
+  { id: "neobrut", label: "Neobrut" },
+];
+
+const DEFAULT_SKIN: Skin = "legacy-purple";
+
+/** Maps stored values (including retired skins) onto a current skin. */
+function normalizeSkin(stored: string | null): Skin {
+  switch (stored) {
+    case "legacy-purple":
+    case "neon": // renamed
+      return "legacy-purple";
+    case "neobrut":
+    case "mono": // retired — closest match is the flat, sharp-edged neobrut
+      return "neobrut";
+    default:
+      return DEFAULT_SKIN;
+  }
+}
 
 interface ThemeContextType {
   skin: Skin;
@@ -28,7 +50,9 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({ children, defaultTheme = "dark" }: ThemeProviderProps) {
   const [skin, setSkinState] = useState<Skin>(() => {
-    return (localStorage.getItem("mp-skin") as Skin) || "neon";
+    const s = normalizeSkin(localStorage.getItem("mp-skin"));
+    localStorage.setItem("mp-skin", s);
+    return s;
   });
   const [mode, setModeState] = useState<Mode>(() => {
     return (localStorage.getItem("mp-mode") as Mode) || defaultTheme;

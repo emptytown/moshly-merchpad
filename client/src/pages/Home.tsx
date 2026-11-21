@@ -33,10 +33,10 @@ function ThemeSwitcher() {
       <Button
         variant="outline"
         size="sm"
-        onClick={() => setSkin(skin === "neon" ? "mono" : "neon")}
+        onClick={() => setSkin(skin === "legacy-purple" ? "neobrut" : "legacy-purple")}
         className="text-xs"
       >
-        {skin === "neon" ? "→ Mono" : "→ Moshly"}
+        {skin === "legacy-purple" ? "→ Neobrut" : "→ Legacy Purple"}
       </Button>
       <Button variant="outline" size="sm" onClick={toggleMode} className="text-xs">
         {mode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -74,20 +74,20 @@ export default function Home() {
             <div>
               <h3 className="font-semibold mb-2">Available Skins:</h3>
               <ul className="list-disc list-inside space-y-1 text-sm">
-                <li><span className="font-mono">neon</span> — Moshly electric dark/light theme with purple accents</li>
-                <li><span className="font-mono">mono</span> — 8-bit retro futuristic flat design (no rounded corners)</li>
+                <li><span className="font-mono">legacy-purple</span> — original Moshly electric dark/light theme with purple gradients</li>
+                <li><span className="font-mono">neobrut</span> — neo-brutalist: thick ink borders, hard offset shadows, flat colour</li>
               </ul>
             </div>
             <div>
               <h3 className="font-semibold mb-2">Typography:</h3>
-              <p className="text-sm">Standard Inter font for all skins. Sharp edges and minimal design in Mono mode.</p>
+              <p className="text-sm">Standard Inter font for all skins. Heavy display weights and hard shadows in Neobrut.</p>
             </div>
             <div>
               <h3 className="font-semibold mb-2">Colors:</h3>
               <p className="text-sm">
                 <strong>Moshly light:</strong> Clean grays (#F9FAFB bg, purple accents) <br />
                 <strong>Moshly dark:</strong> Deep electric theme (default) <br />
-                <strong>Mono:</strong> Pure monochrome (light: #FAFAFA, dark: #0F0F0F)
+                <strong>Neobrut:</strong> Driven by --nb-* tokens (light: #FFF6E5 paper, dark: #141414)
               </p>
             </div>
           </CardContent>
