@@ -1,6 +1,5 @@
 /**
  * Tally Counter — offline-first sale mode  (MerchPad 2.0)
- * Design: "Neon Ledger" — glowing stock-stroke cards, large tally numbers
  *
  * Modes (switched from the radial menu orb in the sticky bar):
  *  1. TALLY mode (default) — + tap instantly records a single-item sale.

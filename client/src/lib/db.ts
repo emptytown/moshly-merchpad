@@ -282,8 +282,8 @@ export async function getDB(): Promise<IDBPDatabase<MerchPadDB>> {
         stores.forEach(s => {
           try {
             const store = transaction.objectStore(s as any);
-            if (!store.indexNames.contains('by-project')) {
-              store.createIndex('by-project', 'projectId');
+            if (!store.indexNames.contains('by-project' as never)) {
+              store.createIndex('by-project' as never, 'projectId');
             }
           } catch { /* ignore */ }
         });
@@ -382,102 +382,6 @@ export async function migrateStockTiers(): Promise<void> {
   if (migrated) console.info('[MerchPad] Migrated products to two-tier stock model');
 }
 
-// ── Seed demo data ─────────────────────────────────────────────────────────
-
-export async function seedDemoData(): Promise<void> {
-  const db = await getDB();
-  const existing = await db.getAll('products');
-  if (existing.length > 0) return;
-  // NO-OP: seedDemoData is no longer called during boot.
-  // Kept for reference or manual execution if needed.
-  return;
-
-  const now = new Date().toISOString();
-
-  function makeVariant(
-    productId: string,
-    name: string,
-    attributes: Record<string, string>,
-    price: number,
-    road: number,
-    warehouse: number
-  ): ProductVariant {
-    return {
-      id: uuidv4(), productId, name, attributes, price,
-      initialStock: road, currentStock: road,
-      warehouseStock: warehouse, roadStock: road,
-    };
-  }
-
-  const products: Product[] = [
-    {
-      id: uuidv4(), name: 'T-Shirt', createdAt: now, updatedAt: now,
-      variants: [],
-    },
-    {
-      id: uuidv4(), name: 'Poster', createdAt: now, updatedAt: now,
-      variants: [],
-    },
-    {
-      id: uuidv4(), name: 'Vinyl Record', createdAt: now, updatedAt: now,
-      variants: [],
-    },
-    {
-      id: uuidv4(), name: 'Enamel Pin', createdAt: now, updatedAt: now,
-      variants: [],
-    },
-    {
-      id: uuidv4(), name: 'Hoodie', createdAt: now, updatedAt: now,
-      variants: [],
-    },
-  ];
-
-  // T-Shirt variants
-  products[0].variants = [
-    makeVariant(products[0].id, 'T-Shirt Black M',  { color: 'Black', size: 'M' },  25, 20, 40),
-    makeVariant(products[0].id, 'T-Shirt Black L',  { color: 'Black', size: 'L' },  25, 15, 30),
-    makeVariant(products[0].id, 'T-Shirt Black XL', { color: 'Black', size: 'XL' }, 25, 10, 20),
-    makeVariant(products[0].id, 'T-Shirt White M',  { color: 'White', size: 'M' },  25, 12, 24),
-    makeVariant(products[0].id, 'T-Shirt White L',  { color: 'White', size: 'L' },  25,  8, 16),
-  ];
-  // Poster variants
-  products[1].variants = [
-    makeVariant(products[1].id, 'Poster A1', { size: 'A1' }, 15, 30, 60),
-    makeVariant(products[1].id, 'Poster A2', { size: 'A2' }, 10, 25, 50),
-  ];
-  // Vinyl variants
-  products[2].variants = [
-    makeVariant(products[2].id, 'Vinyl LP Black',    { format: 'LP', color: 'Black' },    30, 15, 30),
-    makeVariant(products[2].id, 'Vinyl LP Coloured', { format: 'LP', color: 'Coloured' }, 35,  8, 16),
-  ];
-  // Pin variants
-  products[3].variants = [
-    makeVariant(products[3].id, 'Pin Logo', { design: 'Logo' }, 8, 50, 100),
-    makeVariant(products[3].id, 'Pin Tour', { design: 'Tour' }, 8, 40,  80),
-  ];
-  // Hoodie variants
-  products[4].variants = [
-    makeVariant(products[4].id, 'Hoodie Black M', { color: 'Black', size: 'M' }, 55, 6, 12),
-    makeVariant(products[4].id, 'Hoodie Black L', { color: 'Black', size: 'L' }, 55, 4,  8),
-  ];
-
-  for (const p of products) await db.put('products', p);
-
-  const shows: Show[] = [
-    {
-      id: uuidv4(), name: 'Summer Solstice Tour', venue: 'Altice Arena',
-      date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-      city: 'Lisbon', status: 'upcoming', createdAt: now,
-    },
-    {
-      id: uuidv4(), name: 'NOS Alive 2026', venue: 'Passeio Marítimo de Algés',
-      date: new Date(Date.now() - 86400000 * 3).toISOString().split('T')[0],
-      city: 'Lisbon', status: 'completed', createdAt: now,
-    },
-  ];
-  for (const s of shows) await db.put('shows', s);
-}
-
 // ── Sales / Statistics Reset ──────────────────────────────────────────────
 
 export async function resetProjectSalesData(projectId: string): Promise<void> {
@@ -530,7 +434,7 @@ export async function deleteProjectData(projectId: string): Promise<void> {
   const stores = ['products', 'shows', 'sessions', 'tallyBatches', 'auditLog', 'stockAdjustments', 'syncQueue', 'settings', 'teamMembers'] as const;
 
   for (const s of stores) {
-    const items = await db.getAllFromIndex(s as any, 'by-project', projectId);
+    const items = await db.getAllFromIndex(s as any, 'by-project' as never, projectId as never);
     for (const item of items) {
       await db.delete(s as any, (item as any).id || (item as any).key);
     }
@@ -564,10 +468,4 @@ export async function removeMockData(projectId: string): Promise<void> {
   for (const s of shows) {
     if (MOCK_SHOW_NAMES.includes(s.name)) await db.delete('shows', s.id);
   }
-}
-
-export async function hasProducts(projectId: string): Promise<boolean> {
-  const db = await getDB();
-  const products = await db.getAllFromIndex('products', 'by-project', projectId);
-  return products.length > 0;
 }

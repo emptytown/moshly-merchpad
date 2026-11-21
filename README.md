@@ -15,9 +15,9 @@
 - 📦 **Local Project Slots**: Support for up to 3 isolated local project workspaces.
 - 🔗 **Moshly Hub Integration**: (In Progress) Pull professional projects directly from your Moshly Hub dashboard.
 - 📊 **Real-time Stock Tracking**: Visual stock thresholds (Green/Yellow/Red) based on session snapshots.
-- 📁 **Master Catalogue**: Manage products, variants, and categories across different shows.
+- 📁 **Product editor**: Products, variants, tags, unit cost and profit per project.
 - 📉 **Review & Archive**: End-of-sale summary with session duration, revenue breakdown, and top-performing items.
-- 🎨 **Neon Ledger Design**: A dark, electric aesthetic optimized for readability in concert venues.
+- 🎨 **Two skins, light & dark**: Neo Brut (default, shared with the Moshly Site) and Legacy Purple.
 
 ---
 
@@ -25,7 +25,7 @@
 
 | Layer | Technology |
 |---|---|
-| **Frontend** | React 19, Tailwind CSS 4, shadcn/ui, Framer Motion |
+| **Frontend** | React 19, Tailwind CSS 4, a few shadcn/ui primitives |
 | **Routing** | Wouter |
 | **State Management** | React Context + useReducer |
 | **Local Database** | IndexedDB via `idb` |
@@ -104,13 +104,14 @@ MerchPad is designed to be fully functional without an internet connection:
 
 ---
 
-## 🎨 Design Philosophy: "Neon Ledger"
+## 🎨 Skins
 
-The UI follows the **Neon Ledger** approach:
-- **Dark Base**: Uses `#0E0F14` to minimize eye strain and save battery on OLED screens.
-- **High Contrast**: Neon accents (Purple/Magenta) highlight primary actions.
-- **Tactile Feedback**: Every interaction provides immediate visual feedback, critical when haptic feedback might be missed in a loud venue.
-- **Information Density**: Numeric data uses `JetBrains Mono` for maximum clarity and alignment.
+Every screen supports two skins, each in light and dark (Settings → Appearance):
+
+- **Neo Brut** (`data-skin="neo"`, default): the Moshly Site look. Lime for the one primary action and "you are here", purple for identity, everything else neutral; Inter Tight display type. Light mode uses cream paper, ink outlines and hard offset shadows; dark mode uses flat blocks, hairlines and pill controls. Tokens are vendored in `client/src/styles/neo-brut.tokens.css` from `moshly-design-tokens` — change them upstream, not here.
+- **Legacy Purple** (`data-skin="legacy"`): the original dark-glass look with purple/magenta accents.
+
+Skin ids follow the cross-app contract in `moshly-days/docs/MOSHLY_SKINS.md`.
 
 ---
 

@@ -1,6 +1,5 @@
 /**
  * TeamSection — shows active team members with personal sales stats in MerchOffice
- * Design: "Neon Ledger" — dark glass cards, stat chips
  */
 import { useEffect, useState } from 'react';
 import { Users, TrendingUp, Clock, ShoppingBag, DollarSign } from 'lucide-react';

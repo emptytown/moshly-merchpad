@@ -1,6 +1,5 @@
 /**
  * Settings — app configuration screen
- * Design: "Neon Ledger" — dark glass cards, toggle controls
  * Features: Projects picker, undo toggle, stock thresholds, rep name, device info
  */
 

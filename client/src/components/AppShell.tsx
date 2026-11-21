@@ -1,6 +1,5 @@
 /**
  * AppShell — persistent layout wrapper with bottom tab navigation
- * Design: "Neon Ledger" — dark glass bottom nav, Moshly accent colors
  */
 
 import { Link, useLocation } from 'wouter';

@@ -83,12 +83,6 @@ export function setActiveProjectId(id: string): void {
   localStorage.setItem(ACTIVE_PROJECT_KEY, id);
 }
 
-export function getActiveProject(projects: MerchPadProject[]): MerchPadProject | null {
-  const id = getActiveProjectId();
-  if (!id) return projects[0] ?? null;
-  return projects.find(p => p.id === id) ?? projects[0] ?? null;
-}
-
 // ── Default project ────────────────────────────────────────────────────────
 
 export function ensureDefaultProject(): MerchPadProject[] {

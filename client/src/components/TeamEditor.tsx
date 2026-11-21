@@ -1,6 +1,5 @@
 /**
  * TeamEditor — manage team members in Settings
- * Design: "Neon Ledger" — dark glass cards, right-drawer form
  */
 import { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
@@ -11,7 +10,7 @@ import { TeamMember } from '../lib/db';
 import { RightDrawer } from './RightDrawer';
 import { Switch } from './ui/switch';
 
-const EMPTY: Omit<TeamMember, 'id' | 'createdAt' | 'updatedAt'> = {
+const EMPTY: Omit<TeamMember, 'id' | 'projectId' | 'createdAt' | 'updatedAt'> = {
   name: '',
   phone: '',
   email: '',
@@ -41,7 +40,7 @@ export default function TeamEditor() {
   async function handleSave() {
     if (!form.name.trim()) { toast.error('Name is required'); return; }
     const now = new Date().toISOString();
-    const member: TeamMember = editing
+    const member: Omit<TeamMember, 'projectId'> = editing
       ? { ...editing, ...form, phone: form.phone || undefined, email: form.email || undefined, updatedAt: now }
       : { id: uuidv4(), ...form, phone: form.phone || undefined, email: form.email || undefined, createdAt: now, updatedAt: now };
     await saveTeamMember(member);

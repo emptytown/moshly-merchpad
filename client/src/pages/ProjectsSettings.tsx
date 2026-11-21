@@ -1,6 +1,5 @@
 /**
  * ProjectsSettings — project picker and manager
- * Design: "Neon Ledger" — 3 local slots + Hub Projects placeholder
  * Accessible from Settings tab
  */
 

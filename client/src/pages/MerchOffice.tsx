@@ -1,6 +1,5 @@
 /**
  * Merch Office — pre-show preparation screen
- * Design: "Neon Ledger" — dark glass cards, Moshly accent colors
  * Features: items editor, show selector, stats summary, past registers
  */
 
@@ -1112,7 +1111,7 @@ export default function MerchOffice() {
               onClick={async () => {
                 if (!memberForm.name.trim()) { toast.error('Name is required'); return; }
                 const now = new Date().toISOString();
-                const member: TeamMember = editingMember === 'new'
+                const member: Omit<TeamMember, 'projectId'> = editingMember === 'new'
                   ? { id: uuidv4(), name: memberForm.name.trim(), phone: memberForm.phone || undefined, email: memberForm.email || undefined, active: memberForm.active, createdAt: now, updatedAt: now }
                   : { ...editingMember, name: memberForm.name.trim(), phone: memberForm.phone || undefined, email: memberForm.email || undefined, active: memberForm.active, updatedAt: now };
                 await saveTeamMember(member);

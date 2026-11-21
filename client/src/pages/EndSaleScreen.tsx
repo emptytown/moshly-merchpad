@@ -1,6 +1,5 @@
 /**
  * EndSaleScreen — explicit "Stop Sale → Archive" flow
- * Design: "Neon Ledger" — full-screen confirmation with session summary
  * Triggered from Tally Counter via a prominent "Stop Sale" button
  * Shows: units sold, revenue, top items, duration, then archives to history
  */

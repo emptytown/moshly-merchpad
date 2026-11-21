@@ -1,8 +1,10 @@
 /*
  * MerchPad Global Styles
- * Design: "Neon Ledger" — Dark Glassmorphism + Moshly Electric Accents
- * Tokens: Moshly-Site-Design-Tokens (colors, typography, spacing, animations)
- * Fonts: Inter (all weights — 400 through 900)
+ * Two skins, set on <html data-skin> by ThemeContext, each with light/dark (data-mode):
+ *   neo    — Neo Brut (default). Tokens: ./styles/neo-brut.tokens.css (Moshly Site)
+ *   legacy — Legacy Purple, the original dark-glass look. Its dark mode is the
+ *            :root defaults below; its light mode is [data-skin="legacy"][data-mode="light"].
+ * Fonts: Inter (body), Inter Tight (Neo Brut display)
  */
 
 @import "tailwindcss";
@@ -231,16 +233,6 @@
     transform: scale(0.97);
   }
 
-  /* ── Tally Counter Number ── */
-  .mp-tally-number {
-    font-family: 'Inter', sans-serif;
-    font-weight: 800;
-    font-size: 2.5rem;
-    line-height: 1;
-    letter-spacing: -0.04em;
-    color: #E6E7EB;
-  }
-
   /* ── Mono data ── */
   .mp-mono {
     font-family: 'Inter', sans-serif;
@@ -254,36 +246,9 @@
     -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid #24273A;
   }
-
-  /* ── Sync Status Dot ── */
-  .mp-sync-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .mp-sync-dot-online {
-    background: #4ADE80;
-    box-shadow: 0 0 6px rgba(74, 222, 128, 0.8);
-    animation: pulse-dot 2s ease-in-out infinite;
-  }
-  .mp-sync-dot-offline {
-    background: #FBBF24;
-    box-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
-  }
-  .mp-sync-dot-syncing {
-    background: #6B5CFF;
-    box-shadow: 0 0 6px rgba(107, 92, 255, 0.8);
-    animation: pulse-dot 0.8s ease-in-out infinite;
-  }
 }
 
 /* ── Keyframes ── */
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(0.85); }
-}
-
 @keyframes pulse-low {
   0%, 100% { box-shadow: 0 0 16px rgba(248, 113, 113, 0.3); }
   50% { box-shadow: 0 0 24px rgba(248, 113, 113, 0.5); }
@@ -426,10 +391,6 @@
   background: rgba(255, 255, 255, 0.98);
   border-top-color: #E5E7EB;
 }
-[data-skin="legacy"][data-mode="light"] .mp-tally-number {
-  color: #1F2937;
-}
-
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * NEO BRUT skin  (data-skin="neo")
@@ -719,12 +680,6 @@
 [data-skin="neo"] .border-\[\#0E0F14\] { border-color: var(--nb-line) !important; }
 
 /* ── Tally ── */
-[data-skin="neo"] .mp-tally-number {
-  color: var(--nb-ink);
-  font-family: var(--nb-font-family-display);
-  font-weight: var(--nb-font-weight-display);
-  letter-spacing: calc(var(--nb-font-tracking-display) * 1em);
-}
 [data-skin="neo"] .mp-tally-action-bar {
   background: var(--nb-card) !important;
   backdrop-filter: none !important;
@@ -818,12 +773,6 @@
 [data-skin="neo"] .mp-mode-toggle-thumb { background: var(--nb-on) !important; box-shadow: none !important; }
 [data-skin="neo"] .mp-mode-toggle[aria-checked="false"] .mp-mode-toggle-thumb { background: var(--nb-ink) !important; border-radius: 2px !important; top: 2px; width: 16px; height: 16px; }
 
-/* ── Drawers / sheets ── */
-[data-skin="neo"] [data-vaul-drawer] > div {
-  background: var(--nb-paper) !important;
-  border-top: var(--nb-border) !important;
-}
-
 /* ── Recharts: purple data, ink frame ── */
 [data-skin="neo"] .recharts-area-curve { stroke: var(--nb-purple-ink) !important; stroke-width: 2.5px; }
 [data-skin="neo"] .recharts-area-area { fill: var(--nb-purple) !important; fill-opacity: .25; }
@@ -899,17 +848,6 @@
 [data-skin="neo"] .mp-variant-info-popup p,
 [data-skin="neo"] .mp-variant-info-popup span:not([style]) { color: var(--nb-ink) !important; }
 [data-skin="neo"] .mp-variant-info-popup .border-t { border-color: var(--nb-line) !important; }
-
-/* MasterCatalogue — hardcoded dark input backgrounds */
-[data-skin="neo"] .mp-master-catalogue .bg-\[#0E0F14\],
-[data-skin="neo"] .mp-master-catalogue .bg-\[#141624\] { background: var(--input) !important; }
-[data-skin="neo"] .mp-master-catalogue div[style*="background: rgb(14, 15, 20)"],
-[data-skin="neo"] .mp-master-catalogue div[style*="background: rgb(27, 30, 46)"],
-[data-skin="neo"] .mp-master-catalogue span[style*="background: rgb(14, 15, 20)"] {
-  background: var(--input) !important;
-  border-color: var(--border) !important;
-  color: var(--foreground) !important;
-}
 
 /* Project Picker — slot add icon */
 [data-skin="neo"] .mp-slot-add-icon {

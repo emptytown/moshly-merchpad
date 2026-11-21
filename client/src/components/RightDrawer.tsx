@@ -1,6 +1,5 @@
 /**
  * RightDrawer — reusable right-side drawer
- * Design: Neon Ledger dark theme
  *
  * Fixed to the viewport (not affected by page scroll).
  * Slides in from the right. Dark overlay on the left.

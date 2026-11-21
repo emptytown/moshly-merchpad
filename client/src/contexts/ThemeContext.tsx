@@ -42,11 +42,10 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-// Legacy prop kept for backward compat with App.tsx
 interface ThemeProviderProps {
   children: React.ReactNode;
-  defaultTheme?: "dark" | "light";
-  switchable?: boolean;
+  /** Mode used until the user picks one */
+  defaultTheme?: Mode;
 }
 
 export function ThemeProvider({ children, defaultTheme = "dark" }: ThemeProviderProps) {

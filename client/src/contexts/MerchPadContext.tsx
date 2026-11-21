@@ -279,7 +279,8 @@ interface MerchPadContextValue {
   getAuditLog: (sessionId?: string) => Promise<AuditEntry[]>;
   transferStock: (variantId: string, productId: string, variantName: string, direction: 'to_road' | 'to_warehouse', qty: number, note?: string) => Promise<void>;
   startOneOffSession: (repName: string) => Promise<SaleSession>;
-  saveTeamMember: (member: TeamMember) => Promise<void>;
+  /** projectId is filled in from the active project */
+  saveTeamMember: (member: Omit<TeamMember, 'projectId'>) => Promise<void>;
   deleteTeamMember: (memberId: string) => Promise<void>;
   getTeamMemberStats: (memberId: string) => Promise<{ shifts: number; hoursWorked: number; totalItems: number; totalRevenue: number }>;
 }
@@ -842,10 +843,10 @@ export function MerchPadProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'DELETE_SHOW', payload: showId });
   }, [activeProject]);
 
-  const saveTeamMember = useCallback(async (member: TeamMember) => {
+  const saveTeamMember = useCallback(async (member: Omit<TeamMember, 'projectId'>) => {
     if (!activeProject) return;
     const db = await getDB();
-    const taggedMember = { ...member, projectId: activeProject.id };
+    const taggedMember: TeamMember = { ...member, projectId: activeProject.id };
     await db.put('teamMembers', taggedMember);
     await enqueueSync(activeProject.id, 'team_member_upsert', taggedMember);
     dispatch({ type: 'UPSERT_TEAM_MEMBER', payload: taggedMember });

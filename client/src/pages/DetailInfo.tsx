@@ -1,6 +1,5 @@
 /**
  * Detail Info — analytics dashboard
- * Design: "Neon Ledger" — KPI cards, Recharts charts, filters, audit trail
  * Tabs: Analytics | Stock | Audit Trail
  * Filters: time range (session / all / range), tag, product
  */

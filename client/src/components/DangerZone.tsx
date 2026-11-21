@@ -1,6 +1,5 @@
 /**
  * DangerZone — destructive settings actions
- * Design: "Neon Ledger" — red-bordered section, two-step confirm per action
  * Actions: Reset Stock, Delete Products, Delete Project, Full Reset, Remove Mock Data
  */
 
