@@ -298,6 +298,109 @@
   .mp-sheet-btn--secondary { background: transparent; color: var(--foreground); border: 1px solid var(--border); }
   .mp-sheet-btn--danger { background: #DC2626; color: #fff; border: 1px solid transparent; } /* 4.8:1 with white */
 
+  /* ── Register (Confirm Sale) — all skins, colours from theme tokens ── */
+  .mp-reg {
+    --mp-reg-bg: var(--popover);
+    background: var(--mp-reg-bg);
+    color: var(--popover-foreground);
+    border: 1px solid var(--border);
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+  }
+  @media (min-width: 640px) { .mp-reg { border-radius: 20px; } }
+  .mp-reg-close {
+    width: 44px; height: 44px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 999px; border: 1px solid var(--border); color: var(--foreground);
+  }
+  .mp-reg-receipt {
+    position: relative; overflow: hidden;
+    background: var(--muted); border: 1px solid var(--border); border-radius: 16px;
+  }
+  .mp-reg-lines { padding: 0 14px; max-height: 34vh; overflow-y: auto; }
+  .mp-reg-line { display: flex; gap: 12px; align-items: center; padding: 12px 0; }
+  .mp-reg-line + .mp-reg-line { border-top: 1px dashed var(--border); }
+  .mp-reg-line-product { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mp-reg-line-variant { font-size: 16px; font-weight: 800; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mp-reg-line-unit { font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .mp-reg-line-total { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--foreground); }
+  .mp-reg-stepper {
+    display: inline-flex; align-items: center; height: 44px;
+    border: 1px solid var(--border); border-radius: 999px; background: var(--card);
+  }
+  .mp-reg-stepper button { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; color: var(--foreground); }
+  .mp-reg-stepper span { min-width: 22px; text-align: center; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .mp-reg-total {
+    position: relative;
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 14px 16px; border-top: 2px dashed var(--border);
+  }
+  /* ticket notches on the perforation */
+  .mp-reg-total::before, .mp-reg-total::after {
+    content: ""; position: absolute; top: -11px; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--mp-reg-bg); border: 1px solid var(--border);
+  }
+  .mp-reg-total::before { left: -11px; }
+  .mp-reg-total::after { right: -11px; }
+  .mp-reg-total-label { font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+  .mp-reg-total-value { font-size: 32px; font-weight: 900; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .mp-reg-clear { height: 44px; margin: -12px 0; padding: 0 4px; font-size: 13px; font-weight: 700; color: var(--destructive); }
+  .mp-reg-cash {
+    display: flex; align-items: baseline; justify-content: flex-end; gap: 6px;
+    min-height: 68px; padding: 10px 16px;
+    background: var(--background); border: 1px solid var(--border); border-radius: 14px;
+    transition: border-color var(--duration-fast);
+  }
+  .mp-reg-cash--ok { border-color: #4ADE80; }
+  .mp-reg-cash--short { border-color: var(--destructive); }
+  .mp-reg-cash-symbol { font-size: 20px; font-weight: 700; color: var(--muted-foreground); }
+  .mp-reg-cash-value { font-size: 40px; font-weight: 900; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--foreground); }
+  .mp-reg-money { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .mp-reg-chip {
+    height: 48px; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums;
+    background: var(--card); color: var(--foreground); border: 1px solid var(--border); border-radius: 10px;
+    transition: transform var(--duration-fast);
+  }
+  .mp-reg-chip:active { transform: scale(0.96); }
+  .mp-reg-chip--coin { border-radius: 999px; }
+  .mp-reg-chip--exact { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
+  .mp-reg-status {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    min-height: 52px; padding: 8px 16px; border-radius: 14px;
+    font-size: 14px; font-weight: 700; border: 1px solid transparent;
+  }
+  .mp-reg-status strong { font-size: 24px; font-weight: 900; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .mp-reg-status--idle { color: var(--muted-foreground); border: 1px dashed var(--border); }
+  .mp-reg-status--ok { color: #4ADE80; background: rgba(74, 222, 128, 0.1); border-color: rgba(74, 222, 128, 0.35); }
+  .mp-reg-status--short { color: var(--destructive); background: rgba(248, 113, 113, 0.1); border-color: rgba(248, 113, 113, 0.4); }
+  .mp-reg-numpad-toggle {
+    width: 100%; height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 13px; font-weight: 700; color: var(--muted-foreground);
+  }
+  .mp-reg-key {
+    height: 52px; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums;
+    background: var(--card); color: var(--foreground); border: 1px solid var(--border); border-radius: 14px;
+    transition: transform var(--duration-fast);
+  }
+  .mp-reg-key:active { transform: scale(0.95); }
+  .mp-reg-key--delete { color: var(--destructive); }
+  .mp-reg-footer {
+    padding-top: 12px; padding-bottom: max(16px, env(safe-area-inset-bottom));
+    background: var(--mp-reg-bg); border-top: 1px solid var(--border);
+  }
+  .mp-reg-cta {
+    width: 100%; min-height: 56px; padding: 0 16px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    border-radius: 16px; font-size: 16px; font-weight: 900; color: #fff;
+    background: linear-gradient(135deg, #16A34A 0%, #059669 100%);
+    box-shadow: 0 0 20px rgba(74, 222, 128, 0.25);
+    transition: transform var(--duration-fast), opacity var(--duration-fast);
+  }
+  .mp-reg-cta:active:not(:disabled) { transform: scale(0.98); }
+  .mp-reg-cta:disabled { opacity: 0.35; box-shadow: none; cursor: not-allowed; }
+
   /* ── Bottom Nav ── */
   .mp-bottom-nav {
     background: rgba(20, 22, 36, 0.95);
@@ -936,29 +1039,120 @@
 }
 [data-skin="neo"] [style*="border: 1px solid rgb(45, 48, 72)"] { border-color: var(--nb-line) !important; }
 
-/* Numpad keys */
-[data-skin="neo"] .mp-numpad-key {
-  background: var(--nb-card) !important;
-  border: var(--nb-border) !important;
-  color: var(--nb-ink) !important;
-  box-shadow: var(--nb-shadow-sm) !important;
-  border-radius: var(--nb-radius-control) !important;
-  font-weight: var(--nb-font-weight-label);
+/* ── Register (Confirm Sale): the receipt ──
+ * Paper ticket with an inverted ink total and punched notches; cash as coins
+ * (round) and notes (square); lime only on the one primary action. */
+[data-skin="neo"] .mp-reg {
+  --mp-reg-bg: var(--nb-card);
+  border: var(--nb-border);
+  border-bottom: 0;
+  border-radius: var(--nb-radius-block) var(--nb-radius-block) 0 0;
+  box-shadow: none;
 }
-[data-skin="neo"][data-mode="light"] .mp-numpad-key:active { transform: translate(2px, 2px); box-shadow: none !important; }
-[data-skin="neo"] .mp-numpad-key--delete { color: var(--nb-red-ink) !important; }
+@media (min-width: 640px) {
+  [data-skin="neo"] .mp-reg { border-bottom: var(--nb-border); border-radius: var(--nb-radius-block); box-shadow: var(--nb-shadow-lg); }
+}
+[data-skin="neo"] .mp-reg-close { border: var(--nb-border-strong); color: var(--nb-ink); }
+[data-skin="neo"][data-mode="light"] .mp-reg-close { border: var(--nb-border); border-radius: var(--nb-radius-control); box-shadow: var(--nb-shadow-sm); background: var(--nb-card); }
 
-/* Basket rows, money input, denomination buttons */
-[data-skin="neo"] .mp-basket-row { background: var(--nb-paper-2) !important; border-bottom: var(--nb-border); }
-[data-skin="neo"] .mp-money-input { background: var(--nb-card) !important; border-color: var(--nb-line) !important; }
-[data-skin="neo"] .mp-denom-btn {
-  background: var(--nb-card) !important;
-  border: var(--nb-border) !important;
-  color: var(--nb-ink) !important;
-  border-radius: var(--nb-radius-control) !important;
-  box-shadow: var(--nb-shadow-sm);
+[data-skin="neo"] .mp-reg-receipt {
+  background: var(--nb-paper);
+  border: var(--nb-border);
+  border-radius: var(--nb-radius-control);
+  box-shadow: var(--nb-shadow-md);
+}
+[data-skin="neo"][data-mode="dark"] .mp-reg-receipt { border-radius: 20px; }
+[data-skin="neo"] .mp-reg-line + .mp-reg-line { border-top: 2px dashed var(--nb-line-strong); }
+[data-skin="neo"][data-mode="light"] .mp-reg-line + .mp-reg-line { border-top-color: rgba(17, 17, 17, 0.25); }
+[data-skin="neo"] .mp-reg-line-product { color: var(--nb-muted); font-weight: var(--nb-font-weight-label); letter-spacing: calc(var(--nb-font-tracking-label) * 1em); }
+[data-skin="neo"] .mp-reg-line-variant,
+[data-skin="neo"] .mp-reg-line-total { font-family: var(--nb-font-family-display); font-weight: var(--nb-font-weight-display); color: var(--nb-ink); }
+[data-skin="neo"] .mp-reg-line-unit { color: var(--nb-muted); }
+[data-skin="neo"] .mp-reg-stepper { background: var(--nb-card); border: var(--nb-border); }
+[data-skin="neo"][data-mode="light"] .mp-reg-stepper { border-radius: var(--nb-radius-control); }
+[data-skin="neo"] .mp-reg-stepper button { color: var(--nb-ink); }
+[data-skin="neo"] .mp-reg-stepper span { font-family: var(--nb-font-family-display); font-weight: var(--nb-font-weight-display); }
+
+[data-skin="neo"] .mp-reg-total {
+  background: var(--nb-ink);
+  color: var(--nb-paper);
+  border-top: 0;
+  padding: 16px 18px;
+}
+[data-skin="neo"] .mp-reg-total::before,
+[data-skin="neo"] .mp-reg-total::after { background: var(--mp-reg-bg); border: var(--nb-border); }
+[data-skin="neo"] .mp-reg-total-label { color: var(--nb-paper); font-weight: var(--nb-font-weight-label); letter-spacing: calc(var(--nb-font-tracking-label) * 1em); }
+[data-skin="neo"] .mp-reg-total-value {
+  font-family: var(--nb-font-family-display);
+  font-weight: var(--nb-font-weight-display);
+  font-size: var(--nb-font-size-display);
+  letter-spacing: calc(var(--nb-font-tracking-display) * 1em);
+}
+
+[data-skin="neo"] .mp-reg-clear { color: var(--nb-red-ink); }
+[data-skin="neo"] .mp-reg-cash { background: var(--nb-paper); border: var(--nb-border); border-radius: var(--nb-radius-control); }
+[data-skin="neo"][data-mode="dark"] .mp-reg-cash { border-radius: 20px; }
+[data-skin="neo"] .mp-reg-cash--short { border-color: var(--nb-red); }
+[data-skin="neo"] .mp-reg-cash-symbol { color: var(--nb-muted); font-family: var(--nb-font-family-display); }
+[data-skin="neo"] .mp-reg-cash-value {
+  font-family: var(--nb-font-family-display);
+  font-weight: var(--nb-font-weight-display);
+  font-size: 44px;
+  letter-spacing: calc(var(--nb-font-tracking-display) * 1em);
+  color: var(--nb-ink);
+}
+
+[data-skin="neo"] .mp-reg-chip {
+  background: var(--nb-card);
+  color: var(--nb-ink);
+  border: var(--nb-border-strong);
+  border-radius: var(--nb-radius-control);
   font-weight: var(--nb-font-weight-label);
 }
+[data-skin="neo"] .mp-reg-chip--coin { border-radius: var(--nb-radius-pill); background: var(--nb-paper-2); }
+[data-skin="neo"] .mp-reg-chip--exact { background: var(--nb-ink); color: var(--nb-paper); border-color: var(--nb-ink); }
+[data-skin="neo"][data-mode="light"] .mp-reg-chip { border: var(--nb-border); box-shadow: var(--nb-shadow-sm); }
+[data-skin="neo"][data-mode="light"] .mp-reg-chip:active { transform: translate(2px, 2px); box-shadow: none; }
+
+[data-skin="neo"] .mp-reg-status { border-radius: var(--nb-radius-control); }
+[data-skin="neo"][data-mode="dark"] .mp-reg-status { border-radius: 20px; }
+[data-skin="neo"] .mp-reg-status strong { font-family: var(--nb-font-family-display); font-weight: var(--nb-font-weight-display); font-size: 28px; }
+[data-skin="neo"] .mp-reg-status--idle { color: var(--nb-muted); border: 2px dashed var(--nb-line-strong); background: transparent; }
+[data-skin="neo"][data-mode="light"] .mp-reg-status--idle { border-color: rgba(17, 17, 17, 0.3); }
+[data-skin="neo"] .mp-reg-status--ok { color: var(--nb-ink); background: var(--nb-paper-2); border: var(--nb-border); }
+[data-skin="neo"] .mp-reg-status--ok strong { color: var(--nb-purple-ink); }
+[data-skin="neo"] .mp-reg-status--short { color: var(--nb-red-ink); background: transparent; border: var(--nb-border-width) solid var(--nb-red); }
+
+[data-skin="neo"] .mp-reg-numpad-toggle { color: var(--nb-muted); font-weight: var(--nb-font-weight-label); }
+[data-skin="neo"] .mp-reg-key {
+  background: var(--nb-card);
+  color: var(--nb-ink);
+  border: var(--nb-border-strong);
+  border-radius: var(--nb-radius-control);
+  font-family: var(--nb-font-family-display);
+  font-weight: var(--nb-font-weight-display);
+  font-size: 24px;
+}
+[data-skin="neo"][data-mode="dark"] .mp-reg-key { background: var(--nb-paper-2); border-color: var(--nb-line); border-radius: 16px; }
+[data-skin="neo"][data-mode="light"] .mp-reg-key { border: var(--nb-border); box-shadow: var(--nb-shadow-sm); }
+[data-skin="neo"][data-mode="light"] .mp-reg-key:active { transform: translate(2px, 2px); box-shadow: none; }
+[data-skin="neo"] .mp-reg-key--delete { color: var(--nb-red-ink); }
+
+[data-skin="neo"] .mp-reg-footer { background: var(--nb-card); border-top: var(--nb-border); }
+[data-skin="neo"] .mp-reg-cta {
+  background: var(--nb-lime);
+  color: var(--nb-on);
+  border: var(--nb-border-width) solid transparent;
+  border-radius: var(--nb-radius-pill);
+  box-shadow: none;
+  font-family: var(--nb-font-family-display);
+  font-weight: var(--nb-font-weight-display);
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+[data-skin="neo"][data-mode="light"] .mp-reg-cta { border-color: var(--nb-line); border-radius: var(--nb-radius-control); box-shadow: var(--nb-shadow-md); }
+[data-skin="neo"][data-mode="light"] .mp-reg-cta:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: none; }
+[data-skin="neo"] .mp-reg-cta:disabled { opacity: 1; background: var(--nb-paper-2); color: var(--nb-muted); border-color: var(--nb-line-strong); box-shadow: none; }
 
 /* Variant info popup */
 [data-skin="neo"] .mp-variant-info-popup {

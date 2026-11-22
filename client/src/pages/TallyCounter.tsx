@@ -932,23 +932,44 @@ interface RegisterModalProps {
 }
 function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfirm, onCancel, onAdjust }: RegisterModalProps) {
   const [moneyIn, setMoneyIn] = useState(0);
-  const [numpadOpen, setNumpadOpen] = useState(true);
+  // Quick cash (Exact / coins / notes) covers most sales, so the keypad starts
+  // closed; the seller's last choice is remembered on this device.
+  const [numpadOpen, setNumpadOpenState] = useState(() => {
+    try { return localStorage.getItem('mp_registerKeypadOpen') === '1'; } catch { return false; }
+  });
+  const setNumpadOpen = (update: (v: boolean) => boolean) => setNumpadOpenState(v => {
+    const next = update(v);
+    try { localStorage.setItem('mp_registerKeypadOpen', next ? '1' : '0'); } catch { /* noop */ }
+    return next;
+  });
   const [numpadRaw, setNumpadRaw] = useState('');
 
-  // moneyIn is the running sum from denomination taps + numpad
+  // moneyIn is the running sum from denomination taps + numpad (behaviour unchanged)
   const totalUnits = items.reduce((s, i) => s + i.qty, 0);
   const validInput = moneyIn > 0;
   const sufficient = validInput && moneyIn >= totalRevenue;
   const change = validInput ? moneyIn - totalRevenue : null;
   const canComplete = sufficient || !requireMoneyInput;
+  const fmt = (n: number) => `${symbol}${n.toFixed(2)}`;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
 
   function handleDenom(d: number) {
     setMoneyIn(v => Math.min(v + d, 9999));
     setNumpadRaw('');
   }
 
+  function handleExact() {
+    setMoneyIn(Math.round(totalRevenue * 100) / 100);
+    setNumpadRaw('');
+  }
+
   function handleNumpad(key: string) {
-    if (key === '\u232b') {
+    if (key === '⌫') {
       const next = numpadRaw.slice(0, -1);
       setNumpadRaw(next);
       setMoneyIn(parseFloat(next) || 0);
@@ -970,163 +991,129 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
     setNumpadRaw('');
   }
 
+  // One status line that always says what happens next
+  const status: { tone: 'idle' | 'ok' | 'short'; label: string; value: string } =
+    change === null
+      ? { tone: 'idle', label: requireMoneyInput ? 'Enter the cash received' : 'No cash entered — counts as paid in full', value: '' }
+      : sufficient
+        ? { tone: 'ok', label: change === 0 ? 'Exact — no change' : 'Change to give', value: change === 0 ? '' : fmt(change) }
+        : { tone: 'short', label: 'Short', value: fmt(Math.abs(change)) };
+
+  const ctaLabel = !validInput || sufficient
+    ? `Complete sale · ${fmt(totalRevenue)}`
+    : requireMoneyInput ? `${fmt(Math.abs(change ?? 0))} short` : `Continue · ${fmt(Math.abs(change ?? 0))} short`;
+
   return (
     <div className="mp-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
-      <div className="mp-register-modal w-full sm:max-w-sm max-h-[100dvh] rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-y-auto overscroll-contain"
-        style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}>
+      onClick={onCancel}>
+      <div role="dialog" aria-modal="true" aria-labelledby="register-title"
+        className="mp-reg w-full sm:max-w-sm max-h-[100dvh] flex flex-col animate-slide-up"
+        onClick={e => e.stopPropagation()}>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2">
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'rgba(107,92,255,0.12)' }}>
-              <CheckCircle2 size={14} className="text-[#7C6DFF]" />
+        <div className="mp-reg-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          <div className="mp-sheet-handle sm:hidden" aria-hidden="true" />
+
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3 px-4 pt-3">
+            <div className="min-w-0">
+              <p className="mp-sheet-eyebrow">Register · {totalUnits} {totalUnits === 1 ? 'item' : 'items'}</p>
+              <h2 id="register-title" className="mp-sheet-title">Confirm sale</h2>
             </div>
-            <div>
-              <h2 className="text-base font-bold text-[#E6E7EB]">Confirm Sale</h2>
-              <p className="text-xs text-[#7B7F93]">{totalUnits} items · {symbol}{totalRevenue.toFixed(2)}</p>
+            <button onClick={onCancel} aria-label="Back to basket" className="mp-reg-close">
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Receipt */}
+          <div className="mp-reg-receipt mx-4 mt-3">
+            <ul className="mp-reg-lines">
+              {items.map(item => (
+                <li key={item.variantId} className="mp-reg-line">
+                  <div className="min-w-0 flex-1">
+                    {item.productName && <p className="mp-reg-line-product">{item.productName}</p>}
+                    <p className="mp-reg-line-variant">{item.variantName}</p>
+                    <p className="mp-reg-line-unit">{item.qty} × {fmt(item.unitPrice)}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    <span className="mp-reg-line-total">{fmt(item.qty * item.unitPrice)}</span>
+                    <div className="mp-reg-stepper" role="group" aria-label={`Quantity of ${item.variantName}`}>
+                      <button onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, -1)}
+                        aria-label={`Remove one ${item.variantName}`}>
+                        <Minus size={16} />
+                      </button>
+                      <span aria-live="polite">{item.qty}</span>
+                      <button onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, 1)}
+                        aria-label={`Add one ${item.variantName}`}>
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="mp-reg-total">
+              <span className="mp-reg-total-label">Total</span>
+              <span className="mp-reg-total-value">{fmt(totalRevenue)}</span>
             </div>
           </div>
-          <button onClick={onCancel} className="flex items-center gap-1.5 px-4 h-11 rounded-full text-xs font-bold transition-all active:scale-95"
-            style={{ background: 'rgba(107,92,255,0.15)', border: '1px solid rgba(107,92,255,0.35)', color: '#7C6DFF' }}>
-            <X size={13} /> Back
-          </button>
-        </div>
 
-        {/* Items list with +/- tweaks */}
-        <div className="px-4 space-y-0.5 max-h-28 overflow-y-auto mb-1">
-          {items.map(item => (
-            <div key={item.variantId} className="mp-basket-row flex items-center justify-between py-1.5 px-2 rounded-lg"
-              style={{ background: 'rgba(14,15,20,0.5)' }}>
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <span className="text-xs font-bold text-[#7C6DFF] mp-mono w-5 text-center">×{item.qty}</span>
-                <BasketItemLabel item={item} />
-              </div>
-              <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
-                <span className="text-sm font-bold text-[#E6E7EB] mp-mono mr-1">
-                  {symbol}{(item.qty * item.unitPrice).toFixed(2)}
-                </span>
-                <button
-                  onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, -1)}
-                  className="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90"
-                  style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}>
-                  <Minus size={15} className="text-[#F87171]" />
-                </button>
-                <button
-                  onClick={() => onAdjust(item.variantId, item.variantName, item.unitPrice, 1)}
-                  className="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90"
-                  style={{ background: 'rgba(107,92,255,0.12)', border: '1px solid rgba(107,92,255,0.2)' }}>
-                  <Plus size={15} className="text-[#7C6DFF]" />
-                </button>
-              </div>
+          {/* Cash received */}
+          <div className="px-4 mt-5">
+            <div className="flex items-center justify-between">
+              <p className="mp-sheet-eyebrow">Cash received</p>
+              {moneyIn > 0 && (
+                <button onClick={handleClearMoney} className="mp-reg-clear">Clear</button>
+              )}
             </div>
-          ))}
-        </div>
+            <div className={cn('mp-reg-cash mt-2', validInput && (sufficient ? 'mp-reg-cash--ok' : 'mp-reg-cash--short'))}
+              aria-live="polite">
+              <span className="mp-reg-cash-symbol">{symbol}</span>
+              <span className="mp-reg-cash-value">{moneyIn === 0 ? '0.00' : moneyIn.toFixed(2)}</span>
+            </div>
 
-        {/* Total row */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-b border-[#24273A]">
-          <span className="text-sm font-semibold text-[#A4A7B5]">Total</span>
-          <span className="text-xl font-black mp-gradient-text mp-mono">{symbol}{totalRevenue.toFixed(2)}</span>
-        </div>
+            {/* Quick cash: exact, coins, notes */}
+            <div className="mp-reg-money mt-2">
+              <button onClick={handleExact} className="mp-reg-chip mp-reg-chip--exact">Exact</button>
+              {EURO_DENOMS.map(d => (
+                <button key={d} onClick={() => handleDenom(d)} aria-label={`Add ${symbol}${d}`}
+                  className={cn('mp-reg-chip', d <= 2 ? 'mp-reg-chip--coin' : 'mp-reg-chip--note')}>
+                  {symbol}{d}
+                </button>
+              ))}
+            </div>
 
-        {/* Money received */}
-        <div className="px-4 pt-2 pb-1">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-[10px] font-semibold text-[#7B7F93] uppercase tracking-wider">Money Received</p>
-            {moneyIn > 0 && (
-              <button onClick={handleClearMoney}
-                className="h-11 -my-3 px-3 text-xs font-semibold text-[#F87171] hover:text-[#FCA5A5] transition-colors">
-                Clear
-              </button>
+            <div className={cn('mp-reg-status mt-3', `mp-reg-status--${status.tone}`)} aria-live="polite">
+              <span>{status.label}</span>
+              {status.value && <strong>{status.value}</strong>}
+            </div>
+          </div>
+
+          {/* Numpad */}
+          <div className="px-4 mt-3">
+            <button onClick={() => setNumpadOpen(v => !v)} className="mp-reg-numpad-toggle" aria-expanded={numpadOpen}>
+              {numpadOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+              {numpadOpen ? 'Hide keypad' : 'Type an amount'}
+            </button>
+            {numpadOpen && (
+              <div className="grid grid-cols-3 gap-2 pb-3">
+                {NUMPAD_KEYS.map(key => (
+                  <button key={key} onClick={() => handleNumpad(key)}
+                    aria-label={key === '⌫' ? 'Delete last digit' : key}
+                    className={cn('mp-reg-key', key === '⌫' && 'mp-reg-key--delete')}>
+                    {key === '⌫' ? <Delete size={20} /> : key}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
-          <div className="mp-money-input flex items-center gap-1 px-3 py-2 rounded-2xl mb-1.5"
-            style={{
-              background: '#0E0F14',
-              border: `1px solid ${validInput && sufficient ? 'rgba(74,222,128,0.4)' : validInput && !sufficient ? 'rgba(248,113,113,0.4)' : '#2D3048'}`,
-            }}>
-            <span className="text-sm font-bold text-[#7B7F93]">{symbol}</span>
-            <span className="text-xl font-black text-[#E6E7EB] mp-mono flex-1">
-              {moneyIn === 0 ? <span className="text-[#2D3048]">0</span> : moneyIn.toFixed(2)}
-            </span>
-          </div>
-
-          {/* Euro denomination quick-add buttons */}
-          <div className="flex gap-1 mb-1.5">
-            {EURO_DENOMS.map(d => (
-              <button key={d}
-                onClick={() => handleDenom(d)}
-                className="mp-denom-btn flex-1 min-w-0 h-11 rounded-full text-xs font-bold transition-all active:scale-95"
-                style={{
-                  background: '#1B1E2E',
-                  border: '1px solid #2D3048',
-                  color: '#A4A7B5',
-                }}>
-                {symbol}{d}
-              </button>
-            ))}
-          </div>
         </div>
 
-        {/* Change display */}
-        <div className="mx-4 mb-2 flex items-center justify-between py-2 rounded-2xl px-4"
-          style={{
-            background: change === null ? 'rgba(45,48,72,0.4)' : sufficient ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)',
-            border: `1px solid ${change === null ? '#2D3048' : sufficient ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.25)'}`,
-          }}>
-          <span className="text-xs font-semibold"
-            style={{ color: change === null ? '#7B7F93' : sufficient ? '#4ADE80' : '#F87171' }}>
-            {change === null ? 'Change' : sufficient ? 'Change' : 'Short'}
-          </span>
-          <span className="text-lg font-black mp-mono"
-            style={{ color: change === null ? '#2D3048' : sufficient ? '#4ADE80' : '#F87171' }}>
-            {change === null ? '—' : sufficient ? `${symbol}${change.toFixed(2)}` : `-${symbol}${Math.abs(change).toFixed(2)}`}
-          </span>
-        </div>
-
-        {/* Complete Sale button */}
-        <div className="px-4 mb-2">
-          <button
-            onClick={() => onConfirm(moneyIn)}
-            disabled={!canComplete}
-            className="w-full py-3 rounded-2xl text-sm font-black text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-            style={canComplete
-              ? { background: 'linear-gradient(135deg, #4ADE80 0%, #059669 100%)', boxShadow: '0 0 20px rgba(74,222,128,0.3)' }
-              : { background: '#1B1E2E', opacity: 0.35 }}>
-            <CheckCircle2 size={15} /> Complete Sale
+        {/* Primary action, always within thumb reach */}
+        <div className="mp-reg-footer px-4">
+          <button onClick={() => onConfirm(moneyIn)} disabled={!canComplete} className="mp-reg-cta">
+            <CheckCircle2 size={18} /> {ctaLabel}
           </button>
         </div>
-
-        {/* Numpad toggle */}
-        <button
-          onClick={() => setNumpadOpen(v => !v)}
-          className="w-full flex items-center justify-center gap-1.5 h-11 text-xs font-semibold text-[#7B7F93] hover:text-[#A4A7B5] transition-colors border-t border-[#24273A]">
-          {numpadOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-          {numpadOpen ? 'Hide Numpad' : 'Show Numpad'}
-        </button>
-
-        {/* iOS-style numpad */}
-        {numpadOpen && (
-          <div className="grid grid-cols-3 gap-1.5 px-4 pb-3 pt-2">
-            {NUMPAD_KEYS.map(key => (
-              <button
-                key={key}
-                onClick={() => handleNumpad(key)}
-                className={cn(
-                  'mp-numpad-key flex items-center justify-center h-11 rounded-2xl text-base font-bold transition-all active:scale-90',
-                  key === '\u232b' ? 'text-[#F87171] mp-numpad-key--delete' : 'text-[#E6E7EB]'
-                )}
-                style={{
-                  background: key === '\u232b' ? 'rgba(248,113,113,0.12)' : '#1B1E2E',
-                  border: `1px solid ${key === '\u232b' ? 'rgba(248,113,113,0.25)' : '#2D3048'}`,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                }}>
-                {key === '\u232b' ? <Delete size={18} /> : key}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
