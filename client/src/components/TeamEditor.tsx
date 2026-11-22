@@ -184,7 +184,7 @@ export default function TeamEditor() {
       {confirmDelete && (() => {
         const m = teamMembers.find(x => x.id === confirmDelete);
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
+          <div className="mp-backdrop fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
             <div className="mp-card p-5 max-w-xs w-full space-y-3">
               <p className="text-sm font-bold text-[#E6E7EB]">Remove {m?.name}?</p>
               <p className="text-xs text-[#7B7F93]">This only removes the team member record. Historical sales data is preserved.</p>

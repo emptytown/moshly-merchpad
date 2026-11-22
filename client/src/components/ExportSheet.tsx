@@ -215,7 +215,7 @@ export function ExportButton({ auditEntries }: ExportSheetProps) {
       {/* Backdrop + centered dialog — rendered via portal to escape overflow contexts */}
       {open && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          className="mp-backdrop fixed inset-0 z-50 flex items-center justify-center px-4"
           style={{ background: 'rgba(14,15,20,0.75)', backdropFilter: 'blur(6px)' }}
           onClick={close}>
           <div

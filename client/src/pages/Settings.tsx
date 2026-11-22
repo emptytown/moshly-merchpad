@@ -513,7 +513,7 @@ export default function Settings() {
 
       {/* Reset Statistics Confirmation Modal */}
       {isResetStatsConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+        <div className="mp-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
           style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
           <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up"
             style={{ background: '#141624', border: '1px solid rgba(251,191,36,0.3)' }}>

@@ -465,6 +465,92 @@ function MoshlyRadialMenu({ tallyMode, items }: { tallyMode: boolean; items: Rad
 }
 
 // ── Session status (collapsible, below the cards) ──────────────────────────
+// ── Stop Sale sheet ──────────────────────────────────────────────────────────
+// Confirms leaving the live session for the review/archive screen. Shows what is
+// being closed (time, units, revenue) and warns about an unconfirmed basket.
+// Styled with theme tokens + mp-sheet classes so it works in every skin.
+function formatDuration(fromIso: string): string {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(fromIso).getTime()) / 60000));
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
+}
+
+function StopSaleSheet({ session, showName, units, revenue, symbol, basketUnits, onCancel, onConfirm }: {
+  session: SaleSession;
+  showName?: string;
+  units: number;
+  revenue: number;
+  symbol: string;
+  /** unconfirmed items in the Register basket (0 in Tally mode) */
+  basketUnits: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const keepRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    keepRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  const started = new Date(session.startedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const context = session.sessionType === 'oneoff' ? 'One-off sale' : (showName ?? 'Show session');
+
+  return (
+    <div className="mp-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
+      onClick={onCancel}>
+      <div role="dialog" aria-modal="true" aria-labelledby="stop-sale-title"
+        className="mp-sheet w-full sm:max-w-sm animate-slide-up"
+        onClick={e => e.stopPropagation()}>
+        <div className="mp-sheet-handle sm:hidden" aria-hidden="true" />
+
+        <div className="px-5 pt-4">
+          <p className="mp-sheet-eyebrow">{context}</p>
+          <h2 id="stop-sale-title" className="mp-sheet-title">End this sale?</h2>
+          <p className="mp-sheet-sub">
+            Started {started} · {formatDuration(session.startedAt)}{session.repName ? ` · ${session.repName}` : ''}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 px-5 mt-4">
+          <div className="mp-sheet-stat">
+            <span className="mp-sheet-stat-label">Units sold</span>
+            <span className="mp-sheet-stat-value">{units}</span>
+          </div>
+          <div className="mp-sheet-stat">
+            <span className="mp-sheet-stat-label">Revenue</span>
+            <span className="mp-sheet-stat-value">{symbol}{revenue.toFixed(2)}</span>
+          </div>
+        </div>
+
+        {basketUnits > 0 && (
+          <div className="mp-sheet-warning mx-5 mt-3" role="note">
+            <ShoppingCart size={16} className="flex-shrink-0" />
+            <span>
+              {basketUnits} {basketUnits === 1 ? 'item is' : 'items are'} still in the basket and not confirmed.
+              They won't be counted.
+            </span>
+          </div>
+        )}
+
+        <p className="mp-sheet-sub px-5 mt-4">
+          Next you'll review every sale before the session is archived. Nothing is archived yet.
+        </p>
+
+        <div className="mp-sheet-actions flex gap-2 px-5 pt-4">
+          <button ref={keepRef} onClick={onCancel} className="mp-sheet-btn mp-sheet-btn--secondary flex-1">
+            Keep selling
+          </button>
+          <button onClick={onConfirm} className="mp-sheet-btn mp-sheet-btn--danger flex-[1.4]">
+            <Archive size={16} /> Review & end
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SessionStatus({ session, showName, onEndSale }: {
   session: SaleSession;
   showName?: string;
@@ -559,7 +645,7 @@ interface BasketPreviewProps {
 }
 function BasketPreview({ items, totalRevenue, symbol, onClose, onAdjust }: BasketPreviewProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center"
+    <div className="mp-backdrop fixed inset-0 z-50 flex items-end justify-center"
       style={{ background: 'rgba(14,15,20,0.7)', backdropFilter: 'blur(4px)' }}
       onClick={onClose}>
       <div
@@ -678,7 +764,7 @@ function ShortfallModal({
   const paidStr = shortfall < totalRevenue ? `${symbol}${(totalRevenue - shortfall).toFixed(2)} paid` : '';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+    <div className="mp-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center"
       style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
       <div className="mp-register-modal w-full sm:max-w-sm max-h-[100dvh] rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-y-auto overscroll-contain"
         style={{ background: '#141624', border: '1px solid rgba(248,113,113,0.3)' }}>
@@ -885,7 +971,7 @@ function RegisterModal({ items, totalRevenue, symbol, requireMoneyInput, onConfi
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+    <div className="mp-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
       <div className="mp-register-modal w-full sm:max-w-sm max-h-[100dvh] rounded-t-2xl sm:rounded-2xl animate-slide-up overflow-y-auto overscroll-contain"
         style={{ background: '#141624', border: '1px solid rgba(107,92,255,0.3)' }}>
@@ -1066,6 +1152,7 @@ export default function TallyCounter() {
 
   const [justConfirmed, setJustConfirmed] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const closeStopConfirm = useCallback(() => setShowStopConfirm(false), []);
   const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
 
   // TALLY = instant-confirm mode (default), REGISTER = cash drawer modal mode
@@ -1461,7 +1548,7 @@ export default function TallyCounter() {
     <div className="flex flex-col min-h-full">
       {/* Register → Tally with items in the basket: clear it or stay */}
       {showSwitchConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+        <div className="mp-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
           style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}
           onClick={() => setShowSwitchConfirm(false)}>
           <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up p-5"
@@ -1495,39 +1582,18 @@ export default function TallyCounter() {
         </div>
       )}
 
-      {/* Stop Sale confirmation modal */}
-      {showStopConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-          style={{ background: 'rgba(14,15,20,0.92)', backdropFilter: 'blur(8px)' }}>
-          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up"
-            style={{ background: '#141624', border: '1px solid rgba(248,113,113,0.3)' }}>
-            <div className="p-5">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{ background: 'rgba(248,113,113,0.12)' }}>
-                  <StopCircle size={20} className="text-[#F87171]" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-[#E6E7EB]">Stop Sale?</h2>
-                  <p className="text-xs text-[#7B7F93]">You'll review the session before archiving</p>
-                </div>
-              </div>
-              <p className="text-sm text-[#A4A7B5] mb-4">
-                This will take you to the Archive screen where you can review all sales and confirm the session end.
-              </p>
-            </div>
-            <div className="flex gap-2 px-5 pb-5">
-              <button onClick={() => setShowStopConfirm(false)}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold text-[#A4A7B5]"
-                style={{ border: '1px solid #2D3048' }}>Keep Selling</button>
-              <button onClick={() => { setShowStopConfirm(false); navigate('/end-sale'); }}
-                className="flex-[2] py-3 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2"
-                style={{ background: 'linear-gradient(135deg, #F87171 0%, #C026D3 100%)' }}>
-                <Archive size={15} /> Review & Archive
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Stop Sale confirmation */}
+      {showStopConfirm && activeSession && (
+        <StopSaleSheet
+          session={activeSession}
+          showName={activeSession.sessionType !== 'oneoff' ? shows?.find(sh => sh.id === activeSession.showId)?.name : undefined}
+          units={sessionTotalUnits}
+          revenue={sessionTotalRevenue}
+          symbol={symbol}
+          basketUnits={tallyMode ? 0 : totalUnits}
+          onCancel={closeStopConfirm}
+          onConfirm={() => { setShowStopConfirm(false); navigate('/end-sale'); }}
+        />
       )}
 
       {/* Mode indicator banner */}

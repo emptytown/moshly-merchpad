@@ -24,7 +24,7 @@ function ProjectEditor({ project, onSave, onClose }: ProjectEditorProps) {
   const [color, setColor] = useState(project?.color ?? PROJECT_COLORS[0]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+    <div className="mp-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(14,15,20,0.9)', backdropFilter: 'blur(8px)' }}>
       <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl animate-slide-up"
         style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
