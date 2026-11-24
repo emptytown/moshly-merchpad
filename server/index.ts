@@ -4,6 +4,8 @@ import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import { syncRouter } from "./sync.js";
+import { SESSION_COOKIE, readSession, sessionSecret } from "./session.js";
+import { getQuotaOverview } from "./hub.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,7 +16,6 @@ const MOSHLY_SSO_VERIFY_URL =
 
 const SSO_VERIFY_TIMEOUT_MS = 5000;
 
-const SESSION_COOKIE = "mp_session";
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 async function startServer() {
@@ -22,12 +23,11 @@ async function startServer() {
   const server = createServer(app);
 
   app.use(express.json());
-  app.use(cookieParser());
+  app.use(cookieParser(sessionSecret()));
 
   function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
-    const raw = req.cookies?.[SESSION_COOKIE];
-    if (!raw) { res.status(401).json({ error: "no_session" }); return; }
-    try { JSON.parse(raw); next(); } catch { res.status(401).json({ error: "invalid_session" }); }
+    if (!readSession(req)) { res.status(401).json({ error: "no_session" }); return; }
+    next();
   }
 
   app.use("/api/sync", requireAuth, syncRouter);
@@ -52,6 +52,7 @@ async function startServer() {
         return;
       }
       res.cookie(SESSION_COOKIE, JSON.stringify(data.user), {
+        signed: true,
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
@@ -66,16 +67,29 @@ async function startServer() {
 
   // Session rehydration: returns the user from the session cookie
   app.get("/api/auth/me", (req, res) => {
-    const raw = req.cookies?.[SESSION_COOKIE];
-    if (!raw) {
+    const user = readSession(req);
+    if (!user) {
       res.status(401).json({ error: "no_session" });
       return;
     }
-    try {
-      res.json({ user: JSON.parse(raw) });
-    } catch {
-      res.status(401).json({ error: "invalid_session" });
+    res.json({ user });
+  });
+
+  // This month's Moshly quotas (AI credits, PDF exports) for the signed-in user.
+  // Before adding a paid feature: consumeQuota() before the work, refundQuota()
+  // if it fails (see server/hub.ts).
+  app.get("/api/quota", async (req, res) => {
+    const user = readSession(req);
+    if (!user) {
+      res.status(401).json({ error: "no_session" });
+      return;
     }
+    const overview = await getQuotaOverview(user.id);
+    if (!overview) {
+      res.status(503).json({ error: "quota_unavailable" });
+      return;
+    }
+    res.json(overview);
   });
 
   // Sign out: clear session cookie
