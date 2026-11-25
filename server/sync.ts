@@ -14,6 +14,7 @@ import {
   upsertTallyBatch,
   upsertTeamMember,
 } from "./db.js";
+import { readSession } from "./session.js";
 
 const MAX_BATCH_SIZE = 100;
 
@@ -131,14 +132,7 @@ syncRouter.delete("/cleanup/:projectId", async (req, res) => {
 // ---------------------------------------------------------------------------
 
 function getUserId(req: import("express").Request): string | null {
-  try {
-    const raw = req.cookies?.["mp_session"] as string | undefined;
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return typeof parsed.id === "string" && parsed.id.length > 0 ? parsed.id : null;
-  } catch {
-    return null;
-  }
+  return readSession(req)?.id ?? null;
 }
 
 function validateSyncItem(raw: unknown): SyncItem | null {
