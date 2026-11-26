@@ -16,6 +16,15 @@ export type MoshlyShellOptions = {
   hubUrl?: string;
 };
 
+/** Colours for the Browshly bar, so it matches the app's active skin (any CSS colour). */
+export type MoshlyTheme = {
+  background: string;
+  text: string;
+  border?: string;
+  accent?: string;
+  scheme?: "light" | "dark";
+};
+
 export type MoshlyShell = {
   /** True when the app runs inside Browshly (or any frame). */
   inShell: boolean;
@@ -30,9 +39,34 @@ export type MoshlyShell = {
   reauth(fallbackUrl: string): void;
   /** Tell Browshly the user's credits changed (after an AI call or PDF export). */
   quotaChanged(): void;
+  /** Paint the Browshly bar in the app's colours. Call on start and on every skin change. */
+  setTheme(theme: MoshlyTheme): void;
+  /**
+   * Read a theme from the computed style of an element (default: body), e.g. the app's top bar.
+   * Transparent backgrounds fall back to the nearest painted ancestor.
+   */
+  themeFromCss(el?: Element | null): MoshlyTheme;
   /** `target` for links to moshly.io: "_top" inside the frame so they leave it. */
   hubLinkTarget: "_top" | undefined;
 };
+
+const TRANSPARENT = /^(transparent|rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\))$/i;
+
+function paintedBackground(el: Element | null): string {
+  for (let node = el; node; node = node.parentElement) {
+    const bg = getComputedStyle(node).backgroundColor;
+    if (bg && !TRANSPARENT.test(bg)) return bg;
+  }
+  return "rgb(255, 255, 255)";
+}
+
+/** "light" when the colour is bright (relative luminance > 0.5), else "dark". */
+function schemeOf(color: string): "light" | "dark" {
+  const m = color.match(/[\d.]+/g);
+  if (!m || m.length < 3) return "dark";
+  const [r, g, b] = m.slice(0, 3).map(Number);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5 ? "light" : "dark";
+}
 
 export function createMoshlyShell(options: MoshlyShellOptions): MoshlyShell {
   const hubUrl = (options.hubUrl || "https://moshly.io").replace(/\/+$/, "");
@@ -63,6 +97,21 @@ export function createMoshlyShell(options: MoshlyShellOptions): MoshlyShell {
     },
     quotaChanged() {
       if (inShell) send("moshly:quota-changed");
+    },
+    setTheme(theme: MoshlyTheme) {
+      if (inShell) window.parent.postMessage({ type: "moshly:theme", theme }, hubOrigin);
+    },
+    themeFromCss(el?: Element | null): MoshlyTheme {
+      const target = el || document.body;
+      const style = getComputedStyle(target);
+      const background = paintedBackground(target);
+      const border = style.borderBottomColor;
+      return {
+        background,
+        text: style.color,
+        border: border && !TRANSPARENT.test(border) && parseFloat(style.borderBottomWidth) > 0 ? border : undefined,
+        scheme: schemeOf(background),
+      };
     },
     hubLinkTarget: inShell ? "_top" : undefined,
   };

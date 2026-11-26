@@ -7,6 +7,7 @@
  * Persisted to localStorage. Applies data-skin and data-mode attributes to <html>.
  */
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { shell } from "../lib/shell";
 
 export type Skin = "neo" | "legacy";
 export type Mode = "dark" | "light";
@@ -70,6 +71,11 @@ export function ThemeProvider({ children, defaultTheme = "dark" }: ThemeProvider
     root.setAttribute("data-skin", skin);
     root.setAttribute("data-mode", mode);
     root.setAttribute("data-theme", mode); // name used by the other Moshly apps
+    // Browshly: paint its bar like MerchPad's top bar once the new skin's styles apply.
+    const frame = requestAnimationFrame(() =>
+      shell.setTheme(shell.themeFromCss(document.querySelector(".mp-topbar") ?? document.body)),
+    );
+    return () => cancelAnimationFrame(frame);
   }, [skin, mode]);
 
   const setSkin = (s: Skin) => {
