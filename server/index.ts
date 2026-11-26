@@ -22,6 +22,13 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // Only Moshly may show MerchPad inside a frame (Browshly: moshly.io/app?app=merchpad).
+  const frameAncestors = process.env.MOSHLY_FRAME_ANCESTORS || "https://moshly.io";
+  app.use((_req, res, next) => {
+    res.setHeader("Content-Security-Policy", `frame-ancestors 'self' ${frameAncestors}`);
+    next();
+  });
+
   app.use(express.json());
   app.use(cookieParser(sessionSecret()));
 

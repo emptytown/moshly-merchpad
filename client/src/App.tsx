@@ -16,6 +16,7 @@ import DetailInfo from "./pages/DetailInfo";
 import Settings from "./pages/Settings";
 import EndSaleScreen from "./pages/EndSaleScreen";
 import AuthCallback from "./pages/AuthCallback";
+import { hubLinkTarget } from "./lib/shell";
 
 const HUB_URL = import.meta.env.VITE_MOSHLY_HUB_URL ?? "https://moshly.io";
 
@@ -52,19 +53,19 @@ function GateScreen() {
         {/* CTAs */}
         <div className="w-full flex flex-col gap-3">
           <a
-            href="https://moshly.io/login"
+            href="https://moshly.io/login" target={hubLinkTarget}
             className="w-full py-3 rounded-xl text-sm font-bold text-white text-center"
             style={{ background: "linear-gradient(135deg,#6B5CFF 0%,#C026D3 100%)" }}>
             Log In
           </a>
           <a
-            href="https://moshly.io/join"
+            href="https://moshly.io/join" target={hubLinkTarget}
             className="w-full py-3 rounded-xl text-sm font-bold text-center"
             style={{ border: "1px solid #6B5CFF", color: "#9B8FFF" }}>
             Sign Up
           </a>
           <a
-            href={HUB_URL}
+            href={HUB_URL} target={hubLinkTarget}
             className="text-xs text-[#7B7F93] hover:text-[#A4A7B5] transition-colors pt-1">
             Visit Moshly.io
           </a>
