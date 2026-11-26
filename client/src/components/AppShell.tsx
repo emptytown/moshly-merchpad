@@ -6,6 +6,7 @@
 import { Link, useLocation } from 'wouter';
 import { ShoppingBag, Zap, BarChart3, Settings, ArrowLeft } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { inShell, goHome } from '../lib/shell';
 import logoUrl from '../../../assets/moshly-merchpad-logo-svg.svg';
 
 const HUB_URL = import.meta.env.VITE_MOSHLY_HUB_URL ?? 'https://moshly.io';
@@ -35,14 +36,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </span>
         </div>
 
-        {/* Back to Moshly */}
-        <a
-          href={HUB_URL}
-          className="flex items-center gap-1.5 text-xs font-medium text-[#7B7F93] hover:text-foreground transition-colors"
-        >
-          <ArrowLeft size={13} />
-          Back to Moshly
-        </a>
+        {/* Back to Moshly — inside the Moshly frame the hub handles this via postMessage */}
+        {inShell ? (
+          <button
+            type="button"
+            onClick={goHome}
+            className="flex items-center gap-1.5 text-xs font-medium text-[#7B7F93] hover:text-foreground transition-colors"
+          >
+            <ArrowLeft size={13} />
+            Moshly
+          </button>
+        ) : (
+          <a
+            href={HUB_URL}
+            className="flex items-center gap-1.5 text-xs font-medium text-[#7B7F93] hover:text-foreground transition-colors"
+          >
+            <ArrowLeft size={13} />
+            Back to Moshly
+          </a>
+        )}
       </header>
 
       {/* Main content */}
