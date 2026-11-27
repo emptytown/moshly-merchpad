@@ -8,6 +8,7 @@
  */
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { shell } from "../lib/shell";
+import { chooseMode, chooseSkin, onReturn, resolveSkin, sharedMode, type SkinSetup } from "../lib/moshlySkins";
 
 export type Skin = "neo" | "legacy";
 export type Mode = "dark" | "light";
@@ -33,6 +34,8 @@ function normalizeSkin(stored: string | null): Skin {
   }
 }
 
+const MP_SKINS: SkinSetup<Skin> = { storageKey: "mp.skinChoice", skins: ["neo", "legacy"], family: { neo: "neo", legacy: "legacy" } };
+
 interface ThemeContextType {
   skin: Skin;
   mode: Mode;
@@ -51,14 +54,21 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children, defaultTheme = "dark" }: ThemeProviderProps) {
-  const [skin, setSkinState] = useState<Skin>(() => {
-    const s = normalizeSkin(localStorage.getItem("mp-skin"));
-    localStorage.setItem("mp-skin", s);
-    return s;
-  });
-  const [mode, setModeState] = useState<Mode>(() => {
-    return (localStorage.getItem("mp-mode") as Mode) || defaultTheme;
-  });
+  // Moshly shared family: Neo Brut / Legacy Purple and light / dark follow the user across apps
+  // (moshly_skin / moshly_theme cookies, newest wins — see lib/moshlySkins.ts).
+  const resolveMpSkin = (): Skin => {
+    try {
+      if (!localStorage.getItem(MP_SKINS.storageKey)) {
+        const old = localStorage.getItem("mp-skin");
+        if (old) localStorage.setItem(MP_SKINS.storageKey, `${normalizeSkin(old)}.1`);
+      }
+    } catch { /* storage blocked */ }
+    return resolveSkin(MP_SKINS);
+  };
+  const resolveMpMode = (): Mode => sharedMode()?.value ?? ((localStorage.getItem("mp-mode") as Mode) || defaultTheme);
+  const [skin, setSkinState] = useState<Skin>(resolveMpSkin);
+  const [mode, setModeState] = useState<Mode>(resolveMpMode);
+  useEffect(() => onReturn(() => { setSkinState(resolveMpSkin()); setModeState(resolveMpMode()); }), []);
 
   // Apply classes/attributes to <html> whenever skin or mode changes
   useEffect(() => {
@@ -79,11 +89,13 @@ export function ThemeProvider({ children, defaultTheme = "dark" }: ThemeProvider
   }, [skin, mode]);
 
   const setSkin = (s: Skin) => {
+    chooseSkin(MP_SKINS, s);
     setSkinState(s);
     localStorage.setItem("mp-skin", s);
   };
 
   const setMode = (m: Mode) => {
+    chooseMode(m);
     setModeState(m);
     localStorage.setItem("mp-mode", m);
   };
